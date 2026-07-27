@@ -1,5 +1,6 @@
 #include <stdio.h>
 #include <stdlib.h>
+#include <stdbool.h>
 #include "log_sink.h"
 #include "log_record.h"
 
@@ -8,31 +9,25 @@ typedef struct {
     int use_color;             // Whether to use color output
 } console_sink_data_t;
 
-// Console write function
-static int console_write(log_sink_t *sink, const char *buf, size_t len) {
+int console_write(log_sink_t *sink, const char *buf, size_t len) {
     console_sink_data_t *data = (console_sink_data_t *)sink->private_data;
 
     if (!data || !data->stream) return -1;
 
-    // If colors are enabled, we might need to add escape sequences
-    // For simplicity, just write the buffer directly
     size_t written = fwrite(buf, 1, len, data->stream);
-
     fflush(data->stream);
 
     return (int)written;
 }
 
-// Console flush function
-static void console_flush(log_sink_t *sink) {
+void console_flush(log_sink_t *sink) {
     console_sink_data_t *data = (console_sink_data_t *)sink->private_data;
     if (data && data->stream) {
         fflush(data->stream);
     }
 }
 
-// Console destroy function
-static void console_destroy(log_sink_t *sink) {
+void console_destroy(log_sink_t *sink) {
     console_sink_data_t *data = (console_sink_data_t *)sink->private_data;
     if (data) {
         if (data->stream != stdout && data->stream != stderr) {
@@ -43,8 +38,7 @@ static void console_destroy(log_sink_t *sink) {
     free(sink);
 }
 
-// Create a console sink (writes to stdout)
-log_sink_t *console_sink_create(void) {
+log_sink_t *console_sink_create(bool use_color) {
     log_sink_t *sink = malloc(sizeof(log_sink_t));
     if (!sink) return NULL;
 
@@ -55,7 +49,7 @@ log_sink_t *console_sink_create(void) {
     }
 
     data->stream = stdout;
-    data->use_color = 1; // Enable color by default
+    data->use_color = use_color;
 
     sink->write = console_write;
     sink->flush = console_flush;
@@ -65,8 +59,7 @@ log_sink_t *console_sink_create(void) {
     return sink;
 }
 
-// Create a console sink that writes to stderr instead
-log_sink_t *console_sink_create_stderr(void) {
+log_sink_t *console_sink_create_stderr(bool use_color) {
     log_sink_t *sink = malloc(sizeof(log_sink_t));
     if (!sink) return NULL;
 
@@ -77,7 +70,7 @@ log_sink_t *console_sink_create_stderr(void) {
     }
 
     data->stream = stderr;
-    data->use_color = 1;
+    data->use_color = use_color;
 
     sink->write = console_write;
     sink->flush = console_flush;
@@ -85,4 +78,10 @@ log_sink_t *console_sink_create_stderr(void) {
     sink->private_data = data;
 
     return sink;
+}
+
+bool console_sink_is_color_enabled(log_sink_t *sink) {
+    if (!sink || sink->write != console_write) return false;
+    console_sink_data_t *data = (console_sink_data_t *)sink->private_data;
+    return data && data->use_color;
 }

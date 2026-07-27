@@ -15,9 +15,14 @@ struct log_sink {
 };
 
 // Create a console sink
-log_sink_t *console_sink_create(void);
+// use_color: if true, the sink will accept ANSI colorized text per level
+log_sink_t *console_sink_create(bool use_color);
 
-// Create a file sink with parameters
+// Create a console sink that writes to stderr instead
+log_sink_t *console_sink_create_stderr(bool use_color);
+
+// Query whether a sink is a color-enabled console sink
+bool console_sink_is_color_enabled(log_sink_t *sink);
 // path: log file path, max_size: max size in bytes before rotation, backups: number of backup files
 log_sink_t *file_sink_create(const char *path, uint64_t max_size_t, int backups);
 

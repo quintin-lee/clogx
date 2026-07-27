@@ -6,6 +6,7 @@
 #include "log_sink.h"
 #include "log_formatter.h"
 #include "log_config.h"
+#include "log_record.h"
 
 typedef struct {
     log_sink_t **sinks;
@@ -73,15 +74,44 @@ int log_dispatcher_dispatch(log_record_t *record) {
         return -1;
     }
 
+    static const char *ansi_codes[] = {
+        "\x1b[30m", // COLOR_NONE / fallback
+        "\x1b[30m", // COLOR_BLACK
+        "\x1b[31m", // COLOR_RED
+        "\x1b[32m", // COLOR_GREEN
+        "\x1b[33m", // COLOR_YELLOW
+        "\x1b[34m", // COLOR_BLUE
+        "\x1b[35m", // COLOR_PURPLE
+        "\x1b[36m", // COLOR_CYAN
+        "\x1b[37m"  // COLOR_WHITE
+    };
+    const char *reset_code = "\x1b[0m";
+
     pthread_mutex_lock(&g_dispatcher.mutex);
     for (int i = 0; i < g_dispatcher.sink_count; i++) {
-        if (g_dispatcher.sinks[i]) {
-            g_dispatcher.sinks[i]->write(g_dispatcher.sinks[i], formatted_buf, (size_t)len);
-            if (formatted_buf[len - 1] != '\n') {
-                g_dispatcher.sinks[i]->write(g_dispatcher.sinks[i], "\n", 1);
+        if (!g_dispatcher.sinks[i]) continue;
+
+        const char *write_buf = formatted_buf;
+        size_t write_len = (size_t)len;
+
+        if (cfg->color && console_sink_is_color_enabled(g_dispatcher.sinks[i])) {
+            log_color_t color = get_log_color(record->level);
+            int color_idx = color < (int)(sizeof(ansi_codes) / sizeof(ansi_codes[0]))
+                            ? color : 0;
+            char colored_buf[4096];
+            int ret = snprintf(colored_buf, sizeof(colored_buf), "%s%s%s",
+                               ansi_codes[color_idx], formatted_buf, reset_code);
+            if (ret > 0 && ret < (int)sizeof(colored_buf)) {
+                write_buf = colored_buf;
+                write_len = (size_t)ret;
             }
-            g_dispatcher.sinks[i]->flush(g_dispatcher.sinks[i]);
         }
+
+        g_dispatcher.sinks[i]->write(g_dispatcher.sinks[i], write_buf, write_len);
+        if (write_buf[write_len - 1] != '\n') {
+            g_dispatcher.sinks[i]->write(g_dispatcher.sinks[i], "\n", 1);
+        }
+        g_dispatcher.sinks[i]->flush(g_dispatcher.sinks[i]);
     }
     pthread_mutex_unlock(&g_dispatcher.mutex);
 
@@ -93,7 +123,7 @@ int log_dispatcher_init(void) {
     log_dispatcher_destroy();
 
     if (cfg->console_enable) {
-        log_sink_t *sink = console_sink_create();
+        log_sink_t *sink = console_sink_create(cfg->color);
         if (sink) {
             log_dispatcher_add_sink(sink);
         }
