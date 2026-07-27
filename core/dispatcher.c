@@ -108,10 +108,9 @@ int log_dispatcher_dispatch(log_record_t *record) {
         }
 
         g_dispatcher.sinks[i]->write(g_dispatcher.sinks[i], write_buf, write_len);
-        if (write_buf[write_len - 1] != '\n') {
+        if (write_len > 0 && write_buf[write_len - 1] != '\n') {
             g_dispatcher.sinks[i]->write(g_dispatcher.sinks[i], "\n", 1);
         }
-        g_dispatcher.sinks[i]->flush(g_dispatcher.sinks[i]);
     }
     pthread_mutex_unlock(&g_dispatcher.mutex);
 
@@ -156,8 +155,8 @@ void log_dispatcher_destroy(void) {
     free(g_dispatcher.sinks);
     g_dispatcher.sinks = NULL;
     g_dispatcher.sink_count = 0;
+    /* Keep the static mutex alive: init/reload call destroy then reuse it. */
     pthread_mutex_unlock(&g_dispatcher.mutex);
-    pthread_mutex_destroy(&g_dispatcher.mutex);
 }
 
 void log_dispatcher_flush(void) {
