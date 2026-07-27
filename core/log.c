@@ -84,6 +84,28 @@ void log_get_module(char *buf, size_t n) {
     pthread_mutex_unlock(&g_module_mutex);
 }
 
+int log_add_sink(log_sink_t *sink) {
+    if (!sink)
+        return CLOG_ERR_INVALID_ARG;
+
+    pthread_mutex_lock(&g_init_mutex);
+    if (!g_initialized) {
+        pthread_mutex_unlock(&g_init_mutex);
+        return CLOG_ERR_RELOAD;
+    }
+    int ret = log_dispatcher_add_sink(sink);
+    pthread_mutex_unlock(&g_init_mutex);
+    return ret == 0 ? CLOG_OK : CLOG_ERR_OOM;
+}
+
+int log_remove_sink(log_sink_t *sink) {
+    if (!sink)
+        return CLOG_ERR_INVALID_ARG;
+    if (log_dispatcher_remove_sink(sink) != 0)
+        return CLOG_ERR_INVALID_ARG;
+    return CLOG_OK;
+}
+
 /** Wall-clock timestamp in microseconds since the Unix epoch. */
 static inline uint64_t get_timestamp(void) {
     struct timespec ts;

@@ -173,6 +173,8 @@ void           log_set_async_fallback_cb(void (*cb)(void));
 void         (*log_get_async_fallback_cb(void))(void);
 void           log_set_module(const char *module);
 void           log_get_module(char *buf, size_t n);
+int            log_add_sink(log_sink_t *sink);
+int            log_remove_sink(log_sink_t *sink);
 
 LOG_INFO("...");
 LOG_DEBUG("...");
@@ -243,7 +245,7 @@ make test
 ctest --test-dir build --output-on-failure
 ```
 
-Covers async lifecycle, reload start/stop worker, dispatcher reuse, file rotation, nested directory creation, config hot reload, invalid config handling, double init protection, empty sink rejection, async fallback notification, non-blocking queue overflow, max_size unit parsing, stderr console routing, and module/truncation behavior. Total: 16 tests.
+Covers async lifecycle, reload start/stop worker, dispatcher reuse, file rotation, nested directory creation, config hot reload, invalid config handling, double init protection, empty sink rejection, async fallback notification, non-blocking queue overflow, max_size unit parsing, stderr console routing, module/truncation behavior, and custom sink registration. Total: 17 tests.
 
 ## CI
 

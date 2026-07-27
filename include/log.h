@@ -18,6 +18,7 @@
 #include <string.h>
 #include "log_config.h"
 #include "log_record.h"
+#include "log_sink.h"
 
 /**
  * @enum clogx_errno_t
@@ -71,6 +72,24 @@ void log_set_module(const char *module);
  * @param[in]  n   Buffer capacity.
  */
 void log_get_module(char *buf, size_t n);
+
+/**
+ * @brief Append a custom sink after @ref log_init.
+ * @param[in] sink Sink to take ownership of (destroyed by @ref log_destroy / reload).
+ * @return @ref CLOG_OK on success, negative @ref clogx_errno_t on failure.
+ *
+ * @note Custom sinks added this way are discarded on @ref log_reload.
+ */
+int log_add_sink(log_sink_t *sink);
+
+/**
+ * @brief Remove a previously added sink without destroying it.
+ * @param[in] sink Sink pointer previously passed to @ref log_add_sink.
+ * @return @ref CLOG_OK on success, @ref CLOG_ERR_INVALID_ARG if @p sink is NULL.
+ *
+ * @note Caller retains ownership and must call @c sink->destroy when finished.
+ */
+int log_remove_sink(log_sink_t *sink);
 
 /**
  * @brief Initialize the logging subsystem.
