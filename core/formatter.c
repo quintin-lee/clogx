@@ -7,12 +7,14 @@
 #include <string.h>
 #include <time.h>
 #include <ctype.h>
+#include <pthread.h>
 #include "log_formatter.h"
 #include "log_record.h"
 
 static char g_default_format[512] = "%msg";
 static char g_format_buf[512];
 static char *g_format_ptr = g_default_format;
+static pthread_mutex_t g_format_mutex = PTHREAD_MUTEX_INITIALIZER;
 
 #define TIME_BUF_SIZE 64
 
@@ -40,7 +42,11 @@ static int append_token(char **out, size_t *remaining, const char *token, size_t
 }
 
 int log_formatter_format(log_record_t *record, char *buf, size_t buf_size) {
-    const char *fmt = g_format_ptr;
+    const char *fmt;
+    pthread_mutex_lock(&g_format_mutex);
+    fmt = g_format_ptr;
+    pthread_mutex_unlock(&g_format_mutex);
+
     char *out = buf;
     size_t remaining = buf_size;
     int total = 0;
@@ -147,6 +153,7 @@ int log_formatter_format(log_record_t *record, char *buf, size_t buf_size) {
 }
 
 int log_formatter_init(const char *format) {
+    pthread_mutex_lock(&g_format_mutex);
     if (format && strlen(format) > 0) {
         strncpy(g_format_buf, format, sizeof(g_format_buf) - 1);
         g_format_buf[sizeof(g_format_buf) - 1] = '\0';
@@ -154,13 +161,20 @@ int log_formatter_init(const char *format) {
     } else {
         g_format_ptr = g_default_format;
     }
+    pthread_mutex_unlock(&g_format_mutex);
     return 0;
 }
 
 void log_formatter_reset(void) {
+    pthread_mutex_lock(&g_format_mutex);
     g_format_ptr = g_default_format;
+    pthread_mutex_unlock(&g_format_mutex);
 }
 
 const char *log_formatter_get_format(void) {
-    return g_format_ptr;
+    const char *fmt;
+    pthread_mutex_lock(&g_format_mutex);
+    fmt = g_format_ptr;
+    pthread_mutex_unlock(&g_format_mutex);
+    return fmt;
 }

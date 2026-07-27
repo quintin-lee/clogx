@@ -146,6 +146,11 @@ int log_dispatcher_init(void) {
         }
     }
 
+    if (g_dispatcher.sink_count == 0) {
+        fprintf(stderr, "No sinks configured; logging will be dropped\n");
+        return -1;
+    }
+
     return 0;
 }
 

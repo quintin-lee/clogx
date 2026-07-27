@@ -54,15 +54,21 @@ static int socket_write(log_sink_t *sink, const char *buf, size_t len) {
     if (data->sockfd < 0) {
         if (socket_connect(sink) != 0) return -1;
     }
-    int sent = send(data->sockfd, buf, len, 0);
-    if (sent < 0) {
-        perror("Failed to send socket log");
-        data->connected = 0;
-        close(data->sockfd);
-        data->sockfd = -1;
-        return -1;
+
+    size_t total_sent = 0;
+    while (total_sent < len) {
+        int sent = send(data->sockfd, buf + total_sent, len - total_sent, 0);
+        if (sent < 0) {
+            perror("Failed to send socket log");
+            data->connected = 0;
+            close(data->sockfd);
+            data->sockfd = -1;
+            return -1;
+        }
+        total_sent += (size_t)sent;
     }
-    return sent;
+
+    return (int)total_sent;
 }
 
 static void socket_flush(log_sink_t *sink) {

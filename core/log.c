@@ -17,6 +17,9 @@
 #include "log_async.h"
 #include "log_record.h"
 
+static pthread_mutex_t g_init_mutex = PTHREAD_MUTEX_INITIALIZER;
+static int g_initialized = 0;
+
 /** Wall-clock timestamp in microseconds since the Unix epoch. */
 static inline uint64_t get_timestamp(void) {
     struct timespec ts;
@@ -27,7 +30,9 @@ static inline uint64_t get_timestamp(void) {
 /** Truncated pthread_t suitable for %thread formatting. */
 static inline uint32_t get_thread_id(void) {
     pthread_t self = pthread_self();
-    return (uint32_t)((uintptr_t)self % 0xFFFFFFFF);
+    uint32_t h = (uint32_t)((uintptr_t)self >> 32);
+    uint32_t l = (uint32_t)(uintptr_t)self;
+    return (h ^ l ^ 0x9e3779b9u) + 1u;
 }
 
 void log_writevprintf(
@@ -79,9 +84,17 @@ void log_writevprintf(
 }
 
 int log_init(const char *yaml_path) {
+    pthread_mutex_lock(&g_init_mutex);
+    if (g_initialized) {
+        pthread_mutex_unlock(&g_init_mutex);
+        fprintf(stderr, "log_init called without log_destroy\n");
+        return -1;
+    }
+
     if (!yaml_path) yaml_path = "";
 
     if (log_config_init(yaml_path) != 0) {
+        pthread_mutex_unlock(&g_init_mutex);
         return -1;
     }
 
@@ -89,20 +102,28 @@ int log_init(const char *yaml_path) {
     log_formatter_init(cfg->format);
 
     if (log_dispatcher_init() != 0) {
+        pthread_mutex_unlock(&g_init_mutex);
         return -1;
     }
 
     if (cfg->async) {
         if (log_async_init(cfg->queue_size) != 0) {
             log_destroy();
+            pthread_mutex_unlock(&g_init_mutex);
             return -1;
         }
     }
 
+    g_initialized = 1;
+    pthread_mutex_unlock(&g_init_mutex);
     return 0;
 }
 
 void log_destroy(void) {
+    pthread_mutex_lock(&g_init_mutex);
+    g_initialized = 0;
+    pthread_mutex_unlock(&g_init_mutex);
+
     log_async_shutdown();
     log_dispatcher_destroy();
 }

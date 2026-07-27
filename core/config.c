@@ -41,6 +41,7 @@ static int parse_config_file(const char *filepath, log_config_t *cfg) {
     }
 
     char line[1024];
+    int has_errors = 0;
     while (fgets(line, sizeof(line), f)) {
         size_t len = strlen(line);
         while (len > 0 && (line[len - 1] == '\r' || line[len - 1] == '\n')) {
@@ -66,10 +67,20 @@ static int parse_config_file(const char *filepath, log_config_t *cfg) {
             else if (strcmp(value, "WARN") == 0) cfg->level = LOG_LEVEL_WARN;
             else if (strcmp(value, "ERROR") == 0) cfg->level = LOG_LEVEL_ERROR;
             else if (strcmp(value, "FATAL") == 0) cfg->level = LOG_LEVEL_FATAL;
+            else {
+                fprintf(stderr, "Unknown log level: %s (using default INFO)\n", value);
+                has_errors = 1;
+            }
         } else if (strcmp(key, "async") == 0) {
             cfg->async = (strcmp(value, "true") == 0);
         } else if (strcmp(key, "queue_size") == 0) {
-            cfg->queue_size = atoi(value);
+            int qs = atoi(value);
+            if (qs <= 0) {
+                fprintf(stderr, "Invalid queue_size: %s (must be > 0)\n", value);
+                has_errors = 1;
+            } else {
+                cfg->queue_size = qs;
+            }
         } else if (strcmp(key, "color") == 0) {
             cfg->color = (strcmp(value, "true") == 0);
         } else if (strcmp(key, "format") == 0) {
@@ -90,25 +101,49 @@ static int parse_config_file(const char *filepath, log_config_t *cfg) {
             char *mb = strchr(value, 'M');
             if (mb) {
                 *mb = '\0';
-                cfg->file_max_size = (uint64_t)atoi(value) * 1024 * 1024;
+                int mb_val = atoi(value);
+                if (mb_val < 0) {
+                    fprintf(stderr, "Invalid max_size: %s\n", value);
+                    has_errors = 1;
+                } else {
+                    cfg->file_max_size = (uint64_t)mb_val * 1024 * 1024;
+                }
             } else {
-                cfg->file_max_size = (uint64_t)atoi(value);
+                long raw = atol(value);
+                if (raw < 0) {
+                    fprintf(stderr, "Invalid max_size: %s\n", value);
+                    has_errors = 1;
+                } else {
+                    cfg->file_max_size = (uint64_t)raw;
+                }
             }
         } else if (strcmp(key, "backup") == 0 || strcmp(key, "backups") == 0) {
-            cfg->file_backups = atoi(value);
+            int bk = atoi(value);
+            if (bk < 0) {
+                fprintf(stderr, "Invalid backups: %s (must be >= 0)\n", value);
+                has_errors = 1;
+            } else {
+                cfg->file_backups = bk;
+            }
         } else if (strcmp(key, "host") == 0) {
             strncpy(cfg->socket_host, value, sizeof(cfg->socket_host) - 1);
             cfg->socket_host[sizeof(cfg->socket_host) - 1] = '\0';
             cfg->socket_enable = 1;
         } else if (strcmp(key, "port") == 0) {
-            cfg->socket_port = atoi(value);
+            int p = atoi(value);
+            if (p <= 0 || p > 65535) {
+                fprintf(stderr, "Invalid port: %s (must be 1..65535)\n", value);
+                has_errors = 1;
+            } else {
+                cfg->socket_port = p;
+            }
         }
     }
     fclose(f);
-    return 0;
+    return has_errors ? -1 : 0;
 }
 
-static void load_default_and_apply(const char *yaml_path) {
+static int load_default_and_apply(const char *yaml_path) {
     g_config.level = LOG_LEVEL_INFO;
     g_config.async = false;
     g_config.queue_size = 8192;
@@ -130,8 +165,10 @@ static void load_default_and_apply(const char *yaml_path) {
     }
 
     if (access(g_config_path, R_OK) == 0) {
-        parse_config_file(g_config_path, &g_config);
+        return parse_config_file(g_config_path, &g_config);
     }
+
+    return 0;
 }
 
 log_config_t *log_config_get(void) {
@@ -141,16 +178,16 @@ log_config_t *log_config_get(void) {
 int log_config_init(const char *yaml_path) {
     if (!yaml_path) yaml_path = "";
     pthread_rwlock_wrlock(&g_config_rwlock);
-    load_default_and_apply(yaml_path);
+    int ret = load_default_and_apply(yaml_path);
     pthread_rwlock_unlock(&g_config_rwlock);
-    return 0;
+    return ret;
 }
 
 int log_config_reload(void) {
     pthread_rwlock_wrlock(&g_config_rwlock);
-    load_default_and_apply(g_config_path);
+    int ret = load_default_and_apply(g_config_path);
     pthread_rwlock_unlock(&g_config_rwlock);
-    return 0;
+    return ret;
 }
 
 int log_set_level(log_level_t level) {
