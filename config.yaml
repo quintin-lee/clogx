@@ -1,0 +1,11 @@
+level: INFO
+async: false
+queue_size: 8192
+color: true
+format: [%time] [%level] %msg
+console_enable: true
+file_enable: true
+file_path: logs/server.log
+max_size: 100MB
+backups: 10
+socket_enable: false
