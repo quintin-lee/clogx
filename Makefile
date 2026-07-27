@@ -15,7 +15,7 @@ TESTS = test_async_lifecycle test_async_reload test_dispatcher_lifecycle \
         test_file_rotate test_file_mkdir test_config_reload
 TEST_BINS = $(addprefix $(BUILD_DIR)/,$(TESTS))
 
-.PHONY: all clean example test
+.PHONY: all clean example test docs
 
 all: $(LIB_TARGET) $(EXAMPLE_BIN)
 
@@ -73,5 +73,12 @@ test: $(TEST_BINS)
 	done; \
 	exit $$status
 
+docs:
+	@command -v doxygen >/dev/null || { echo "doxygen not found; install it to generate API docs"; exit 1; }
+	@mkdir -p docs/api
+	doxygen Doxyfile
+	@echo "API docs: docs/api/html/index.html"
+
 clean:
 	rm -rf $(BUILD_DIR)
+	rm -rf docs/api
