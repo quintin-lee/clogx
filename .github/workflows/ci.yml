@@ -1,0 +1,42 @@
+name: CI
+
+on:
+  push:
+    branches: [ main, master ]
+  pull_request:
+    branches: [ main, master ]
+
+jobs:
+  build-and-test:
+    runs-on: ubuntu-latest
+    strategy:
+      matrix:
+        build_type: [makefile, cmake]
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Build with Makefile
+        if: matrix.build_type == 'makefile'
+        run: make
+
+      - name: Run tests with Makefile
+        if: matrix.build_type == 'makefile'
+        run: make test
+
+      - name: Configure with CMake
+        if: matrix.build_type == 'cmake'
+        run: cmake -S . -B build -DCMAKE_EXPORT_COMPILE_COMMANDS=ON
+
+      - name: Build with CMake
+        if: matrix.build_type == 'cmake'
+        run: cmake --build build -j
+
+      - name: Run tests with CMake
+        if: matrix.build_type == 'cmake'
+        run: ctest --test-dir build --output-on-failure
+
+      - name: Verify compile_commands.json
+        if: matrix.build_type == 'cmake'
+        run: test -f build/compile_commands.json
