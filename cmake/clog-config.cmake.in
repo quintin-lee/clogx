@@ -1,0 +1,1 @@
+@PACKAGE_INIT@@INCLUDE_DEPENDENCY_FILE(clog-targets.cmake)check_required_components(clog)
