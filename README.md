@@ -115,7 +115,7 @@ port: 5140
 
 | Key | Meaning |
 |-----|---------|
-| `level` | minimum output level: `TRACE` / `DEBUG` / `INFO` / `WARN` / `ERROR` / `FATAL` |
+| `level` | minimum output level: `TRACE` / `DEBUG` / `INFO` / `WARN` / `ERROR` / `FATAL` (unknown values are rejected) |
 | `async` | enable background consumer thread when `true` |
 | `queue_size` | async queue capacity |
 | `color` | console ANSI coloring (does not affect file / socket) |

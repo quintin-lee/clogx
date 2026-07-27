@@ -79,7 +79,8 @@ static int parse_config_file(const char *filepath, log_config_t *cfg) {
             else if (strcmp(value, "FATAL") == 0)
                 cfg->level = LOG_LEVEL_FATAL;
             else {
-                fprintf(stderr, "Unknown log level: %s (using default INFO)\n", value);
+                fprintf(stderr, "Unknown log level: %s\n", value);
+                has_errors = 1;
             }
         } else if (strcmp(key, "async") == 0) {
             cfg->async = (strcmp(value, "true") == 0);

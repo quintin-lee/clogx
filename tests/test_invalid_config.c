@@ -55,11 +55,10 @@ int main(void) {
 
     if (write_config("level: INVALID") != 0)
         return 1;
-    if (log_init(CONFIG_PATH) != 0) {
-        fprintf(stderr, "log_init should succeed with warnings for unknown level\n");
+    if (log_init(CONFIG_PATH) == 0) {
+        fprintf(stderr, "Expected log_init to fail with unknown level\n");
         return 1;
     }
-    log_destroy();
 
     printf("invalid config test passed\n");
     return 0;
