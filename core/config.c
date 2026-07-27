@@ -100,6 +100,8 @@ static int parse_config_file(const char *filepath, log_config_t *cfg) {
             cfg->format = g_config_format;
         } else if (strcmp(key, "console_enable") == 0) {
             cfg->console_enable = (strcmp(value, "true") == 0);
+        } else if (strcmp(key, "console_stderr") == 0) {
+            cfg->console_stderr = (strcmp(value, "true") == 0);
         } else if (strcmp(key, "file_enable") == 0) {
             cfg->file_enable = (strcmp(value, "true") == 0);
         } else if (strcmp(key, "socket_enable") == 0) {
@@ -191,6 +193,7 @@ static int load_default_and_apply(const char *yaml_path) {
     g_config.color = true;
     strcpy(g_config_format, "[%time] [%level] %msg");
     g_config.console_enable = 1;
+    g_config.console_stderr = 0;
     g_config.file_enable = 0;
     g_config.file_path[0] = '\0';
     g_config.file_max_size = 100 * 1024 * 1024;

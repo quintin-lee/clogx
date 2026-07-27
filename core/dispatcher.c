@@ -131,7 +131,8 @@ int log_dispatcher_init(void) {
     int count = 0;
 
     if (cfg->console_enable) {
-        log_sink_t *sink = console_sink_create(cfg->color);
+        log_sink_t *sink = cfg->console_stderr ? console_sink_create_stderr(cfg->color)
+                                               : console_sink_create(cfg->color);
         if (sink) {
             sinks[count++] = sink;
         }
@@ -181,7 +182,8 @@ int log_dispatcher_build_snapshot(log_config_t *cfg, log_dispatcher_snapshot_t *
     int count = 0;
 
     if (cfg->console_enable) {
-        log_sink_t *sink = console_sink_create(cfg->color);
+        log_sink_t *sink = cfg->console_stderr ? console_sink_create_stderr(cfg->color)
+                                               : console_sink_create(cfg->color);
         if (sink) {
             sinks[count++] = sink;
         }

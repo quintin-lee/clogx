@@ -120,7 +120,8 @@ port: 5140
 | `queue_size` | async queue capacity |
 | `color` | console ANSI coloring (does not affect file / socket) |
 | `format` | format string |
-| `console_enable` | enable stdout sink |
+| `console_enable` | enable console sink |
+| `console_stderr` | when `true`, console sink writes to stderr instead of stdout |
 | `file_enable` / `file_path` | file sink; key `path` also accepted |
 | `max_size` | rotation threshold: raw bytes, or `K`/`KB`, `M`/`MB`, `G`/`GB` |
 | `backups` | number of backups to retain (`.1` … `.N`) |
@@ -230,7 +231,7 @@ make test
 ctest --test-dir build --output-on-failure
 ```
 
-Covers async lifecycle, reload start/stop worker, dispatcher reuse, file rotation, nested directory creation, config hot reload, invalid config handling, double init protection, empty sink rejection, async fallback notification, non-blocking queue overflow, and max_size unit parsing. Total: 14 tests.
+Covers async lifecycle, reload start/stop worker, dispatcher reuse, file rotation, nested directory creation, config hot reload, invalid config handling, double init protection, empty sink rejection, async fallback notification, non-blocking queue overflow, max_size unit parsing, and stderr console routing. Total: 15 tests.
 
 ## CI
 
