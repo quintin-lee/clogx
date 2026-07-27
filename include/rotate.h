@@ -11,7 +11,7 @@
 /**
  * @brief Rotate @p base_path into a numbered backup chain.
  *
- * Deletes `@p base_path.N`, shifts `.1`→`.2` … `.(N-1)`→`.N`, then renames
+ * Deletes \c base_path.N , shifts \c .1  \c .2  \c .(N-1)  \c .N , then renames
  * the active file to `.1`.
  *
  * @param[in] base_path   Active log file path (e.g. `"logs/server.log"`).
