@@ -169,6 +169,8 @@ LOG_ERROR("...");
 LOG_FATAL("...");
 LOG_TRACE("...");
 TRACE("..."); /* deprecated alias for LOG_TRACE */
+```
+
 Error codes:
 
 | Code | Meaning |
