@@ -10,7 +10,8 @@ int log_formatter_format(log_record_t *record, char *buf, size_t buf_size);
 
 // Initialize formatter with format string
 // format: e.g., "[%time] [%level] %msg"
-// Supported tokens: %time, %level, %thread, %pid, %file, %line, %func, %msg, %module, %tag, %hostname, %process, %newline
+// Supported tokens: %time, %level, %thread, %pid, %file, %line,
+//                   %func, %msg, %module, %tag, %newline
 int log_formatter_init(const char *format);
 
 // Reset formatter to default format
