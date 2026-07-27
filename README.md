@@ -50,6 +50,8 @@ int main(void) {
 }
 ```
 
+After `cmake --install`, prefer `#include <clogx/log.h>` (pkg-config / CMake export set the include path).
+
 Linking requires pthread:
 
 ```bash
@@ -159,7 +161,8 @@ Example: `[%time] [%level] %file:%line %msg`
 ## Public API
 
 ```c
-#include "log.h"
+#include "log.h"           /* in-tree: -Iinclude */
+/* #include <clogx/log.h>  after cmake --install */
 
 clogx_errno_t log_init(const char *yaml_path);
 void           log_destroy(void);
@@ -197,7 +200,8 @@ Error codes:
 | `CLOG_ERR_RELOAD` | reload without init |
 | `CLOG_ERR_INVALID_ARG` | invalid argument |
 
-Lower-level interfaces: `include/log_config.h`, `log_async.h`, `log_sink.h`, `dispatcher.h`, `log_record.h`, `log_formatter.h`.
+Installed public headers: `log.h`, `log_config.h`, `log_record.h`, `log_sink.h` under `include/clogx/`.
+Internal headers (`queue.h`, `dispatcher.h`, `log_async.h`, `log_formatter.h`, …) stay in-tree and are not installed.
 
 ## Async Mode
 
