@@ -10,6 +10,7 @@
 #include "queue.h"
 #include "dispatcher.h"
 #include "log_config.h"
+#include "log.h"
 
 typedef struct {
     mpsc_queue_t *queue;
@@ -137,7 +138,6 @@ int log_async_is_running(void) {
 
 int log_async_write(log_record_t *record) {
     if (!g_async_logger.queue) {
-        /* Async not started: write synchronously with the caller's pointers. */
         log_dispatcher_dispatch(record);
         return 0;
     }
@@ -145,14 +145,16 @@ int log_async_write(log_record_t *record) {
     log_record_t owned;
     if (log_record_clone(&owned, record) != 0) {
         log_dispatcher_dispatch(record);
-        return -1;
+        return CLOG_ERR_OOM;
     }
 
     int ret = mpsc_queue_put(g_async_logger.queue, &owned);
     if (ret != 0) {
-        /* Queue closed or shutting down: drop the clone and write sync. */
         log_record_free_owned(&owned);
         log_dispatcher_dispatch(record);
+        if (log_get_async_fallback_cb()) {
+            log_get_async_fallback_cb();
+        }
     }
 
     return ret;

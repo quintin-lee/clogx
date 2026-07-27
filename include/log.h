@@ -20,6 +20,46 @@
 #include "log_record.h"
 
 /**
+ * @enum clogx_errno_t
+ * @brief Structured error codes returned by clogx APIs.
+ */
+typedef enum {
+    CLOG_OK = 0,
+    CLOG_ERR_INVALID_ARG = -1,
+    CLOG_ERR_INIT_REENTRANT = -2,
+    CLOG_ERR_CONFIG_OPEN = -3,
+    CLOG_ERR_CONFIG_PARSE = -4,
+    CLOG_ERR_NO_SINKS = -5,
+    CLOG_ERR_FILE_OPEN = -6,
+    CLOG_ERR_FILE_WRITE = -7,
+    CLOG_ERR_QUEUE_FULL = -8,
+    CLOG_ERR_THREAD_CREATE = -9,
+    CLOG_ERR_SOCKET_CONNECT = -10,
+    CLOG_ERR_OOM = -11,
+    CLOG_ERR_RELOAD = -12,
+} clogx_errno_t;
+
+/**
+ * @brief Get a string description for the last error.
+ * @return Static error string.
+ */
+const char *log_strerror(int err);
+
+/**
+ * @brief Register a callback invoked when async mode degrades to sync.
+ * @param[in] cb Callback, or NULL to clear.
+ *
+ * @note Called with async fallback context (not async-signal-safe).
+ */
+void log_set_async_fallback_cb(void (*cb)(void));
+
+/**
+ * @brief Get the currently registered async fallback callback.
+ * @return Callback function pointer, or NULL if none registered.
+ */
+void (*log_get_async_fallback_cb(void))(void);
+
+/**
  * @brief Initialize the logging subsystem.
  *
  * Loads configuration, creates sinks, initializes the formatter, and starts
@@ -27,7 +67,7 @@
  *
  * @param[in] yaml_path Path to a key:value config file. NULL or "" uses
  *                      `./config.yaml` if present.
- * @return 0 on success, -1 on failure.
+ * @return @ref CLOG_OK on success, negative @ref clogx_errno_t on failure.
  *
  * @note Call @ref log_destroy when finished. Calling @ref log_init again
  *       without destroy is not supported.
@@ -55,7 +95,7 @@ void log_flush(void);
  * Always shuts down the async worker before replacing sinks, then restarts
  * it if the new config enables async mode.
  *
- * @return 0 on success, -1 on failure.
+ * @return @ref CLOG_OK on success, negative @ref clogx_errno_t on failure.
  */
 int log_reload(void);
 

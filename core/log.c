@@ -19,6 +19,34 @@
 
 static pthread_mutex_t g_init_mutex = PTHREAD_MUTEX_INITIALIZER;
 static int g_initialized = 0;
+static void (*g_async_fallback_cb)(void);
+
+const char *log_strerror(int err) {
+    switch (err) {
+        case CLOG_OK: return "success";
+        case CLOG_ERR_INVALID_ARG: return "invalid argument";
+        case CLOG_ERR_INIT_REENTRANT: return "reentrant init without destroy";
+        case CLOG_ERR_CONFIG_OPEN: return "failed to open config file";
+        case CLOG_ERR_CONFIG_PARSE: return "config parse error";
+        case CLOG_ERR_NO_SINKS: return "no sinks configured";
+        case CLOG_ERR_FILE_OPEN: return "failed to open log file";
+        case CLOG_ERR_FILE_WRITE: return "file write error";
+        case CLOG_ERR_QUEUE_FULL: return "async queue full or closed";
+        case CLOG_ERR_THREAD_CREATE: return "failed to create worker thread";
+        case CLOG_ERR_SOCKET_CONNECT: return "socket connect failed";
+        case CLOG_ERR_OOM: return "out of memory";
+        case CLOG_ERR_RELOAD: return "reload failed";
+        default: return "unknown error";
+    }
+}
+
+void log_set_async_fallback_cb(void (*cb)(void)) {
+    g_async_fallback_cb = cb;
+}
+
+void (*log_get_async_fallback_cb(void))(void) {
+    return g_async_fallback_cb;
+}
 
 /** Wall-clock timestamp in microseconds since the Unix epoch. */
 static inline uint64_t get_timestamp(void) {
@@ -87,15 +115,14 @@ int log_init(const char *yaml_path) {
     pthread_mutex_lock(&g_init_mutex);
     if (g_initialized) {
         pthread_mutex_unlock(&g_init_mutex);
-        fprintf(stderr, "log_init called without log_destroy\n");
-        return -1;
+        return CLOG_ERR_INIT_REENTRANT;
     }
 
     if (!yaml_path) yaml_path = "";
 
     if (log_config_init(yaml_path) != 0) {
         pthread_mutex_unlock(&g_init_mutex);
-        return -1;
+        return CLOG_ERR_CONFIG_OPEN;
     }
 
     log_config_t *cfg = log_config_get();
@@ -103,20 +130,20 @@ int log_init(const char *yaml_path) {
 
     if (log_dispatcher_init() != 0) {
         pthread_mutex_unlock(&g_init_mutex);
-        return -1;
+        return CLOG_ERR_NO_SINKS;
     }
 
     if (cfg->async) {
         if (log_async_init(cfg->queue_size) != 0) {
             log_destroy();
             pthread_mutex_unlock(&g_init_mutex);
-            return -1;
+            return CLOG_ERR_THREAD_CREATE;
         }
     }
 
     g_initialized = 1;
     pthread_mutex_unlock(&g_init_mutex);
-    return 0;
+    return CLOG_OK;
 }
 
 void log_destroy(void) {
@@ -141,13 +168,13 @@ int log_reload(void) {
     pthread_mutex_lock(&g_init_mutex);
     if (!g_initialized) {
         pthread_mutex_unlock(&g_init_mutex);
-        return -1;
+        return CLOG_ERR_RELOAD;
     }
     pthread_mutex_unlock(&g_init_mutex);
 
     int ret = log_config_reload();
     if (ret != 0) {
-        return ret;
+        return CLOG_ERR_CONFIG_OPEN;
     }
 
     log_config_t *cfg = log_config_get();
@@ -156,7 +183,7 @@ int log_reload(void) {
     log_dispatcher_snapshot_t snap = {0};
     ret = log_dispatcher_build_snapshot(cfg, &snap);
     if (ret != 0) {
-        return ret;
+        return CLOG_ERR_NO_SINKS;
     }
 
     log_async_shutdown();
@@ -165,9 +192,9 @@ int log_reload(void) {
 
     if (cfg->async) {
         if (log_async_init(cfg->queue_size) != 0) {
-            return -1;
+            return CLOG_ERR_THREAD_CREATE;
         }
     }
 
-    return 0;
+    return CLOG_OK;
 }
