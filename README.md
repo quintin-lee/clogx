@@ -3,7 +3,7 @@
 [![C99](https://img.shields.io/badge/C-C99-blue.svg)](https://en.wikipedia.org/wiki/C99)
 [![License: MIT](https://img.shields.io/badge/License-MIT-yellow.svg)](LICENSE)
 [![CMake](https://img.shields.io/badge/CMake-3.14%2B-red.svg)](https://cmake.org/)
-[![CI](https://github.com/${{ github.repository }}/actions/workflows/ci.yml/badge.svg)](https://github.com/${{ github.repository }}/actions/workflows/ci.yml)
+[![CI](https://github.com/quintin-lee/clogx/actions/workflows/ci.yml/badge.svg)](https://github.com/quintin-lee/clogx/actions/workflows/ci.yml)
 
 Lightweight C99 logging library: config-driven, multi-sink output, optional async queue, size-based log file rotation.
 
