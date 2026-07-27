@@ -2,7 +2,7 @@ CC = gcc
 CFLAGS = -std=c99 -Wall -Wextra -Iinclude -O2 -D_GNU_SOURCE
 LDFLAGS = -lpthread
 BUILD_DIR = build
-LIB_TARGET = $(BUILD_DIR)/libclog.a
+LIB_TARGET = $(BUILD_DIR)/libclogx.a
 EXAMPLE_BIN = $(BUILD_DIR)/example
 
 # Object files from core and sinks (built first)
@@ -57,10 +57,10 @@ $(LIB_TARGET): $(ALL_OBJS)
 	ar rcs $@ $^
 
 $(EXAMPLE_BIN): example/main.c $(LIB_TARGET) | $(BUILD_DIR)
-	$(CC) $(CFLAGS) -o $@ example/main.c -L$(BUILD_DIR) -lclog $(LDFLAGS)
+	$(CC) $(CFLAGS) -o $@ example/main.c -L$(BUILD_DIR) -lclogx $(LDFLAGS)
 
 $(BUILD_DIR)/test_%: tests/test_%.c $(LIB_TARGET) | $(BUILD_DIR)
-	$(CC) $(CFLAGS) -o $@ $< -L$(BUILD_DIR) -lclog $(LDFLAGS)
+	$(CC) $(CFLAGS) -o $@ $< -L$(BUILD_DIR) -lclogx $(LDFLAGS)
 
 example: $(EXAMPLE_BIN)
 

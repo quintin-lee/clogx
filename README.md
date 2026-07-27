@@ -1,4 +1,4 @@
-# clog
+# clogx
 
 [![C99](https://img.shields.io/badge/C-C99-blue.svg)](https://en.wikipedia.org/wiki/C99)
 [![License: MIT](https://img.shields.io/badge/License-MIT-yellow.svg)](LICENSE)
@@ -14,7 +14,7 @@ Lightweight C99 logging library: config-driven, multi-sink output, optional asyn
 - Token formatting: `%time` `%level` `%msg` `%file` `%line` `%func` and more
 - Sync / async switchable; async path deep-copies records to avoid dangling stack pointers
 - Hot reload: `log_reload()` re-reads config and rebuilds sinks / async worker
-- Build: Makefile and CMake (with CTest, `find_package(clog)`)
+- Build: Makefile and CMake (with CTest, `find_package(clogx)`)
 
 ## Directory Layout
 
@@ -50,7 +50,7 @@ int main(void) {
 Linking requires pthread:
 
 ```bash
-gcc -Iinclude app.c -Lbuild -lclog -lpthread -o app
+gcc -Iinclude app.c -Lbuild -lclogx -lpthread -o app
 ```
 
 ## Build
@@ -58,7 +58,7 @@ gcc -Iinclude app.c -Lbuild -lclog -lpthread -o app
 ### Makefile
 
 ```bash
-make          # generates build/libclog.a and build/example
+make          # generates build/libclogx.a and build/example
 make example
 make test     # compiles and runs all regression tests
 make clean
@@ -84,8 +84,8 @@ Common options:
 Downstream projects:
 
 ```cmake
-find_package(clog REQUIRED)
-target_link_libraries(app PRIVATE clog::clog)
+find_package(clogx REQUIRED)
+target_link_libraries(app PRIVATE clog::clogx)
 ```
 
 ## Configuration

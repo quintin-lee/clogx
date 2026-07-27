@@ -1,6 +1,6 @@
 /**
  * @file log.h
- * @brief Public application-facing API for the clog logging library.
+ * @brief Public application-facing API for the clogx logging library.
  *
  * @details Typical usage:
  * @code
