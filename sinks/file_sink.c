@@ -2,6 +2,7 @@
 #include <stdio.h>
 #include <stdlib.h>
 #include <string.h>
+#include <errno.h>
 #include <sys/stat.h>
 #include "log_sink.h"
 #include "log_record.h"
@@ -14,6 +15,36 @@ typedef struct {
     uint64_t current_size;
     int backups;
 } file_sink_data_t;
+
+static int ensure_parent_dirs(const char *path) {
+    char dir[1024];
+    size_t len;
+
+    if (!path || !*path) return -1;
+
+    len = strlen(path);
+    if (len >= sizeof(dir)) return -1;
+    memcpy(dir, path, len + 1);
+
+    char *slash = strrchr(dir, '/');
+    if (!slash || slash == dir) return 0;
+    *slash = '\0';
+
+    for (char *p = dir + 1; *p; p++) {
+        if (*p == '/') {
+            *p = '\0';
+            if (mkdir(dir, 0755) != 0 && errno != EEXIST) {
+                return -1;
+            }
+            *p = '/';
+        }
+    }
+
+    if (mkdir(dir, 0755) != 0 && errno != EEXIST) {
+        return -1;
+    }
+    return 0;
+}
 
 static int file_write(log_sink_t *sink, const char *buf, size_t len) {
     file_sink_data_t *data = (file_sink_data_t *)sink->private_data;
@@ -80,6 +111,14 @@ log_sink_t *file_sink_create(const char *path, uint64_t max_size, int backups) {
     data->max_size = max_size;
     data->backups = backups;
     data->current_size = 0;
+
+    if (ensure_parent_dirs(path) != 0) {
+        free(data->path);
+        free(data);
+        free(sink);
+        return NULL;
+    }
+
     data->file = fopen(path, "a");
     if (!data->file) {
         perror("Failed to open file for logging");
