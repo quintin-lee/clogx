@@ -81,6 +81,7 @@ void *async_worker(void *arg) {
 
 int log_async_init(int queue_size) {
     if (queue_size <= 0) return -1;
+    if (g_async_logger.running) return 0;
 
     g_async_logger.queue = mpsc_queue_create(queue_size);
     if (!g_async_logger.queue) return -1;
@@ -112,6 +113,10 @@ void log_async_flush(void) {
 
     mpsc_queue_wait_empty(g_async_logger.queue);
     log_dispatcher_flush();
+}
+
+int log_async_is_running(void) {
+    return g_async_logger.running && g_async_logger.queue != NULL;
 }
 
 int log_async_write(log_record_t *record) {

@@ -111,12 +111,26 @@ void log_flush(void) {
 }
 
 int log_reload(void) {
+    /* Stop async worker before rebuilding sinks to avoid use-after-free. */
+    log_async_shutdown();
+
     int ret = log_config_reload();
-    if (ret == 0) {
-        log_config_t *cfg = log_config_get();
-        log_formatter_init(cfg->format);
-        log_dispatcher_destroy();
-        log_dispatcher_init();
+    if (ret != 0) {
+        return ret;
     }
-    return ret;
+
+    log_config_t *cfg = log_config_get();
+    log_formatter_init(cfg->format);
+    log_dispatcher_destroy();
+    if (log_dispatcher_init() != 0) {
+        return -1;
+    }
+
+    if (cfg->async) {
+        if (log_async_init(cfg->queue_size) != 0) {
+            return -1;
+        }
+    }
+
+    return 0;
 }
