@@ -4,3 +4,4 @@ docs/api/
 
 compile_commands.json
 config*.yaml
+*.bak

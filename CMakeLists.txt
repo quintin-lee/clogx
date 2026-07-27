@@ -1,5 +1,5 @@
 cmake_minimum_required(VERSION 3.14)
-project(clog VERSION 0.1.0 LANGUAGES C)
+project(clogx VERSION 0.1.0 LANGUAGES C)
 
 set(CMAKE_C_STANDARD 99)
 set(CMAKE_C_STANDARD_REQUIRED ON)
@@ -26,36 +26,36 @@ set(CLOG_SOURCES
 )
 
 if(CLOG_BUILD_SHARED)
-    add_library(clog SHARED ${CLOG_SOURCES})
+    add_library(clogx SHARED ${CLOG_SOURCES})
 else()
-    add_library(clog STATIC ${CLOG_SOURCES})
+    add_library(clogx STATIC ${CLOG_SOURCES})
 endif()
 
-add_library(clog::clog ALIAS clog)
+add_library(clog::clogx ALIAS clogx)
 
-target_include_directories(clog
+target_include_directories(clogx
     PUBLIC
         $<BUILD_INTERFACE:${CMAKE_CURRENT_SOURCE_DIR}/include>
         $<INSTALL_INTERFACE:include>
 )
 
-target_compile_definitions(clog
+target_compile_definitions(clogx
     PRIVATE
         _GNU_SOURCE
 )
 
-target_compile_options(clog
+target_compile_options(clogx
     PRIVATE
         $<$<C_COMPILER_ID:GNU,Clang,AppleClang>:-Wall -Wextra>
 )
 
-target_link_libraries(clog
+target_link_libraries(clogx
     PUBLIC
         Threads::Threads
 )
 
-set_target_properties(clog PROPERTIES
-    OUTPUT_NAME clog
+set_target_properties(clogx PROPERTIES
+    OUTPUT_NAME clogx
     VERSION ${PROJECT_VERSION}
     SOVERSION 0
     POSITION_INDEPENDENT_CODE ON
@@ -64,7 +64,7 @@ set_target_properties(clog PROPERTIES
 # --- Example ---
 if(CLOG_BUILD_EXAMPLES)
     add_executable(clog_example example/main.c)
-    target_link_libraries(clog_example PRIVATE clog)
+    target_link_libraries(clog_example PRIVATE clogx)
     set_target_properties(clog_example PROPERTIES
         OUTPUT_NAME example
         RUNTIME_OUTPUT_DIRECTORY ${CMAKE_BINARY_DIR}/bin
@@ -86,7 +86,7 @@ if(CLOG_BUILD_TESTS)
 
     foreach(test_name IN LISTS CLOG_TEST_SOURCES)
         add_executable(${test_name} tests/${test_name}.c)
-        target_link_libraries(${test_name} PRIVATE clog)
+        target_link_libraries(${test_name} PRIVATE clogx)
         target_compile_definitions(${test_name} PRIVATE _GNU_SOURCE)
         set_target_properties(${test_name} PROPERTIES
             RUNTIME_OUTPUT_DIRECTORY ${CMAKE_BINARY_DIR}/tests
@@ -103,8 +103,8 @@ endif()
 include(GNUInstallDirs)
 include(CMakePackageConfigHelpers)
 
-install(TARGETS clog
-    EXPORT clogTargets
+install(TARGETS clogx
+    EXPORT clogxTargets
     ARCHIVE DESTINATION ${CMAKE_INSTALL_LIBDIR}
     LIBRARY DESTINATION ${CMAKE_INSTALL_LIBDIR}
     RUNTIME DESTINATION ${CMAKE_INSTALL_BINDIR}
@@ -112,7 +112,7 @@ install(TARGETS clog
 )
 
 install(DIRECTORY include/
-    DESTINATION ${CMAKE_INSTALL_INCLUDEDIR}/clog
+    DESTINATION ${CMAKE_INSTALL_INCLUDEDIR}/clogx
     FILES_MATCHING PATTERN "*.h"
 )
 
@@ -122,28 +122,28 @@ if(CLOG_BUILD_EXAMPLES)
     )
 endif()
 
-install(EXPORT clogTargets
-    FILE clogTargets.cmake
-    NAMESPACE clog::
-    DESTINATION ${CMAKE_INSTALL_LIBDIR}/cmake/clog
+install(EXPORT clogxTargets
+    FILE clogxTargets.cmake
+    NAMESPACE clogx::
+    DESTINATION ${CMAKE_INSTALL_LIBDIR}/cmake/clogx
 )
 
 configure_package_config_file(
-    ${CMAKE_CURRENT_SOURCE_DIR}/cmake/clog-config.cmake.in
-    ${CMAKE_CURRENT_BINARY_DIR}/clog-config.cmake
-    INSTALL_DESTINATION ${CMAKE_INSTALL_LIBDIR}/cmake/clog
+    ${CMAKE_CURRENT_SOURCE_DIR}/cmake/clogx-config.cmake.in
+    ${CMAKE_CURRENT_BINARY_DIR}/clogx-config.cmake
+    INSTALL_DESTINATION ${CMAKE_INSTALL_LIBDIR}/cmake/clogx
 )
 
 write_basic_package_version_file(
-    ${CMAKE_CURRENT_BINARY_DIR}/clog-config-version.cmake
+    ${CMAKE_CURRENT_BINARY_DIR}/clogx-config-version.cmake
     VERSION ${PROJECT_VERSION}
     COMPATIBILITY SameMajorVersion
 )
 
 install(FILES
-    ${CMAKE_CURRENT_BINARY_DIR}/clog-config.cmake
-    ${CMAKE_CURRENT_BINARY_DIR}/clog-config-version.cmake
-    DESTINATION ${CMAKE_INSTALL_LIBDIR}/cmake/clog
+    ${CMAKE_CURRENT_BINARY_DIR}/clogx-config.cmake
+    ${CMAKE_CURRENT_BINARY_DIR}/clogx-config-version.cmake
+    DESTINATION ${CMAKE_INSTALL_LIBDIR}/cmake/clogx
 )
 
 # --- Docs (optional; requires doxygen) ---
