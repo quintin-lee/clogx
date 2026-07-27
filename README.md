@@ -122,7 +122,7 @@ port: 5140
 | `format` | format string |
 | `console_enable` | enable stdout sink |
 | `file_enable` / `file_path` | file sink; key `path` also accepted |
-| `max_size` | rotation threshold, supports `100MB` or raw byte count |
+| `max_size` | rotation threshold: raw bytes, or `K`/`KB`, `M`/`MB`, `G`/`GB` |
 | `backups` | number of backups to retain (`.1` … `.N`) |
 | `socket_enable` / `host` / `port` | TCP socket sink |
 
@@ -230,7 +230,7 @@ make test
 ctest --test-dir build --output-on-failure
 ```
 
-Covers async lifecycle, reload start/stop worker, dispatcher reuse, file rotation, nested directory creation, config hot reload, invalid config handling, double init protection, empty sink rejection, async fallback notification, and non-blocking queue overflow. Total: 13 tests.
+Covers async lifecycle, reload start/stop worker, dispatcher reuse, file rotation, nested directory creation, config hot reload, invalid config handling, double init protection, empty sink rejection, async fallback notification, non-blocking queue overflow, and max_size unit parsing. Total: 14 tests.
 
 ## CI
 

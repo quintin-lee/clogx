@@ -89,6 +89,7 @@ if(CLOG_BUILD_TESTS)
         test_empty_sink
         test_async_fallback
         test_queue_try_put
+        test_max_size
     )
 
     foreach(test_name IN LISTS CLOG_TEST_SOURCES)

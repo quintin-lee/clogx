@@ -108,24 +108,54 @@ static int parse_config_file(const char *filepath, log_config_t *cfg) {
             cfg->file_path[sizeof(cfg->file_path) - 1] = '\0';
             cfg->file_enable = 1;
         } else if (strcmp(key, "max_size") == 0) {
-            char *mb = strchr(value, 'M');
-            if (mb) {
-                *mb = '\0';
-                int mb_val = atoi(value);
-                if (mb_val < 0) {
-                    fprintf(stderr, "Invalid max_size: %s\n", value);
-                    has_errors = 1;
-                } else {
-                    cfg->file_max_size = (uint64_t)mb_val * 1024 * 1024;
+            char size_buf[64];
+            size_t vlen = strlen(value);
+            char *end = NULL;
+            unsigned long long n;
+            uint64_t mult = 1;
+
+            if (vlen == 0 || vlen >= sizeof(size_buf)) {
+                fprintf(stderr, "Invalid max_size: %s\n", value);
+                has_errors = 1;
+                continue;
+            }
+            memcpy(size_buf, value, vlen + 1);
+
+            /* Accept optional unit suffix: K/KB, M/MB, G/GB (case-insensitive). */
+            if (vlen >= 2) {
+                char u0 = size_buf[vlen - 2];
+                char u1 = size_buf[vlen - 1];
+                if ((u0 == 'K' || u0 == 'k') && (u1 == 'B' || u1 == 'b')) {
+                    size_buf[vlen - 2] = '\0';
+                    mult = 1024ULL;
+                } else if ((u0 == 'M' || u0 == 'm') && (u1 == 'B' || u1 == 'b')) {
+                    size_buf[vlen - 2] = '\0';
+                    mult = 1024ULL * 1024ULL;
+                } else if ((u0 == 'G' || u0 == 'g') && (u1 == 'B' || u1 == 'b')) {
+                    size_buf[vlen - 2] = '\0';
+                    mult = 1024ULL * 1024ULL * 1024ULL;
                 }
+            }
+            if (mult == 1 && vlen >= 1) {
+                char u = size_buf[vlen - 1];
+                if (u == 'K' || u == 'k') {
+                    size_buf[vlen - 1] = '\0';
+                    mult = 1024ULL;
+                } else if (u == 'M' || u == 'm') {
+                    size_buf[vlen - 1] = '\0';
+                    mult = 1024ULL * 1024ULL;
+                } else if (u == 'G' || u == 'g') {
+                    size_buf[vlen - 1] = '\0';
+                    mult = 1024ULL * 1024ULL * 1024ULL;
+                }
+            }
+
+            n = strtoull(size_buf, &end, 10);
+            if (end == size_buf || *end != '\0') {
+                fprintf(stderr, "Invalid max_size: %s\n", value);
+                has_errors = 1;
             } else {
-                long raw = atol(value);
-                if (raw < 0) {
-                    fprintf(stderr, "Invalid max_size: %s\n", value);
-                    has_errors = 1;
-                } else {
-                    cfg->file_max_size = (uint64_t)raw;
-                }
+                cfg->file_max_size = (uint64_t)n * mult;
             }
         } else if (strcmp(key, "backup") == 0 || strcmp(key, "backups") == 0) {
             int bk = atoi(value);
