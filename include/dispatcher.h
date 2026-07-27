@@ -11,6 +11,15 @@
 
 #include "log_record.h"
 #include "log_sink.h"
+#include "log_config.h"
+
+/**
+ * @brief Dispatcher snapshot used for atomic reload.
+ */
+typedef struct {
+    log_sink_t **sinks;
+    int sink_count;
+} log_dispatcher_snapshot_t;
 
 /**
  * @brief Destroy existing sinks (if any) and create sinks from current config.
@@ -55,5 +64,28 @@ int log_dispatcher_add_sink(log_sink_t *sink);
  * @note Caller retains ownership and must call @c sink->destroy if needed.
  */
 int log_dispatcher_remove_sink(log_sink_t *sink);
+
+/**
+ * @brief Build a new dispatcher snapshot from config without touching global state.
+ * @param[in]  cfg   Configuration to apply.
+ * @param[out] snap  Receives the newly allocated snapshot.
+ * @return 0 on success, -1 on error.
+ *
+ * @note Caller must call @ref log_dispatcher_destroy_snapshot on failure, or
+ *       @ref log_dispatcher_commit_snapshot on success to take ownership.
+ */
+int log_dispatcher_build_snapshot(log_config_t *cfg, log_dispatcher_snapshot_t *snap);
+
+/**
+ * @brief Destroy a snapshot without affecting the global dispatcher.
+ * @param[in,out] snap Snapshot to free.
+ */
+void log_dispatcher_destroy_snapshot(log_dispatcher_snapshot_t *snap);
+
+/**
+ * @brief Atomically replace the global dispatcher with @p snap.
+ * @param[in,out] snap Snapshot to commit (ownership transferred).
+ */
+void log_dispatcher_commit_snapshot(log_dispatcher_snapshot_t *snap);
 
 #endif /* DISPATCHER_H */

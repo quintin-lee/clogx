@@ -138,8 +138,12 @@ void log_flush(void) {
 }
 
 int log_reload(void) {
-    /* Stop async worker before rebuilding sinks to avoid use-after-free. */
-    log_async_shutdown();
+    pthread_mutex_lock(&g_init_mutex);
+    if (!g_initialized) {
+        pthread_mutex_unlock(&g_init_mutex);
+        return -1;
+    }
+    pthread_mutex_unlock(&g_init_mutex);
 
     int ret = log_config_reload();
     if (ret != 0) {
@@ -148,10 +152,16 @@ int log_reload(void) {
 
     log_config_t *cfg = log_config_get();
     log_formatter_init(cfg->format);
-    log_dispatcher_destroy();
-    if (log_dispatcher_init() != 0) {
-        return -1;
+
+    log_dispatcher_snapshot_t snap = {0};
+    ret = log_dispatcher_build_snapshot(cfg, &snap);
+    if (ret != 0) {
+        return ret;
     }
+
+    log_async_shutdown();
+    log_dispatcher_commit_snapshot(&snap);
+    log_dispatcher_destroy_snapshot(&snap);
 
     if (cfg->async) {
         if (log_async_init(cfg->queue_size) != 0) {

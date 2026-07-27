@@ -173,6 +173,85 @@ int log_dispatcher_init(void) {
     return 0;
 }
 
+int log_dispatcher_build_snapshot(log_config_t *cfg, log_dispatcher_snapshot_t *snap) {
+    log_sink_t *sinks[8] = {0};
+    int count = 0;
+
+    if (cfg->console_enable) {
+        log_sink_t *sink = console_sink_create(cfg->color);
+        if (sink) {
+            sinks[count++] = sink;
+        }
+    }
+
+    if (cfg->file_enable && strlen(cfg->file_path) > 0) {
+        log_sink_t *sink = file_sink_create(cfg->file_path, cfg->file_max_size, cfg->file_backups);
+        if (sink) {
+            sinks[count++] = sink;
+        }
+    }
+
+    if (cfg->socket_enable && strlen(cfg->socket_host) > 0) {
+        log_sink_t *sink = socket_sink_create(cfg->socket_host, cfg->socket_port);
+        if (sink) {
+            sinks[count++] = sink;
+        }
+    }
+
+    if (count == 0) {
+        fprintf(stderr, "No sinks configured; logging will be dropped\n");
+        return -1;
+    }
+
+    snap->sinks = malloc((size_t)count * sizeof(log_sink_t *));
+    if (!snap->sinks) {
+        for (int i = 0; i < count; i++) {
+            sinks[i]->destroy(sinks[i]);
+        }
+        return -1;
+    }
+    for (int i = 0; i < count; i++) {
+        snap->sinks[i] = sinks[i];
+    }
+    snap->sink_count = count;
+    return 0;
+}
+
+void log_dispatcher_destroy_snapshot(log_dispatcher_snapshot_t *snap) {
+    if (!snap) return;
+    for (int i = 0; i < snap->sink_count; i++) {
+        if (snap->sinks[i]) {
+            snap->sinks[i]->destroy(snap->sinks[i]);
+        }
+    }
+    free(snap->sinks);
+    snap->sinks = NULL;
+    snap->sink_count = 0;
+}
+
+void log_dispatcher_commit_snapshot(log_dispatcher_snapshot_t *snap) {
+    log_sink_t **old_sinks = NULL;
+    int old_count = 0;
+    int i;
+
+    pthread_mutex_lock(&g_dispatcher.mutex);
+    old_sinks = g_dispatcher.sinks;
+    old_count = g_dispatcher.sink_count;
+    g_dispatcher.sinks = snap->sinks;
+    g_dispatcher.sink_count = snap->sink_count;
+    pthread_mutex_unlock(&g_dispatcher.mutex);
+
+    for (i = 0; i < old_count; i++) {
+        if (old_sinks[i]) {
+            old_sinks[i]->destroy(old_sinks[i]);
+        }
+    }
+    free(old_sinks);
+
+    snap->sinks = NULL;
+    snap->sink_count = 0;
+}
+
 void log_dispatcher_destroy(void) {
     pthread_mutex_lock(&g_dispatcher.mutex);
     for (int i = 0; i < g_dispatcher.sink_count; i++) {
