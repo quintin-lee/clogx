@@ -2,6 +2,8 @@ build*/
 logs/
 docs/api/
 
+.cache/
+
 compile_commands.json
 config*.yaml
 *.bak

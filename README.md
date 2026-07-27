@@ -1,5 +1,9 @@
 # clog
 
+[![C99](https://img.shields.io/badge/C-C99-blue.svg)](https://en.wikipedia.org/wiki/C99)
+[![License: MIT](https://img.shields.io/badge/License-MIT-yellow.svg)](LICENSE)
+[![CMake](https://img.shields.io/badge/CMake-3.14%2B-red.svg)](https://cmake.org/)
+
 Lightweight C99 logging library: config-driven, multi-sink output, optional async queue, size-based log file rotation.
 
 ## Features
@@ -202,4 +206,4 @@ make docs   # requires doxygen
 
 ## License
 
-As declared in the repository; if no license file is present yet, add one before use.
+This project is licensed under the MIT License - see the [LICENSE](LICENSE) file for details.
