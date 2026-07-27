@@ -155,6 +155,16 @@ install(FILES
     DESTINATION ${CMAKE_INSTALL_LIBDIR}/cmake/clogx
 )
 
+configure_file(
+    ${CMAKE_CURRENT_SOURCE_DIR}/cmake/clogx.pc.in
+    ${CMAKE_CURRENT_BINARY_DIR}/clogx.pc
+    @ONLY
+)
+
+install(FILES ${CMAKE_CURRENT_BINARY_DIR}/clogx.pc
+    DESTINATION ${CMAKE_INSTALL_LIBDIR}/pkgconfig
+)
+
 # --- Docs (optional; requires doxygen) ---
 find_program(DOXYGEN_EXECUTABLE doxygen)
 if(DOXYGEN_EXECUTABLE)

@@ -91,6 +91,12 @@ find_package(clogx REQUIRED)
 target_link_libraries(app PRIVATE clogx::clogx)
 ```
 
+Or with pkg-config:
+
+```bash
+pkg-config --cflags --libs clogx
+```
+
 ## Configuration
 
 The config file is a simple `key: value` text format (not full YAML). Pass the path to `log_init(path)`; when empty, defaults to `./config.yaml`.

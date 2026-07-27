@@ -1,0 +1,10 @@
+prefix=@CMAKE_INSTALL_PREFIX@
+exec_prefix=${prefix}
+libdir=${prefix}/@CMAKE_INSTALL_LIBDIR@
+includedir=${prefix}/@CMAKE_INSTALL_INCLUDEDIR@
+
+Name: clogx
+Description: Lightweight C99 logging library with multi-sink and async support
+Version: @PROJECT_VERSION@
+Libs: -L${libdir} -lclogx -lpthread
+Cflags: -I${includedir}/clogx
