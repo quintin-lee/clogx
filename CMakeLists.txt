@@ -145,3 +145,14 @@ install(FILES
     ${CMAKE_CURRENT_BINARY_DIR}/clog-config-version.cmake
     DESTINATION ${CMAKE_INSTALL_LIBDIR}/cmake/clog
 )
+
+# --- Docs (optional; requires doxygen) ---
+find_program(DOXYGEN_EXECUTABLE doxygen)
+if(DOXYGEN_EXECUTABLE)
+    add_custom_target(docs
+        COMMAND ${DOXYGEN_EXECUTABLE} ${CMAKE_CURRENT_SOURCE_DIR}/Doxyfile
+        WORKING_DIRECTORY ${CMAKE_CURRENT_SOURCE_DIR}
+        COMMENT "Generating API documentation with Doxygen"
+        VERBATIM
+    )
+endif()

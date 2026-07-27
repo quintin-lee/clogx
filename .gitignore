@@ -1,5 +1,6 @@
 build*/
 logs/
+docs/api/
 
 compile_commands.json
 config*.yaml
