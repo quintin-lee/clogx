@@ -1,1 +1,8 @@
-@PACKAGE_INIT@@INCLUDE_DEPENDENCY_FILE(clog-targets.cmake)check_required_components(clog)
+@PACKAGE_INIT@
+
+include(CMakeFindDependencyMacro)
+find_dependency(Threads)
+
+include("${CMAKE_CURRENT_LIST_DIR}/clogTargets.cmake")
+
+check_required_components(clog)
