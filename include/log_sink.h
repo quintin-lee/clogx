@@ -2,6 +2,8 @@
 #define LOG_SINK_H
 
 #include <stddef.h>
+#include <stdint.h>
+#include <stdbool.h>
 #include "log_record.h"
 
 // Sink function pointers
