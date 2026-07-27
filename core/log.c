@@ -79,8 +79,7 @@ void log_get_module(char *buf, size_t n) {
     if (!buf || n == 0)
         return;
     pthread_mutex_lock(&g_module_mutex);
-    strncpy(buf, g_module, n - 1);
-    buf[n - 1] = '\0';
+    snprintf(buf, n, "%s", g_module);
     pthread_mutex_unlock(&g_module_mutex);
 }
 
