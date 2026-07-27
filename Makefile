@@ -5,10 +5,10 @@ BUILD_DIR = build
 LIB_TARGET = $(BUILD_DIR)/libclogx.a
 EXAMPLE_BIN = $(BUILD_DIR)/example
 
-# Object files from core and sinks (built first)
-CORE_OBJS = $(BUILD_DIR)/config.o $(BUILD_DIR)/formatter.o $(BUILD_DIR)/dispatcher.o \
-            $(BUILD_DIR)/queue.o $(BUILD_DIR)/async.o $(BUILD_DIR)/log.o $(BUILD_DIR)/rotate.o
-SINK_OBJS = $(BUILD_DIR)/console_sink.o $(BUILD_DIR)/file_sink.o $(BUILD_DIR)/socket_sink.o
+CORE_SRCS = config.c formatter.c dispatcher.c queue.c async.c log.c rotate.c
+SINK_SRCS = console_sink.c file_sink.c socket_sink.c
+CORE_OBJS = $(addprefix $(BUILD_DIR)/,$(CORE_SRCS:.c=.o))
+SINK_OBJS = $(addprefix $(BUILD_DIR)/,$(SINK_SRCS:.c=.o))
 ALL_OBJS = $(CORE_OBJS) $(SINK_OBJS)
 
 TESTS = test_async_lifecycle test_async_reload test_dispatcher_lifecycle \
@@ -28,35 +28,10 @@ all: $(LIB_TARGET) $(EXAMPLE_BIN)
 $(BUILD_DIR):
 	mkdir -p $@
 
-# Compile each core source file
-$(BUILD_DIR)/config.o: core/config.c | $(BUILD_DIR)
+$(BUILD_DIR)/%.o: core/%.c | $(BUILD_DIR)
 	$(CC) $(CFLAGS) -c $< -o $@
 
-$(BUILD_DIR)/formatter.o: core/formatter.c | $(BUILD_DIR)
-	$(CC) $(CFLAGS) -c $< -o $@
-
-$(BUILD_DIR)/dispatcher.o: core/dispatcher.c | $(BUILD_DIR)
-	$(CC) $(CFLAGS) -c $< -o $@
-
-$(BUILD_DIR)/queue.o: core/queue.c | $(BUILD_DIR)
-	$(CC) $(CFLAGS) -c $< -o $@
-
-$(BUILD_DIR)/async.o: core/async.c | $(BUILD_DIR)
-	$(CC) $(CFLAGS) -c $< -o $@
-
-$(BUILD_DIR)/log.o: core/log.c | $(BUILD_DIR)
-	$(CC) $(CFLAGS) -c $< -o $@
-
-$(BUILD_DIR)/rotate.o: core/rotate.c | $(BUILD_DIR)
-	$(CC) $(CFLAGS) -c $< -o $@
-
-$(BUILD_DIR)/console_sink.o: sinks/console_sink.c | $(BUILD_DIR)
-	$(CC) $(CFLAGS) -c $< -o $@
-
-$(BUILD_DIR)/file_sink.o: sinks/file_sink.c | $(BUILD_DIR)
-	$(CC) $(CFLAGS) -c $< -o $@
-
-$(BUILD_DIR)/socket_sink.o: sinks/socket_sink.c | $(BUILD_DIR)
+$(BUILD_DIR)/%.o: sinks/%.c | $(BUILD_DIR)
 	$(CC) $(CFLAGS) -c $< -o $@
 
 $(LIB_TARGET): $(ALL_OBJS)
