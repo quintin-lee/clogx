@@ -9,7 +9,7 @@ Lightweight C99 logging library: config-driven, multi-sink output, optional asyn
 
 ## Features
 
-- Macro API: `LOG_INFO` / `LOG_DEBUG` / `LOG_WARN` / `LOG_ERROR` / `LOG_FATAL` / `TRACE`
+- Macro API: `LOG_INFO` / `LOG_DEBUG` / `LOG_WARN` / `LOG_ERROR` / `LOG_FATAL` / `LOG_TRACE` (`TRACE` kept as alias)
 - Multi-sink: console (optional ANSI color), file (auto-create directories + rotation), TCP socket
 - Token formatting: `%time` `%level` `%msg` `%file` `%line` `%func` and more
 - Sync / async switchable; async path deep-copies records to avoid dangling stack pointers
@@ -167,9 +167,8 @@ LOG_DEBUG("...");
 LOG_WARN("...");
 LOG_ERROR("...");
 LOG_FATAL("...");
-TRACE("...");
-```
-
+LOG_TRACE("...");
+TRACE("..."); /* deprecated alias for LOG_TRACE */
 Error codes:
 
 | Code | Meaning |
