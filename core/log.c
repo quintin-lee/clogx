@@ -78,11 +78,13 @@ int log_init(const char *yaml_path) {
         return -1;
     }
 
+    log_config_t *cfg = log_config_get();
+    log_formatter_init(cfg->format);
+
     if (log_dispatcher_init() != 0) {
         return -1;
     }
 
-    log_config_t *cfg = log_config_get();
     if (cfg->async) {
         if (log_async_init(cfg->queue_size) != 0) {
             log_destroy();
@@ -105,6 +107,8 @@ void log_flush(void) {
 int log_reload(void) {
     int ret = log_config_reload();
     if (ret == 0) {
+        log_config_t *cfg = log_config_get();
+        log_formatter_init(cfg->format);
         log_dispatcher_destroy();
         log_dispatcher_init();
     }

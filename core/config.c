@@ -60,6 +60,7 @@ static int parse_config_file(const char *filepath, log_config_t *cfg) {
         else if (strcmp(key, "format") == 0) {
             strncpy(g_config_format, value, sizeof(g_config_format) - 1);
             g_config_format[sizeof(g_config_format) - 1] = '\0';
+            cfg->format = g_config_format;
         }
         else if (strcmp(key, "console_enable") == 0) cfg->console_enable = (strcmp(value, "true") == 0);
         else if (strcmp(key, "file_enable") == 0) cfg->file_enable = (strcmp(value, "true") == 0);
@@ -91,6 +92,7 @@ void load_default_and_apply(const char *yaml_path) {
     g_config.color = true; strcpy(g_config_format, "[%time] [%level] %msg");
     g_config.console_enable = 1; g_config.file_enable = 0; g_config.file_path[0] = '\0';
     g_config.file_max_size = 100*1024*1024; g_config.file_backups = 10; g_config.socket_enable = 0;
+    g_config.format = g_config_format;
     const char *path = (yaml_path && strlen(yaml_path)>0) ? yaml_path : "./config.yaml";
     if (access(path, R_OK) == 0) parse_config_file(path, &g_config);
 }
