@@ -13,7 +13,10 @@ Lightweight C99 logging library: config-driven, multi-sink output, optional asyn
 - Multi-sink: console (optional ANSI color), file (auto-create directories + rotation), TCP socket
 - Token formatting: `%time` `%level` `%msg` `%file` `%line` `%func` and more
 - Sync / async switchable; async path deep-copies records to avoid dangling stack pointers
-- Hot reload: `log_reload()` re-reads config and rebuilds sinks / async worker
+- Hot reload: `log_reload()` re-reads config and atomically rebuilds sinks / async worker
+- Config validation: rejects invalid `queue_size`, `port`, `backups`, and unknown log levels
+- Error handling: structured error codes via `clogx_errno_t` and `log_strerror()`
+- Observability: async fallback callback (`log_set_async_fallback_cb()`)
 - Build: Makefile and CMake (with CTest, `find_package(clogx)`)
 
 ## Directory Layout
@@ -149,10 +152,15 @@ Example: `[%time] [%level] %file:%line %msg`
 ## Public API
 
 ```c
-int  log_init(const char *yaml_path);  // 0 success, -1 failure
-void log_destroy(void);
-void log_flush(void);                  // drain queue in async mode
-int  log_reload(void);
+#include "log.h"
+
+clogx_errno_t log_init(const char *yaml_path);
+void           log_destroy(void);
+void           log_flush(void);
+clogx_errno_t log_reload(void);
+const char    *log_strerror(int err);
+void           log_set_async_fallback_cb(void (*cb)(void));
+void         (*log_get_async_fallback_cb(void))(void);
 
 LOG_INFO("...");
 LOG_DEBUG("...");
@@ -162,28 +170,52 @@ LOG_FATAL("...");
 TRACE("...");
 ```
 
-Lower-level interfaces: `include/log_config.h`, `log_async.h`, `log_sink.h`, `dispatcher.h`.
+Error codes:
+
+| Code | Meaning |
+|------|---------|
+| `CLOG_OK` | success |
+| `CLOG_ERR_INIT_REENTRANT` | `log_init` called without `log_destroy` |
+| `CLOG_ERR_CONFIG_OPEN` | failed to open or parse config file |
+| `CLOG_ERR_NO_SINKS` | no sinks configured |
+| `CLOG_ERR_FILE_OPEN` | failed to open log file |
+| `CLOG_ERR_FILE_WRITE` | file write error or short write |
+| `CLOG_ERR_QUEUE_FULL` | async queue full or closed |
+| `CLOG_ERR_THREAD_CREATE` | failed to create async worker |
+| `CLOG_ERR_SOCKET_CONNECT` | socket connect failed |
+| `CLOG_ERR_OOM` | out of memory during clone |
+| `CLOG_ERR_RELOAD` | reload without init |
+| `CLOG_ERR_INVALID_ARG` | invalid argument |
+
+Lower-level interfaces: `include/log_config.h`, `log_async.h`, `log_sink.h`, `dispatcher.h`, `log_record.h`, `log_formatter.h`.
 
 ## Async Mode
 
 When `async: true`:
 
-1. calling thread formats message and enqueues it (deep copy of string fields)
-2. background worker dequeues and passes to dispatcher
-3. `log_flush()` / `log_destroy()` / `log_reload()` correctly drain or stop the worker
+1. calling thread formats message and deep-copies string fields
+2. record is enqueued to a bounded MPSC queue
+3. background worker dequeues and passes to dispatcher
+4. `log_flush()` / `log_destroy()` / `log_reload()` correctly drain or stop the worker
 
-When queue is full, `put` blocks; on shutdown or OOM, falls back to synchronous output to minimize log loss.
+When the async path cannot accept a record (queue closed, OOM, or worker not running), the library falls back to synchronous dispatch. Register `log_set_async_fallback_cb()` to observe these fallbacks.
 
 ## Architecture
 
 ```
 LOG_* ──► log_writevprintf
-              ├─ level filter
-              ├─ assemble log_record_t
-              └─ async? ──► queue ──► worker ──► dispatcher
-                           └─ sync ─────────────► dispatcher
-                                                    ├─ formatter
-                                                    └─ console / file / socket
+               ├─ level filter
+               ├─ assemble log_record_t
+               └─ async? ──► queue ──► worker ──► dispatcher
+                            └─ sync ─────────────► dispatcher
+                                                     ├─ formatter
+                                                     └─ console / file / socket
+```
+
+Reload path uses an atomic snapshot swap so old sinks stay alive until new sinks are ready:
+
+```
+config reload → build new snapshot → shutdown async → commit snapshot → restart async if needed
 ```
 
 ## Tests
@@ -194,7 +226,16 @@ make test
 ctest --test-dir build --output-on-failure
 ```
 
-Covers async lifecycle, reload start/stop worker, dispatcher reuse, file rotation, nested directory creation, config hot reload, etc.
+Covers async lifecycle, reload start/stop worker, dispatcher reuse, file rotation, nested directory creation, config hot reload, invalid config handling, double init protection, empty sink rejection, and async fallback notification. Total: 12 tests.
+
+## CI
+
+GitHub Actions runs:
+
+- Makefile and CMake build/test matrix
+- AddressSanitizer (`clang` + `-fsanitize=address`)
+- Valgrind leak check on core tests
+- `cppcheck --enable=all` on `include/`, `core/`, `sinks/`
 
 ## API Documentation (Doxygen)
 
