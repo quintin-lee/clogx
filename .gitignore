@@ -1,2 +1,5 @@
 build*/
 logs/
+
+compile_commands.json
+config*.yaml
