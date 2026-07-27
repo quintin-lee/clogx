@@ -31,16 +31,16 @@ typedef enum {
  * them onto the heap before enqueueing.
  */
 typedef struct {
-    log_level_t level;     /**< Severity. */
-    uint64_t timestamp;    /**< Microseconds since Unix epoch. */
-    uint32_t tid;          /**< Thread identifier (truncated pthread_t). */
-    uint32_t pid;          /**< Process identifier. */
-    const char *file;      /**< Source file name. */
-    const char *func;      /**< Source function name. */
-    int line;              /**< Source line number. */
-    const char *module;    /**< Logical module name. */
-    const char *tag;       /**< Optional tag/label (may be NULL). */
-    const char *message;   /**< Formatted message body. */
+    log_level_t level;   /**< Severity. */
+    uint64_t timestamp;  /**< Microseconds since Unix epoch. */
+    uint32_t tid;        /**< Thread identifier (truncated pthread_t). */
+    uint32_t pid;        /**< Process identifier. */
+    const char *file;    /**< Source file name. */
+    const char *func;    /**< Source function name. */
+    int line;            /**< Source line number. */
+    const char *module;  /**< Logical module name. */
+    const char *tag;     /**< Optional tag/label (may be NULL). */
+    const char *message; /**< Formatted message body. */
 } log_record_t;
 
 /**
@@ -66,13 +66,20 @@ typedef enum {
  */
 static inline log_color_t get_log_color(log_level_t level) {
     switch ((int)level) {
-        case LOG_LEVEL_TRACE: return COLOR_BLACK;
-        case LOG_LEVEL_DEBUG: return COLOR_BLUE;
-        case LOG_LEVEL_INFO: return COLOR_GREEN;
-        case LOG_LEVEL_WARN: return COLOR_YELLOW;
-        case LOG_LEVEL_ERROR: return COLOR_RED;
-        case LOG_LEVEL_FATAL: return COLOR_PURPLE;
-        default: return COLOR_NONE;
+    case LOG_LEVEL_TRACE:
+        return COLOR_BLACK;
+    case LOG_LEVEL_DEBUG:
+        return COLOR_BLUE;
+    case LOG_LEVEL_INFO:
+        return COLOR_GREEN;
+    case LOG_LEVEL_WARN:
+        return COLOR_YELLOW;
+    case LOG_LEVEL_ERROR:
+        return COLOR_RED;
+    case LOG_LEVEL_FATAL:
+        return COLOR_PURPLE;
+    default:
+        return COLOR_NONE;
     }
 }
 

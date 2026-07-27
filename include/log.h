@@ -112,13 +112,8 @@ int log_reload(void);
  * @param[in] fmt   printf-style format string.
  * @param[in] ...   Format arguments.
  */
-void log_writevprintf(
-    log_level_t level,
-    const char *file,
-    int line,
-    const char *func,
-    const char *fmt,
-    ...);
+void log_writevprintf(log_level_t level, const char *file, int line, const char *func,
+                      const char *fmt, ...);
 
 /**
  * @brief Extract the basename of @c __FILE__.
@@ -128,9 +123,11 @@ static inline const char *clogx_filename_only(const char *path) {
     const char *slash;
     const char *base = path ? path : "";
     slash = strrchr(base, '/');
-    if (slash) base = slash + 1;
+    if (slash)
+        base = slash + 1;
     slash = strrchr(base, '\\');
-    if (slash) base = slash + 1;
+    if (slash)
+        base = slash + 1;
     return base;
 }
 
@@ -164,12 +161,18 @@ static inline const char *clogx_filename_only(const char *path) {
  * @def TRACE(...)
  * @brief Deprecated alias for @ref LOG_TRACE.
  */
-#define LOG_INFO(...)   log_writevprintf(LOG_LEVEL_INFO,  LOG_FILENAME_ONLY(), __LINE__, __func__, __VA_ARGS__)
-#define LOG_DEBUG(...)  log_writevprintf(LOG_LEVEL_DEBUG, LOG_FILENAME_ONLY(), __LINE__, __func__, __VA_ARGS__)
-#define LOG_WARN(...)   log_writevprintf(LOG_LEVEL_WARN,  LOG_FILENAME_ONLY(), __LINE__, __func__, __VA_ARGS__)
-#define LOG_ERROR(...)  log_writevprintf(LOG_LEVEL_ERROR, LOG_FILENAME_ONLY(), __LINE__, __func__, __VA_ARGS__)
-#define LOG_FATAL(...)  log_writevprintf(LOG_LEVEL_FATAL, LOG_FILENAME_ONLY(), __LINE__, __func__, __VA_ARGS__)
-#define LOG_TRACE(...)  log_writevprintf(LOG_LEVEL_TRACE, LOG_FILENAME_ONLY(), __LINE__, __func__, __VA_ARGS__)
-#define TRACE(...)      LOG_TRACE(__VA_ARGS__)
+#define LOG_INFO(...)                                                                              \
+    log_writevprintf(LOG_LEVEL_INFO, LOG_FILENAME_ONLY(), __LINE__, __func__, __VA_ARGS__)
+#define LOG_DEBUG(...)                                                                             \
+    log_writevprintf(LOG_LEVEL_DEBUG, LOG_FILENAME_ONLY(), __LINE__, __func__, __VA_ARGS__)
+#define LOG_WARN(...)                                                                              \
+    log_writevprintf(LOG_LEVEL_WARN, LOG_FILENAME_ONLY(), __LINE__, __func__, __VA_ARGS__)
+#define LOG_ERROR(...)                                                                             \
+    log_writevprintf(LOG_LEVEL_ERROR, LOG_FILENAME_ONLY(), __LINE__, __func__, __VA_ARGS__)
+#define LOG_FATAL(...)                                                                             \
+    log_writevprintf(LOG_LEVEL_FATAL, LOG_FILENAME_ONLY(), __LINE__, __func__, __VA_ARGS__)
+#define LOG_TRACE(...)                                                                             \
+    log_writevprintf(LOG_LEVEL_TRACE, LOG_FILENAME_ONLY(), __LINE__, __func__, __VA_ARGS__)
+#define TRACE(...) LOG_TRACE(__VA_ARGS__)
 
 #endif /* LOG_H */

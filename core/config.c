@@ -19,13 +19,16 @@ static void trim(char *s) {
     char *start;
     char *end;
 
-    if (!s || !*s) return;
+    if (!s || !*s)
+        return;
 
     start = s;
-    while (*start == ' ' || *start == '\t') start++;
+    while (*start == ' ' || *start == '\t')
+        start++;
 
     end = start + strlen(start);
-    while (end > start && (end[-1] == ' ' || end[-1] == '\t')) end--;
+    while (end > start && (end[-1] == ' ' || end[-1] == '\t'))
+        end--;
 
     *end = '\0';
     if (start != s) {
@@ -48,10 +51,12 @@ static int parse_config_file(const char *filepath, log_config_t *cfg) {
             line[len - 1] = '\0';
             len--;
         }
-        if (*line == '\0' || *line == '#') continue;
+        if (*line == '\0' || *line == '#')
+            continue;
 
         char *colon = strchr(line, ':');
-        if (!colon) continue;
+        if (!colon)
+            continue;
 
         *colon = '\0';
         char *key = line;
@@ -61,12 +66,18 @@ static int parse_config_file(const char *filepath, log_config_t *cfg) {
         trim(value);
 
         if (strcmp(key, "level") == 0) {
-            if (strcmp(value, "TRACE") == 0) cfg->level = LOG_LEVEL_TRACE;
-            else if (strcmp(value, "DEBUG") == 0) cfg->level = LOG_LEVEL_DEBUG;
-            else if (strcmp(value, "INFO") == 0) cfg->level = LOG_LEVEL_INFO;
-            else if (strcmp(value, "WARN") == 0) cfg->level = LOG_LEVEL_WARN;
-            else if (strcmp(value, "ERROR") == 0) cfg->level = LOG_LEVEL_ERROR;
-            else if (strcmp(value, "FATAL") == 0) cfg->level = LOG_LEVEL_FATAL;
+            if (strcmp(value, "TRACE") == 0)
+                cfg->level = LOG_LEVEL_TRACE;
+            else if (strcmp(value, "DEBUG") == 0)
+                cfg->level = LOG_LEVEL_DEBUG;
+            else if (strcmp(value, "INFO") == 0)
+                cfg->level = LOG_LEVEL_INFO;
+            else if (strcmp(value, "WARN") == 0)
+                cfg->level = LOG_LEVEL_WARN;
+            else if (strcmp(value, "ERROR") == 0)
+                cfg->level = LOG_LEVEL_ERROR;
+            else if (strcmp(value, "FATAL") == 0)
+                cfg->level = LOG_LEVEL_FATAL;
             else {
                 fprintf(stderr, "Unknown log level: %s (using default INFO)\n", value);
             }
@@ -176,7 +187,8 @@ log_config_t *log_config_get(void) {
 }
 
 int log_config_init(const char *yaml_path) {
-    if (!yaml_path) yaml_path = "";
+    if (!yaml_path)
+        yaml_path = "";
     pthread_rwlock_wrlock(&g_config_rwlock);
     int ret = load_default_and_apply(yaml_path);
     pthread_rwlock_unlock(&g_config_rwlock);

@@ -9,7 +9,8 @@
 
 static int write_config(void) {
     FILE *f = fopen(CONFIG_PATH, "w");
-    if (!f) return -1;
+    if (!f)
+        return -1;
     fprintf(f,
             "level: INFO\n"
             "async: true\n"

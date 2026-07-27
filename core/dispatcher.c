@@ -19,16 +19,15 @@ typedef struct {
 } log_dispatcher_t;
 
 static log_dispatcher_t g_dispatcher = {
-    .sinks = NULL,
-    .sink_count = 0,
-    .mutex = PTHREAD_MUTEX_INITIALIZER
-};
+    .sinks = NULL, .sink_count = 0, .mutex = PTHREAD_MUTEX_INITIALIZER};
 
 int log_dispatcher_add_sink(log_sink_t *sink) {
-    if (!sink) return -1;
+    if (!sink)
+        return -1;
 
     pthread_mutex_lock(&g_dispatcher.mutex);
-    log_sink_t **new_sinks = realloc(g_dispatcher.sinks, (g_dispatcher.sink_count + 1) * sizeof(log_sink_t *));
+    log_sink_t **new_sinks =
+        realloc(g_dispatcher.sinks, (g_dispatcher.sink_count + 1) * sizeof(log_sink_t *));
     if (!new_sinks) {
         pthread_mutex_unlock(&g_dispatcher.mutex);
         return -1;
@@ -41,7 +40,8 @@ int log_dispatcher_add_sink(log_sink_t *sink) {
 }
 
 int log_dispatcher_remove_sink(log_sink_t *sink) {
-    if (!sink) return -1;
+    if (!sink)
+        return -1;
 
     pthread_mutex_lock(&g_dispatcher.mutex);
     for (int i = 0; i < g_dispatcher.sink_count; i++) {
@@ -52,7 +52,8 @@ int log_dispatcher_remove_sink(log_sink_t *sink) {
             g_dispatcher.sinks[g_dispatcher.sink_count - 1] = NULL;
             g_dispatcher.sink_count--;
             if (g_dispatcher.sink_count > 0) {
-                g_dispatcher.sinks = realloc(g_dispatcher.sinks, g_dispatcher.sink_count * sizeof(log_sink_t *));
+                g_dispatcher.sinks =
+                    realloc(g_dispatcher.sinks, g_dispatcher.sink_count * sizeof(log_sink_t *));
             } else {
                 free(g_dispatcher.sinks);
                 g_dispatcher.sinks = NULL;
@@ -65,7 +66,8 @@ int log_dispatcher_remove_sink(log_sink_t *sink) {
 }
 
 int log_dispatcher_dispatch(log_record_t *record) {
-    if (!record) return -1;
+    if (!record)
+        return -1;
 
     log_config_t *cfg = log_config_get();
     if (record->level < cfg->level) {
@@ -95,17 +97,17 @@ int log_dispatcher_dispatch(log_record_t *record) {
 
     pthread_mutex_lock(&g_dispatcher.mutex);
     for (int i = 0; i < g_dispatcher.sink_count; i++) {
-        if (!g_dispatcher.sinks[i]) continue;
+        if (!g_dispatcher.sinks[i])
+            continue;
 
         const char *write_buf = formatted_buf;
         size_t write_len = (size_t)len;
 
         if (cfg->color && console_sink_is_color_enabled(g_dispatcher.sinks[i])) {
             log_color_t color = get_log_color(record->level);
-            int color_idx = color < (int)(sizeof(ansi_codes) / sizeof(ansi_codes[0]))
-                            ? color : 0;
-            int ret = snprintf(colored_buf, sizeof(colored_buf), "%s%s%s",
-                               ansi_codes[color_idx], formatted_buf, reset_code);
+            int color_idx = color < (int)(sizeof(ansi_codes) / sizeof(ansi_codes[0])) ? color : 0;
+            int ret = snprintf(colored_buf, sizeof(colored_buf), "%s%s%s", ansi_codes[color_idx],
+                               formatted_buf, reset_code);
             if (ret > 0 && ret < (int)sizeof(colored_buf)) {
                 write_buf = colored_buf;
                 write_len = (size_t)ret;
@@ -219,7 +221,8 @@ int log_dispatcher_build_snapshot(log_config_t *cfg, log_dispatcher_snapshot_t *
 }
 
 void log_dispatcher_destroy_snapshot(log_dispatcher_snapshot_t *snap) {
-    if (!snap) return;
+    if (!snap)
+        return;
     for (int i = 0; i < snap->sink_count; i++) {
         if (snap->sinks[i]) {
             snap->sinks[i]->destroy(snap->sinks[i]);

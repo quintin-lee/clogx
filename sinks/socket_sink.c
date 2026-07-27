@@ -22,7 +22,8 @@ typedef struct {
 
 static int socket_connect(log_sink_t *sink) {
     socket_sink_data_t *data = (socket_sink_data_t *)sink->private_data;
-    if (data->connected) return 0;
+    if (data->connected)
+        return 0;
     data->sockfd = socket(AF_INET, SOCK_STREAM, 0);
     if (data->sockfd < 0) {
         perror("Failed to create socket");
@@ -52,7 +53,8 @@ static int socket_connect(log_sink_t *sink) {
 static int socket_write(log_sink_t *sink, const char *buf, size_t len) {
     socket_sink_data_t *data = (socket_sink_data_t *)sink->private_data;
     if (data->sockfd < 0) {
-        if (socket_connect(sink) != 0) return -1;
+        if (socket_connect(sink) != 0)
+            return -1;
     }
 
     size_t total_sent = 0;
@@ -88,9 +90,11 @@ static void socket_destroy(log_sink_t *sink) {
 }
 
 log_sink_t *socket_sink_create(const char *host, int port) {
-    if (!host || strlen(host) == 0 || port <= 0 || port > 65535) return NULL;
+    if (!host || strlen(host) == 0 || port <= 0 || port > 65535)
+        return NULL;
     log_sink_t *sink = malloc(sizeof(log_sink_t));
-    if (!sink) return NULL;
+    if (!sink)
+        return NULL;
     socket_sink_data_t *data = malloc(sizeof(socket_sink_data_t));
     if (!data) {
         free(sink);

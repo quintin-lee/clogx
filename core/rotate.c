@@ -8,7 +8,8 @@
 #include "rotate.h"
 
 int file_rotate_file(const char *base_path, int max_backups) {
-    if (!base_path || max_backups <= 0) return 0;
+    if (!base_path || max_backups <= 0)
+        return 0;
 
     char path[512];
 

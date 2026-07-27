@@ -8,7 +8,8 @@
 
 static int write_config(void) {
     FILE *f = fopen(CONFIG_PATH, "w");
-    if (!f) return -1;
+    if (!f)
+        return -1;
     fprintf(f,
             "level: INFO\n"
             "async: false\n"
@@ -27,7 +28,8 @@ static int write_config(void) {
 
 int main(void) {
     remove(LOG_PATH);
-    if (write_config() != 0) return 1;
+    if (write_config() != 0)
+        return 1;
 
     if (log_init(CONFIG_PATH) != 0) {
         fprintf(stderr, "First log_init failed\n");

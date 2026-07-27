@@ -25,14 +25,17 @@ static int ensure_parent_dirs(const char *path) {
     char dir[1024];
     size_t len;
 
-    if (!path || !*path) return -1;
+    if (!path || !*path)
+        return -1;
 
     len = strlen(path);
-    if (len >= sizeof(dir)) return -1;
+    if (len >= sizeof(dir))
+        return -1;
     memcpy(dir, path, len + 1);
 
     char *slash = strrchr(dir, '/');
-    if (!slash || slash == dir) return 0;
+    if (!slash || slash == dir)
+        return 0;
     *slash = '\0';
 
     for (char *p = dir + 1; *p; p++) {
@@ -53,7 +56,8 @@ static int ensure_parent_dirs(const char *path) {
 
 static int file_write(log_sink_t *sink, const char *buf, size_t len) {
     file_sink_data_t *data = (file_sink_data_t *)sink->private_data;
-    if (!data || !data->file || !buf) return -1;
+    if (!data || !data->file || !buf)
+        return -1;
 
     size_t written = 0;
     while (written < len) {
@@ -80,7 +84,8 @@ static int file_write(log_sink_t *sink, const char *buf, size_t len) {
         file_rotate_file(data->path, data->backups);
 
         data->file = fopen(data->path, "a");
-        if (!data->file) return -1;
+        if (!data->file)
+            return -1;
         data->current_size = 0;
     }
 
@@ -107,10 +112,12 @@ static void file_destroy(log_sink_t *sink) {
 }
 
 log_sink_t *file_sink_create(const char *path, uint64_t max_size, int backups) {
-    if (!path || strlen(path) == 0) return NULL;
+    if (!path || strlen(path) == 0)
+        return NULL;
 
     log_sink_t *sink = malloc(sizeof(log_sink_t));
-    if (!sink) return NULL;
+    if (!sink)
+        return NULL;
 
     file_sink_data_t *data = malloc(sizeof(file_sink_data_t));
     if (!data) {

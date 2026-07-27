@@ -9,7 +9,8 @@
 
 static int write_config(const char *level) {
     FILE *f = fopen(CONFIG_PATH, "w");
-    if (!f) return -1;
+    if (!f)
+        return -1;
     fprintf(f,
             "level: %s\n"
             "async: false\n"
@@ -28,7 +29,8 @@ static int write_config(const char *level) {
 
 int main(void) {
     remove(LOG_PATH);
-    if (write_config("ERROR") != 0) return 1;
+    if (write_config("ERROR") != 0)
+        return 1;
 
     if (log_init(CONFIG_PATH) != 0) {
         fprintf(stderr, "log_init failed\n");
@@ -39,7 +41,8 @@ int main(void) {
     LOG_ERROR("before-change");
 
     /* Change only the custom config file; reload must re-read that path */
-    if (write_config("INFO") != 0) return 1;
+    if (write_config("INFO") != 0)
+        return 1;
     if (log_reload() != 0) {
         fprintf(stderr, "log_reload failed\n");
         return 1;

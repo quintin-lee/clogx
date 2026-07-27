@@ -18,20 +18,18 @@ typedef struct {
     volatile int running;
 } async_logger_t;
 
-static async_logger_t g_async_logger = {
-    .queue = NULL,
-    .worker_thread = 0,
-    .running = 0
-};
+static async_logger_t g_async_logger = {.queue = NULL, .worker_thread = 0, .running = 0};
 
 static char *dup_field(const char *s) {
-    if (!s) return NULL;
+    if (!s)
+        return NULL;
     return strdup(s);
 }
 
 /** @brief Free string fields previously allocated by @ref log_record_clone. */
 static void log_record_free_owned(log_record_t *record) {
-    if (!record) return;
+    if (!record)
+        return;
 
     free((void *)record->message);
     free((void *)record->file);
@@ -53,7 +51,8 @@ static void log_record_free_owned(log_record_t *record) {
  * @return 0 on success, -1 on allocation failure (dst fields freed).
  */
 static int log_record_clone(log_record_t *dst, const log_record_t *src) {
-    if (!dst || !src) return -1;
+    if (!dst || !src)
+        return -1;
 
     *dst = *src;
     dst->message = dup_field(src->message);
@@ -62,11 +61,8 @@ static int log_record_clone(log_record_t *dst, const log_record_t *src) {
     dst->module = dup_field(src->module);
     dst->tag = dup_field(src->tag);
 
-    if ((src->message && !dst->message) ||
-        (src->file && !dst->file) ||
-        (src->func && !dst->func) ||
-        (src->module && !dst->module) ||
-        (src->tag && !dst->tag)) {
+    if ((src->message && !dst->message) || (src->file && !dst->file) || (src->func && !dst->func) ||
+        (src->module && !dst->module) || (src->tag && !dst->tag)) {
         log_record_free_owned(dst);
         return -1;
     }
@@ -97,11 +93,14 @@ static void *async_worker(void *arg) {
 }
 
 int log_async_init(int queue_size) {
-    if (queue_size <= 0) return -1;
-    if (g_async_logger.running) return 0;
+    if (queue_size <= 0)
+        return -1;
+    if (g_async_logger.running)
+        return 0;
 
     g_async_logger.queue = mpsc_queue_create(queue_size);
-    if (!g_async_logger.queue) return -1;
+    if (!g_async_logger.queue)
+        return -1;
 
     g_async_logger.running = 1;
 
@@ -116,7 +115,8 @@ int log_async_init(int queue_size) {
 }
 
 void log_async_shutdown(void) {
-    if (!g_async_logger.running || !g_async_logger.queue) return;
+    if (!g_async_logger.running || !g_async_logger.queue)
+        return;
 
     mpsc_queue_close(g_async_logger.queue);
     g_async_logger.running = 0;
@@ -126,7 +126,8 @@ void log_async_shutdown(void) {
 }
 
 void log_async_flush(void) {
-    if (!g_async_logger.queue) return;
+    if (!g_async_logger.queue)
+        return;
 
     mpsc_queue_wait_empty(g_async_logger.queue);
     log_dispatcher_flush();

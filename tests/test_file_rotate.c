@@ -15,7 +15,8 @@ static void cleanup(void) {
 
 static long file_size(const char *path) {
     FILE *f = fopen(path, "r");
-    if (!f) return -1;
+    if (!f)
+        return -1;
     fseek(f, 0, SEEK_END);
     long sz = ftell(f);
     fclose(f);
@@ -65,7 +66,8 @@ int main(void) {
     }
 
     FILE *f = fopen(LOG_PATH, "r");
-    if (!f) return 1;
+    if (!f)
+        return 1;
     char buf[256];
     size_t n = fread(buf, 1, sizeof(buf) - 1, f);
     buf[n] = '\0';

@@ -23,20 +23,34 @@ static void (*g_async_fallback_cb)(void);
 
 const char *log_strerror(int err) {
     switch (err) {
-        case CLOG_OK: return "success";
-        case CLOG_ERR_INVALID_ARG: return "invalid argument";
-        case CLOG_ERR_INIT_REENTRANT: return "reentrant init without destroy";
-        case CLOG_ERR_CONFIG_OPEN: return "failed to open config file";
-        case CLOG_ERR_CONFIG_PARSE: return "config parse error";
-        case CLOG_ERR_NO_SINKS: return "no sinks configured";
-        case CLOG_ERR_FILE_OPEN: return "failed to open log file";
-        case CLOG_ERR_FILE_WRITE: return "file write error";
-        case CLOG_ERR_QUEUE_FULL: return "async queue full or closed";
-        case CLOG_ERR_THREAD_CREATE: return "failed to create worker thread";
-        case CLOG_ERR_SOCKET_CONNECT: return "socket connect failed";
-        case CLOG_ERR_OOM: return "out of memory";
-        case CLOG_ERR_RELOAD: return "reload failed";
-        default: return "unknown error";
+    case CLOG_OK:
+        return "success";
+    case CLOG_ERR_INVALID_ARG:
+        return "invalid argument";
+    case CLOG_ERR_INIT_REENTRANT:
+        return "reentrant init without destroy";
+    case CLOG_ERR_CONFIG_OPEN:
+        return "failed to open config file";
+    case CLOG_ERR_CONFIG_PARSE:
+        return "config parse error";
+    case CLOG_ERR_NO_SINKS:
+        return "no sinks configured";
+    case CLOG_ERR_FILE_OPEN:
+        return "failed to open log file";
+    case CLOG_ERR_FILE_WRITE:
+        return "file write error";
+    case CLOG_ERR_QUEUE_FULL:
+        return "async queue full or closed";
+    case CLOG_ERR_THREAD_CREATE:
+        return "failed to create worker thread";
+    case CLOG_ERR_SOCKET_CONNECT:
+        return "socket connect failed";
+    case CLOG_ERR_OOM:
+        return "out of memory";
+    case CLOG_ERR_RELOAD:
+        return "reload failed";
+    default:
+        return "unknown error";
     }
 }
 
@@ -63,13 +77,8 @@ static inline uint32_t get_thread_id(void) {
     return (h ^ l ^ 0x9e3779b9u) + 1u;
 }
 
-void log_writevprintf(
-    log_level_t level,
-    const char *file,
-    int line,
-    const char *func,
-    const char *fmt,
-    ...) {
+void log_writevprintf(log_level_t level, const char *file, int line, const char *func,
+                      const char *fmt, ...) {
 
     if (level < log_get_level()) {
         return;
@@ -108,7 +117,8 @@ void log_writevprintf(
         int ar = log_async_write(&record);
         if (ar != 0) {
             void (*cb)(void) = log_get_async_fallback_cb();
-            if (cb) cb();
+            if (cb)
+                cb();
         }
     } else {
         log_dispatcher_dispatch(&record);
@@ -122,7 +132,8 @@ int log_init(const char *yaml_path) {
         return CLOG_ERR_INIT_REENTRANT;
     }
 
-    if (!yaml_path) yaml_path = "";
+    if (!yaml_path)
+        yaml_path = "";
 
     if (log_config_init(yaml_path) != 0) {
         pthread_mutex_unlock(&g_init_mutex);

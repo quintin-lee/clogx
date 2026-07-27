@@ -9,7 +9,8 @@
 
 mpsc_queue_t *mpsc_queue_create(size_t capacity) {
     mpsc_queue_t *q = malloc(sizeof(mpsc_queue_t));
-    if (!q) return NULL;
+    if (!q)
+        return NULL;
 
     q->capacity = capacity;
     q->buffer = malloc(capacity * sizeof(log_record_t));
@@ -32,7 +33,8 @@ mpsc_queue_t *mpsc_queue_create(size_t capacity) {
 }
 
 int mpsc_queue_put(mpsc_queue_t *q, log_record_t *record) {
-    if (!q || !record) return -1;
+    if (!q || !record)
+        return -1;
 
     pthread_mutex_lock(&q->mutex);
 
@@ -56,7 +58,8 @@ int mpsc_queue_put(mpsc_queue_t *q, log_record_t *record) {
 }
 
 int mpsc_queue_try_put(mpsc_queue_t *q, log_record_t *record) {
-    if (!q || !record) return -1;
+    if (!q || !record)
+        return -1;
 
     pthread_mutex_lock(&q->mutex);
 
@@ -76,7 +79,8 @@ int mpsc_queue_try_put(mpsc_queue_t *q, log_record_t *record) {
 }
 
 int mpsc_queue_get(mpsc_queue_t *q, log_record_t *record) {
-    if (!q || !record) return -1;
+    if (!q || !record)
+        return -1;
 
     pthread_mutex_lock(&q->mutex);
 
@@ -103,7 +107,8 @@ int mpsc_queue_get(mpsc_queue_t *q, log_record_t *record) {
 }
 
 void mpsc_queue_close(mpsc_queue_t *q) {
-    if (!q) return;
+    if (!q)
+        return;
 
     pthread_mutex_lock(&q->mutex);
     q->closed = 1;
@@ -114,7 +119,8 @@ void mpsc_queue_close(mpsc_queue_t *q) {
 }
 
 void mpsc_queue_wait_empty(mpsc_queue_t *q) {
-    if (!q) return;
+    if (!q)
+        return;
 
     pthread_mutex_lock(&q->mutex);
     while (q->count > 0) {
@@ -124,7 +130,8 @@ void mpsc_queue_wait_empty(mpsc_queue_t *q) {
 }
 
 void mpsc_queue_destroy(mpsc_queue_t *q) {
-    if (!q) return;
+    if (!q)
+        return;
 
     pthread_mutex_lock(&q->mutex);
     pthread_cond_broadcast(&q->not_full);

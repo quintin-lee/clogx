@@ -7,7 +7,8 @@
 
 static int write_config(int console, int file, int socket) {
     FILE *f = fopen(CONFIG_PATH, "w");
-    if (!f) return -1;
+    if (!f)
+        return -1;
     fprintf(f,
             "level: INFO\n"
             "async: false\n"
@@ -20,8 +21,7 @@ static int write_config(int console, int file, int socket) {
             "backups: 2\n"
             "%s\n"
             "socket_enable: %s\n",
-            console ? "true" : "false",
-            file ? "true" : "false",
+            console ? "true" : "false", file ? "true" : "false",
             file ? "file_path: logs/empty_sink_test.log\n" : "",
             socket ? "host: 127.0.0.1\nport: 1" : "socket_enable: false",
             socket ? "true" : "false");
@@ -30,7 +30,8 @@ static int write_config(int console, int file, int socket) {
 }
 
 int main(void) {
-    if (write_config(0, 0, 0) != 0) return 1;
+    if (write_config(0, 0, 0) != 0)
+        return 1;
     if (log_init(CONFIG_PATH) == 0) {
         fprintf(stderr, "Expected failure with no sinks enabled\n");
         return 1;

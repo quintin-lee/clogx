@@ -18,19 +18,19 @@
  *       @ref log_set_level. Other fields are typically read after init/reload.
  */
 typedef struct {
-    log_level_t level;       /**< Minimum level that will be emitted. */
-    bool async;              /**< Enable background worker + queue. */
-    int queue_size;          /**< Async queue capacity. */
-    bool color;              /**< Enable ANSI color for console sinks. */
-    const char *format;      /**< Format string (points at internal storage). */
-    int console_enable;      /**< Non-zero to enable stdout sink. */
-    int file_enable;         /**< Non-zero to enable file sink. */
-    char file_path[256];     /**< Log file path. */
-    uint64_t file_max_size;  /**< Rotate when file reaches this many bytes. */
-    int file_backups;        /**< Number of rotated backups to keep. */
-    int socket_enable;       /**< Non-zero to enable TCP socket sink. */
-    char socket_host[256];   /**< Socket peer IPv4 address. */
-    int socket_port;         /**< Socket peer port. */
+    log_level_t level;      /**< Minimum level that will be emitted. */
+    bool async;             /**< Enable background worker + queue. */
+    int queue_size;         /**< Async queue capacity. */
+    bool color;             /**< Enable ANSI color for console sinks. */
+    const char *format;     /**< Format string (points at internal storage). */
+    int console_enable;     /**< Non-zero to enable stdout sink. */
+    int file_enable;        /**< Non-zero to enable file sink. */
+    char file_path[256];    /**< Log file path. */
+    uint64_t file_max_size; /**< Rotate when file reaches this many bytes. */
+    int file_backups;       /**< Number of rotated backups to keep. */
+    int socket_enable;      /**< Non-zero to enable TCP socket sink. */
+    char socket_host[256];  /**< Socket peer IPv4 address. */
+    int socket_port;        /**< Socket peer port. */
 } log_config_t;
 
 /**

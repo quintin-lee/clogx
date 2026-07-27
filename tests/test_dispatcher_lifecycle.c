@@ -9,7 +9,8 @@
 
 static int write_config(void) {
     FILE *f = fopen(CONFIG_PATH, "w");
-    if (!f) return -1;
+    if (!f)
+        return -1;
     fprintf(f,
             "level: INFO\n"
             "async: false\n"
@@ -28,10 +29,12 @@ static int write_config(void) {
 
 static int count_lines(const char *path) {
     FILE *f = fopen(path, "r");
-    if (!f) return -1;
+    if (!f)
+        return -1;
     int n = 0;
     char buf[256];
-    while (fgets(buf, sizeof(buf), f)) n++;
+    while (fgets(buf, sizeof(buf), f))
+        n++;
     fclose(f);
     return n;
 }

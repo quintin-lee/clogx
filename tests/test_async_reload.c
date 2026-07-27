@@ -10,7 +10,8 @@
 
 static int write_config(int async) {
     FILE *f = fopen(CONFIG_PATH, "w");
-    if (!f) return -1;
+    if (!f)
+        return -1;
     fprintf(f,
             "level: INFO\n"
             "async: %s\n"
@@ -23,18 +24,19 @@ static int write_config(int async) {
             "max_size: 100MB\n"
             "backups: 2\n"
             "socket_enable: false\n",
-            async ? "true" : "false",
-            LOG_PATH);
+            async ? "true" : "false", LOG_PATH);
     fclose(f);
     return 0;
 }
 
 static int count_lines(const char *path) {
     FILE *f = fopen(path, "r");
-    if (!f) return -1;
+    if (!f)
+        return -1;
     int n = 0;
     char buf[256];
-    while (fgets(buf, sizeof(buf), f)) n++;
+    while (fgets(buf, sizeof(buf), f))
+        n++;
     fclose(f);
     return n;
 }

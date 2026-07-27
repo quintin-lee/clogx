@@ -18,7 +18,9 @@ TESTS = test_async_lifecycle test_async_reload test_dispatcher_lifecycle \
         test_async_fallback test_queue_try_put
 TEST_BINS = $(addprefix $(BUILD_DIR)/,$(TESTS))
 
-.PHONY: all clean example test docs
+.PHONY: all clean example test docs format check-format
+
+FORMAT_FILES := $(shell find include core sinks example tests -name '*.c' -o -name '*.h')
 
 all: $(LIB_TARGET) $(EXAMPLE_BIN)
 
@@ -84,6 +86,13 @@ docs:
 	@mkdir -p docs/api
 	doxygen Doxyfile
 	@echo "API docs: docs/api/html/index.html"
+
+format:
+	clang-format -i $(FORMAT_FILES)
+
+check-format:
+	@clang-format --dry-run --Werror $(FORMAT_FILES) || \
+		(echo "Formatting check failed! Run 'make format' to fix." && exit 1)
 
 clean:
 	rm -rf $(BUILD_DIR)

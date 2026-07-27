@@ -20,13 +20,20 @@ static pthread_mutex_t g_format_mutex = PTHREAD_MUTEX_INITIALIZER;
 
 static const char *level_to_string(log_level_t level) {
     switch (level) {
-        case LOG_LEVEL_TRACE: return "TRACE";
-        case LOG_LEVEL_DEBUG: return "DEBUG";
-        case LOG_LEVEL_INFO:  return "INFO";
-        case LOG_LEVEL_WARN:  return "WARN";
-        case LOG_LEVEL_ERROR: return "ERROR";
-        case LOG_LEVEL_FATAL: return "FATAL";
-        default: return "UNKNOWN";
+    case LOG_LEVEL_TRACE:
+        return "TRACE";
+    case LOG_LEVEL_DEBUG:
+        return "DEBUG";
+    case LOG_LEVEL_INFO:
+        return "INFO";
+    case LOG_LEVEL_WARN:
+        return "WARN";
+    case LOG_LEVEL_ERROR:
+        return "ERROR";
+    case LOG_LEVEL_FATAL:
+        return "FATAL";
+    default:
+        return "UNKNOWN";
     }
 }
 
@@ -68,7 +75,8 @@ int log_formatter_format(log_record_t *record, char *buf, size_t buf_size) {
             localtime_r(&sec, &tm_buf);
             char time_buf[TIME_BUF_SIZE];
             strftime(time_buf, sizeof(time_buf), "%Y-%m-%d %H:%M:%S", &tm_buf);
-            int ret = snprintf(out, remaining, "%s.%06llu", time_buf, (unsigned long long)(record->timestamp % 1000000));
+            int ret = snprintf(out, remaining, "%s.%06llu", time_buf,
+                               (unsigned long long)(record->timestamp % 1000000));
             if (ret > 0 && (size_t)ret < remaining) {
                 out += ret;
                 remaining -= ret;
