@@ -82,6 +82,11 @@ if(CLOG_BUILD_TESTS)
         test_file_rotate
         test_file_mkdir
         test_config_reload
+        test_pipeline
+        verify_config
+        test_invalid_config
+        test_double_init
+        test_empty_sink
     )
 
     foreach(test_name IN LISTS CLOG_TEST_SOURCES)

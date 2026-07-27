@@ -12,7 +12,9 @@ SINK_OBJS = $(BUILD_DIR)/console_sink.o $(BUILD_DIR)/file_sink.o $(BUILD_DIR)/so
 ALL_OBJS = $(CORE_OBJS) $(SINK_OBJS)
 
 TESTS = test_async_lifecycle test_async_reload test_dispatcher_lifecycle \
-        test_file_rotate test_file_mkdir test_config_reload
+        test_file_rotate test_file_mkdir test_config_reload \
+        test_pipeline verify_config \
+        test_invalid_config test_double_init test_empty_sink
 TEST_BINS = $(addprefix $(BUILD_DIR)/,$(TESTS))
 
 .PHONY: all clean example test docs
@@ -60,6 +62,9 @@ $(EXAMPLE_BIN): example/main.c $(LIB_TARGET) | $(BUILD_DIR)
 	$(CC) $(CFLAGS) -o $@ example/main.c -L$(BUILD_DIR) -lclogx $(LDFLAGS)
 
 $(BUILD_DIR)/test_%: tests/test_%.c $(LIB_TARGET) | $(BUILD_DIR)
+	$(CC) $(CFLAGS) -o $@ $< -L$(BUILD_DIR) -lclogx $(LDFLAGS)
+
+$(BUILD_DIR)/verify_config: tests/verify_config.c $(LIB_TARGET) | $(BUILD_DIR)
 	$(CC) $(CFLAGS) -o $@ $< -L$(BUILD_DIR) -lclogx $(LDFLAGS)
 
 example: $(EXAMPLE_BIN)
