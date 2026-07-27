@@ -31,7 +31,7 @@ else()
     add_library(clogx STATIC ${CLOG_SOURCES})
 endif()
 
-add_library(clog::clogx ALIAS clogx)
+add_library(clogx::clogx ALIAS clogx)
 
 target_include_directories(clogx
     PUBLIC

@@ -88,7 +88,7 @@ Downstream projects:
 
 ```cmake
 find_package(clogx REQUIRED)
-target_link_libraries(app PRIVATE clog::clogx)
+target_link_libraries(app PRIVATE clogx::clogx)
 ```
 
 ## Configuration
