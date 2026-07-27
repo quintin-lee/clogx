@@ -101,7 +101,12 @@ void log_destroy(void) {
 }
 
 void log_flush(void) {
-    log_dispatcher_flush();
+    log_config_t *cfg = log_config_get();
+    if (cfg->async) {
+        log_async_flush();
+    } else {
+        log_dispatcher_flush();
+    }
 }
 
 int log_reload(void) {

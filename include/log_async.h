@@ -7,8 +7,11 @@
 // Returns 0 on success, -1 on error
 int log_async_init(int queue_size);
 
-// Shutdown async logger (flushes all pending logs)
+// Shutdown async logger (drains queue and frees pending records)
 void log_async_shutdown(void);
+
+// Wait until the async queue is empty, then flush sinks
+void log_async_flush(void);
 
 // Write a log record asynchronously (blocks if queue is full)
 int log_async_write(log_record_t *record);

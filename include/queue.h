@@ -11,14 +11,18 @@ typedef struct mpsc_queue_t {
     size_t head;
     size_t tail;
     size_t count;
+    int closed;
     pthread_mutex_t mutex;
     pthread_cond_t not_full;
     pthread_cond_t not_empty;
+    pthread_cond_t drained;
 } mpsc_queue_t;
 
 mpsc_queue_t *mpsc_queue_create(size_t capacity);
 int mpsc_queue_put(mpsc_queue_t *q, log_record_t *record);
 int mpsc_queue_get(mpsc_queue_t *q, log_record_t *record);
+void mpsc_queue_close(mpsc_queue_t *q);
+void mpsc_queue_wait_empty(mpsc_queue_t *q);
 void mpsc_queue_destroy(mpsc_queue_t *q);
 
 #endif // QUEUE_H
