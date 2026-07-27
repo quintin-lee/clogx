@@ -2,8 +2,8 @@
 #define LOG_CONFIG_H
 
 #include <stdbool.h>
+#include <stdint.h>
 #include "log_record.h"
-#include "log_sink.h"
 
 // Configuration for the logging system
 typedef struct {
@@ -39,8 +39,7 @@ log_level_t log_get_level(void);
 
 // Check if a log message should be emitted based on level and config
 static inline int log_should_emit(log_level_t level) {
-    log_config_t *cfg = log_config_get();
-    return level >= cfg->level;
+    return level >= log_get_level();
 }
 
 #endif // LOG_CONFIG_H

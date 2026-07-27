@@ -3,6 +3,7 @@ CFLAGS = -std=c99 -Wall -Wextra -Iinclude -O2 -D_GNU_SOURCE
 LDFLAGS = -lpthread
 BUILD_DIR = build
 LIB_TARGET = $(BUILD_DIR)/libclog.a
+EXAMPLE_BIN = $(BUILD_DIR)/example
 
 # Object files from core and sinks (built first)
 CORE_OBJS = $(BUILD_DIR)/config.o $(BUILD_DIR)/formatter.o $(BUILD_DIR)/dispatcher.o \
@@ -10,7 +11,11 @@ CORE_OBJS = $(BUILD_DIR)/config.o $(BUILD_DIR)/formatter.o $(BUILD_DIR)/dispatch
 SINK_OBJS = $(BUILD_DIR)/console_sink.o $(BUILD_DIR)/file_sink.o $(BUILD_DIR)/socket_sink.o
 ALL_OBJS = $(CORE_OBJS) $(SINK_OBJS)
 
-.PHONY: all clean example
+TESTS = test_async_lifecycle test_async_reload test_dispatcher_lifecycle \
+        test_file_rotate test_file_mkdir test_config_reload
+TEST_BINS = $(addprefix $(BUILD_DIR)/,$(TESTS))
+
+.PHONY: all clean example test
 
 all: $(LIB_TARGET) $(EXAMPLE_BIN)
 
@@ -51,12 +56,22 @@ $(BUILD_DIR)/socket_sink.o: sinks/socket_sink.c | $(BUILD_DIR)
 $(LIB_TARGET): $(ALL_OBJS)
 	ar rcs $@ $^
 
-# Build example by compiling main.c and linking with the library
-EXAMPLE_BIN = $(BUILD_DIR)/example
 $(EXAMPLE_BIN): example/main.c $(LIB_TARGET) | $(BUILD_DIR)
-	$(CC) -Iinclude -o $@ example/main.c $(ALL_OBJS) $(LDFLAGS)
+	$(CC) $(CFLAGS) -o $@ example/main.c -L$(BUILD_DIR) -lclog $(LDFLAGS)
+
+$(BUILD_DIR)/test_%: tests/test_%.c $(LIB_TARGET) | $(BUILD_DIR)
+	$(CC) $(CFLAGS) -o $@ $< -L$(BUILD_DIR) -lclog $(LDFLAGS)
 
 example: $(EXAMPLE_BIN)
+
+test: $(TEST_BINS)
+	@mkdir -p logs
+	@status=0; \
+	for t in $(TEST_BINS); do \
+		echo "=== $$t ==="; \
+		$$t || status=1; \
+	done; \
+	exit $$status
 
 clean:
 	rm -rf $(BUILD_DIR)

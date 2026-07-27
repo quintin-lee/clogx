@@ -5,11 +5,11 @@
 #include "log_record.h"
 
 typedef struct {
-    FILE *stream;              // stdout or stderr
-    int use_color;             // Whether to use color output
+    FILE *stream;
+    int use_color;
 } console_sink_data_t;
 
-int console_write(log_sink_t *sink, const char *buf, size_t len) {
+static int console_write(log_sink_t *sink, const char *buf, size_t len) {
     console_sink_data_t *data = (console_sink_data_t *)sink->private_data;
 
     if (!data || !data->stream) return -1;
@@ -20,14 +20,14 @@ int console_write(log_sink_t *sink, const char *buf, size_t len) {
     return (int)written;
 }
 
-void console_flush(log_sink_t *sink) {
+static void console_flush(log_sink_t *sink) {
     console_sink_data_t *data = (console_sink_data_t *)sink->private_data;
     if (data && data->stream) {
         fflush(data->stream);
     }
 }
 
-void console_destroy(log_sink_t *sink) {
+static void console_destroy(log_sink_t *sink) {
     console_sink_data_t *data = (console_sink_data_t *)sink->private_data;
     if (data) {
         if (data->stream != stdout && data->stream != stderr) {
