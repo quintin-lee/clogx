@@ -49,8 +49,8 @@ int main(void) {
     log_flush();
     log_destroy();
 
-    if (callback_invoked == 0) {
-        fprintf(stderr, "fallback callback was not invoked\n");
+    if (callback_invoked != 1) {
+        fprintf(stderr, "fallback callback expected once, got %d\n", callback_invoked);
         return 1;
     }
 

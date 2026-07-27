@@ -152,10 +152,9 @@ int log_async_write(log_record_t *record) {
     if (ret != 0) {
         log_record_free_owned(&owned);
         log_dispatcher_dispatch(record);
-        if (log_get_async_fallback_cb()) {
-            log_get_async_fallback_cb();
-        }
+        /* Fallback notification is owned by log_writevprintf. */
+        return CLOG_ERR_QUEUE_FULL;
     }
 
-    return ret;
+    return CLOG_OK;
 }
