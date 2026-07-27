@@ -16,7 +16,4 @@ void log_async_flush(void);
 // Write a log record asynchronously (blocks if queue is full)
 int log_async_write(log_record_t *record);
 
-// Set custom dispatch function (optional)
-void log_async_set_dispatch(void (*func)(log_record_t *));
-
 #endif // LOG_ASYNC_H

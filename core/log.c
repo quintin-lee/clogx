@@ -32,10 +32,11 @@ void log_writevprintf(
     const char *fmt,
     ...) {
 
-    log_config_t *cfg = log_config_get();
-    if (level < cfg->level) {
+    if (level < log_get_level()) {
         return;
     }
+
+    log_config_t *cfg = log_config_get();
 
     // Use va_list to handle variable arguments
     va_list args;
