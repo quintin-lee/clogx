@@ -1,28 +1,28 @@
 # clog
 
-轻量级 C99 日志库：配置驱动、多 Sink 输出、可选异步队列、文件按大小轮转。
+Lightweight C99 logging library: config-driven, multi-sink output, optional async queue, size-based log file rotation.
 
-## 特性
+## Features
 
-- 宏 API：`LOG_INFO` / `LOG_DEBUG` / `LOG_WARN` / `LOG_ERROR` / `LOG_FATAL` / `TRACE`
-- 多 Sink：控制台（可选 ANSI 着色）、文件（自动建目录 + 轮转）、TCP Socket
-- Token 格式化：`%time` `%level` `%msg` `%file` `%line` `%func` 等
-- 同步 / 异步可切换；异步路径深拷贝记录，避免栈指针悬空
-- 热更新：`log_reload()` 重读配置并重建 Sink / 异步 worker
-- 构建：Makefile 与 CMake（含 CTest、`find_package(clog)`）
+- Macro API: `LOG_INFO` / `LOG_DEBUG` / `LOG_WARN` / `LOG_ERROR` / `LOG_FATAL` / `TRACE`
+- Multi-sink: console (optional ANSI color), file (auto-create directories + rotation), TCP socket
+- Token formatting: `%time` `%level` `%msg` `%file` `%line` `%func` and more
+- Sync / async switchable; async path deep-copies records to avoid dangling stack pointers
+- Hot reload: `log_reload()` re-reads config and rebuilds sinks / async worker
+- Build: Makefile and CMake (with CTest, `find_package(clog)`)
 
-## 目录结构
+## Directory Layout
 
 ```
-include/     公共头文件
-core/        配置、格式化、分发、队列、异步、轮转
+include/     public headers
+core/        config, formatting, dispatch, queue, async, rotation
 sinks/       console / file / socket
-example/     示例程序
-tests/       回归测试
-cmake/       CMake 包配置模板
+example/     example programs
+tests/       regression tests
+cmake/       CMake package config templates
 ```
 
-## 快速开始
+## Quick Start
 
 ```c
 #include "log.h"
@@ -42,20 +42,20 @@ int main(void) {
 }
 ```
 
-链接时需要 pthread：
+Linking requires pthread:
 
 ```bash
 gcc -Iinclude app.c -Lbuild -lclog -lpthread -o app
 ```
 
-## 构建
+## Build
 
 ### Makefile
 
 ```bash
-make          # 生成 build/libclog.a 与 build/example
+make          # generates build/libclog.a and build/example
 make example
-make test     # 编译并运行全部回归测试
+make test     # compiles and runs all regression tests
 make clean
 ```
 
@@ -68,26 +68,26 @@ ctest --test-dir build --output-on-failure
 cmake --install build --prefix /usr/local
 ```
 
-常用选项：
+Common options:
 
-| 选项 | 默认 | 说明 |
-|------|------|------|
-| `CLOG_BUILD_EXAMPLES` | ON | 构建 example |
-| `CLOG_BUILD_TESTS` | ON | 构建并注册 CTest |
-| `CLOG_BUILD_SHARED` | OFF | ON 时构建动态库 |
+| Option | Default | Description |
+|--------|---------|-------------|
+| `CLOG_BUILD_EXAMPLES` | ON | build examples |
+| `CLOG_BUILD_TESTS` | ON | build and register CTest |
+| `CLOG_BUILD_SHARED` | OFF | build shared library when ON |
 
-下游项目：
+Downstream projects:
 
 ```cmake
 find_package(clog REQUIRED)
 target_link_libraries(app PRIVATE clog::clog)
 ```
 
-## 配置
+## Configuration
 
-配置文件是简易 `key: value` 文本（非完整 YAML）。`log_init(path)` 传入路径；空路径时默认读取 `./config.yaml`。
+The config file is a simple `key: value` text format (not full YAML). Pass the path to `log_init(path)`; when empty, defaults to `./config.yaml`.
 
-示例：
+Example:
 
 ```yaml
 level: INFO
@@ -105,48 +105,48 @@ host: 127.0.0.1
 port: 5140
 ```
 
-| 键 | 含义 |
-|----|------|
-| `level` | 最低输出级别：`TRACE` / `DEBUG` / `INFO` / `WARN` / `ERROR` / `FATAL` |
-| `async` | `true` 时启用后台消费线程 |
-| `queue_size` | 异步队列容量 |
-| `color` | 控制台 ANSI 着色（不影响文件 / socket） |
-| `format` | 格式串 |
-| `console_enable` | 启用 stdout Sink |
-| `file_enable` / `file_path` | 文件 Sink；也可用键 `path` |
-| `max_size` | 轮转阈值，支持 `100MB` 或字节数 |
-| `backups` | 保留备份个数（`.1` … `.N`） |
-| `socket_enable` / `host` / `port` | TCP Socket Sink |
+| Key | Meaning |
+|-----|---------|
+| `level` | minimum output level: `TRACE` / `DEBUG` / `INFO` / `WARN` / `ERROR` / `FATAL` |
+| `async` | enable background consumer thread when `true` |
+| `queue_size` | async queue capacity |
+| `color` | console ANSI coloring (does not affect file / socket) |
+| `format` | format string |
+| `console_enable` | enable stdout sink |
+| `file_enable` / `file_path` | file sink; key `path` also accepted |
+| `max_size` | rotation threshold, supports `100MB` or raw byte count |
+| `backups` | number of backups to retain (`.1` … `.N`) |
+| `socket_enable` / `host` / `port` | TCP socket sink |
 
-运行时可调：
+Runtime adjustment:
 
 ```c
 log_set_level(LOG_LEVEL_DEBUG);
 log_get_level();
-log_reload();   // 重读 init 时的配置路径
+log_reload();   // re-read config path passed to init
 ```
 
-## 格式 Token
+## Format Tokens
 
-| Token | 内容 |
-|-------|------|
-| `%time` | 本地时间 `YYYY-MM-DD HH:MM:SS.uuuuuu` |
-| `%level` | 级别名 |
-| `%msg` | 消息正文 |
-| `%thread` | 线程 ID |
-| `%pid` | 进程 ID |
-| `%file` / `%line` / `%func` | 源位置 |
-| `%module` / `%tag` | 模块与标签（当前写日志入口里 module 固定为 `"main"`） |
-| `%newline` | 换行 |
+| Token | Content |
+|-------|---------|
+| `%time` | local time `YYYY-MM-DD HH:MM:SS.uuuuuu` |
+| `%level` | level name |
+| `%msg` | message body |
+| `%thread` | thread ID |
+| `%pid` | process ID |
+| `%file` / `%line` / `%func` | source location |
+| `%module` / `%tag` | module and tag (current log entry's module is fixed to `"main"`) |
+| `%newline` | newline |
 
-示例：`[%time] [%level] %file:%line %msg`
+Example: `[%time] [%level] %file:%line %msg`
 
-## 公共 API
+## Public API
 
 ```c
-int  log_init(const char *yaml_path);  // 0 成功，-1 失败
+int  log_init(const char *yaml_path);  // 0 success, -1 failure
 void log_destroy(void);
-void log_flush(void);                  // 异步模式下先排空队列
+void log_flush(void);                  // drain queue in async mode
 int  log_reload(void);
 
 LOG_INFO("...");
@@ -157,49 +157,49 @@ LOG_FATAL("...");
 TRACE("...");
 ```
 
-更底层接口见 `include/log_config.h`、`log_async.h`、`log_sink.h`、`dispatcher.h`。
+Lower-level interfaces: `include/log_config.h`, `log_async.h`, `log_sink.h`, `dispatcher.h`.
 
-## 异步模式
+## Async Mode
 
-`async: true` 时：
+When `async: true`:
 
-1. 调用线程格式化消息并入队（字符串字段深拷贝）
-2. 后台 worker 出队后交给 dispatcher
-3. `log_flush()` / `log_destroy()` / `log_reload()` 会正确排空或停掉 worker
+1. calling thread formats message and enqueues it (deep copy of string fields)
+2. background worker dequeues and passes to dispatcher
+3. `log_flush()` / `log_destroy()` / `log_reload()` correctly drain or stop the worker
 
-队列满时 `put` 会阻塞等待；关闭或 OOM 时回退为同步写出，尽量不丢日志。
+When queue is full, `put` blocks; on shutdown or OOM, falls back to synchronous output to minimize log loss.
 
-## 架构
+## Architecture
 
 ```
 LOG_* ──► log_writevprintf
-              ├─ level 过滤
-              ├─ 组装 log_record_t
-              └─ async? ──► 队列 ──► worker ──► dispatcher
+              ├─ level filter
+              ├─ assemble log_record_t
+              └─ async? ──► queue ──► worker ──► dispatcher
                            └─ sync ─────────────► dispatcher
                                                     ├─ formatter
                                                     └─ console / file / socket
 ```
 
-## 测试
+## Tests
 
 ```bash
 make test
-# 或
+# or
 ctest --test-dir build --output-on-failure
 ```
 
-覆盖异步生命周期、reload 启停 worker、dispatcher 复用、文件轮转、嵌套目录创建、配置热更新等。
+Covers async lifecycle, reload start/stop worker, dispatcher reuse, file rotation, nested directory creation, config hot reload, etc.
 
-## API 文档（Doxygen）
+## API Documentation (Doxygen)
 
-头文件与实现均含 Doxygen 注释。生成 HTML：
+Headers and implementations include Doxygen comments. Generate HTML:
 
 ```bash
-make docs   # 需要安装 doxygen
-# 输出：docs/api/html/index.html
+make docs   # requires doxygen
+# Output: docs/api/html/index.html
 ```
 
-## 许可证
+## License
 
-以仓库内声明为准；若尚未添加许可证文件，使用前请自行补充。
+As declared in the repository; if no license file is present yet, add one before use.
