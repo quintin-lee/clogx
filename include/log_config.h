@@ -14,8 +14,10 @@
  * @struct log_config_t
  * @brief Process-wide logging configuration.
  *
- * @note `level` is read/written under an rwlock via @ref log_get_level /
- *       @ref log_set_level. Other fields are typically read after init/reload.
+ * @note Hot-path fields `level`, `async`, and `color` should be read via
+ *       @ref log_get_level, @ref log_config_is_async, and
+ *       @ref log_config_color_enabled. Prefer those over @ref log_config_get
+ *       on concurrent paths.
  */
 typedef struct {
     log_level_t level;      /**< Minimum level that will be emitted. */
@@ -67,6 +69,18 @@ int log_set_level(log_level_t level);
  * @return Current @ref log_level_t.
  */
 log_level_t log_get_level(void);
+
+/**
+ * @brief Whether async mode is enabled (thread-safe).
+ * @return true when the async worker path is configured.
+ */
+bool log_config_is_async(void);
+
+/**
+ * @brief Whether console ANSI coloring is enabled (thread-safe).
+ * @return true when color output is configured.
+ */
+bool log_config_color_enabled(void);
 
 /**
  * @brief Check whether @p level should be emitted under the current config.

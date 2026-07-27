@@ -215,3 +215,17 @@ log_level_t log_get_level(void) {
     pthread_rwlock_unlock(&g_config_rwlock);
     return lvl;
 }
+
+bool log_config_is_async(void) {
+    pthread_rwlock_rdlock(&g_config_rwlock);
+    bool async = g_config.async;
+    pthread_rwlock_unlock(&g_config_rwlock);
+    return async;
+}
+
+bool log_config_color_enabled(void) {
+    pthread_rwlock_rdlock(&g_config_rwlock);
+    bool color = g_config.color;
+    pthread_rwlock_unlock(&g_config_rwlock);
+    return color;
+}

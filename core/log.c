@@ -84,8 +84,6 @@ void log_writevprintf(log_level_t level, const char *file, int line, const char 
         return;
     }
 
-    log_config_t *cfg = log_config_get();
-
     va_list args;
     va_start(args, fmt);
 
@@ -113,7 +111,7 @@ void log_writevprintf(log_level_t level, const char *file, int line, const char 
     record.tag = NULL;
     record.message = message;
 
-    if (cfg->async) {
+    if (log_config_is_async()) {
         int ar = log_async_write(&record);
         if (ar != 0) {
             void (*cb)(void) = log_get_async_fallback_cb();
@@ -171,8 +169,7 @@ void log_destroy(void) {
 }
 
 void log_flush(void) {
-    log_config_t *cfg = log_config_get();
-    if (cfg->async) {
+    if (log_config_is_async()) {
         log_async_flush();
     } else {
         log_dispatcher_flush();

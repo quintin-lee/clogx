@@ -69,8 +69,7 @@ int log_dispatcher_dispatch(log_record_t *record) {
     if (!record)
         return -1;
 
-    log_config_t *cfg = log_config_get();
-    if (record->level < cfg->level) {
+    if (record->level < log_get_level()) {
         return 0;
     }
 
@@ -92,6 +91,7 @@ int log_dispatcher_dispatch(log_record_t *record) {
         "\x1b[37m"  // COLOR_WHITE
     };
     const char *reset_code = "\x1b[0m";
+    bool color_enabled = log_config_color_enabled();
 
     char colored_buf[4096];
 
@@ -103,7 +103,7 @@ int log_dispatcher_dispatch(log_record_t *record) {
         const char *write_buf = formatted_buf;
         size_t write_len = (size_t)len;
 
-        if (cfg->color && console_sink_is_color_enabled(g_dispatcher.sinks[i])) {
+        if (color_enabled && console_sink_is_color_enabled(g_dispatcher.sinks[i])) {
             log_color_t color = get_log_color(record->level);
             int color_idx = color < (int)(sizeof(ansi_codes) / sizeof(ansi_codes[0])) ? color : 0;
             int ret = snprintf(colored_buf, sizeof(colored_buf), "%s%s%s", ansi_codes[color_idx],
