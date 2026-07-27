@@ -58,8 +58,10 @@ jobs:
       - name: Checkout
         uses: actions/checkout@v4
 
-      - name: Build with Makefile
-        run: make
+      - name: Build library and selected tests
+        run: |
+          make
+          make build/test_async_lifecycle build/test_file_rotate build/test_pipeline
 
       - name: Install valgrind
         run: sudo apt-get update && sudo apt-get install -y valgrind
@@ -80,4 +82,9 @@ jobs:
         run: sudo apt-get update && sudo apt-get install -y cppcheck
 
       - name: Run cppcheck
-        run: cppcheck --enable=all --error-exitcode=1 --inline-suppressions include/ core/ sinks/
+        # warning/performance/portability only: --enable=all flags public API as unusedFunction
+        run: >
+          cppcheck --enable=warning,performance,portability
+          --error-exitcode=1 --inline-suppr
+          --suppress=missingIncludeSystem
+          -I include include/ core/ sinks/

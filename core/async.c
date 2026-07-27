@@ -79,7 +79,7 @@ static int log_record_clone(log_record_t *dst, const log_record_t *src) {
  * @param[in] arg Pointer to async_logger_t.
  * @return Always NULL.
  */
-void *async_worker(void *arg) {
+static void *async_worker(void *arg) {
     async_logger_t *logger = (async_logger_t *)arg;
     log_record_t record;
 

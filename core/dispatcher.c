@@ -91,6 +91,8 @@ int log_dispatcher_dispatch(log_record_t *record) {
     };
     const char *reset_code = "\x1b[0m";
 
+    char colored_buf[4096];
+
     pthread_mutex_lock(&g_dispatcher.mutex);
     for (int i = 0; i < g_dispatcher.sink_count; i++) {
         if (!g_dispatcher.sinks[i]) continue;
@@ -102,7 +104,6 @@ int log_dispatcher_dispatch(log_record_t *record) {
             log_color_t color = get_log_color(record->level);
             int color_idx = color < (int)(sizeof(ansi_codes) / sizeof(ansi_codes[0]))
                             ? color : 0;
-            char colored_buf[4096];
             int ret = snprintf(colored_buf, sizeof(colored_buf), "%s%s%s",
                                ansi_codes[color_idx], formatted_buf, reset_code);
             if (ret > 0 && ret < (int)sizeof(colored_buf)) {

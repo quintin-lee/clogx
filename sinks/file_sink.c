@@ -145,10 +145,11 @@ log_sink_t *file_sink_create(const char *path, uint64_t max_size, int backups) {
         return NULL;
     }
 
-    if (fseek(data->file, 0, SEEK_END) == 0) {
-        long sz = ftell(data->file);
-        if (sz > 0 && sz != -1L) {
-            data->current_size = (uint64_t)sz;
+    /* Append mode ignores fseek; use fstat for initial size. */
+    {
+        struct stat st;
+        if (fstat(fileno(data->file), &st) == 0 && st.st_size > 0) {
+            data->current_size = (uint64_t)st.st_size;
         }
     }
 

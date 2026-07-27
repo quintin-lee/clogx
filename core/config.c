@@ -158,7 +158,8 @@ static int load_default_and_apply(const char *yaml_path) {
     g_config.socket_port = 0;
     g_config.format = g_config_format;
 
-    if (yaml_path && strlen(yaml_path) > 0) {
+    /* Reload passes g_config_path itself; avoid overlapping copy (ASan). */
+    if (yaml_path && yaml_path != g_config_path && strlen(yaml_path) > 0) {
         strncpy(g_config_path, yaml_path, sizeof(g_config_path) - 1);
         g_config_path[sizeof(g_config_path) - 1] = '\0';
     }

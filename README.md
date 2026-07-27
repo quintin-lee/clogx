@@ -235,7 +235,7 @@ GitHub Actions runs:
 - Makefile and CMake build/test matrix
 - AddressSanitizer (`clang` + `-fsanitize=address`)
 - Valgrind leak check on core tests
-- `cppcheck --enable=all` on `include/`, `core/`, `sinks/`
+- `cppcheck --enable=warning,performance,portability` on `include/`, `core/`, `sinks/`
 
 ## API Documentation (Doxygen)
 
