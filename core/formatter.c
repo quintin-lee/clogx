@@ -1,3 +1,7 @@
+/**
+ * @file formatter.c
+ * @brief Token formatter for log lines (@ref log_formatter_init for tokens).
+ */
 #include <stdio.h>
 #include <stdlib.h>
 #include <string.h>

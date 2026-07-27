@@ -1,4 +1,8 @@
 #define _POSIX_C_SOURCE 200809L
+/**
+ * @file log.c
+ * @brief Public logging entry points: init/destroy/reload/flush and write path.
+ */
 #include <stdio.h>
 #include <stdlib.h>
 #include <string.h>
@@ -13,12 +17,14 @@
 #include "log_async.h"
 #include "log_record.h"
 
+/** Wall-clock timestamp in microseconds since the Unix epoch. */
 static inline uint64_t get_timestamp(void) {
     struct timespec ts;
     clock_gettime(CLOCK_REALTIME, &ts);
     return (uint64_t)ts.tv_sec * 1000000 + (uint64_t)ts.tv_nsec / 1000;
 }
 
+/** Truncated pthread_t suitable for %thread formatting. */
 static inline uint32_t get_thread_id(void) {
     pthread_t self = pthread_self();
     return (uint32_t)((uintptr_t)self % 0xFFFFFFFF);
@@ -38,11 +44,9 @@ void log_writevprintf(
 
     log_config_t *cfg = log_config_get();
 
-    // Use va_list to handle variable arguments
     va_list args;
     va_start(args, fmt);
 
-    // Format the message using vsnprintf
     char message[1024];
     int ret = vsnprintf(message, sizeof(message), fmt, args);
     va_end(args);
@@ -51,7 +55,10 @@ void log_writevprintf(
         message[sizeof(message) - 1] = '\0';
     }
 
-    // Create log record
+    /*
+     * record.message / file / func point at caller stack or static storage.
+     * Async mode must deep-copy before the caller returns (see log_async_write).
+     */
     log_record_t record;
     record.level = level;
     record.timestamp = get_timestamp();
@@ -64,7 +71,6 @@ void log_writevprintf(
     record.tag = NULL;
     record.message = message;
 
-    // Dispatch based on config
     if (cfg->async) {
         log_async_write(&record);
     } else {

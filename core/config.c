@@ -1,3 +1,7 @@
+/**
+ * @file config.c
+ * @brief key:value config parser with defaults, rwlock, and reload path memory.
+ */
 #include <stdio.h>
 #include <stdlib.h>
 #include <string.h>

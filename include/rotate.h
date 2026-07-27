@@ -1,12 +1,23 @@
+/**
+ * @file rotate.h
+ * @brief Size-based log file rotation helpers for the file sink.
+ */
+
 #ifndef ROTATE_H
 #define ROTATE_H
 
 #include <stdint.h>
 
-// Rotate a log file based on max size and backup count
-// base_path: path without extension (e.g., "logs/server.log")
-// max_size: max size before rotation
-// backups: number of backup files to keep
+/**
+ * @brief Rotate @p base_path into a numbered backup chain.
+ *
+ * Deletes `@p base_path.N`, shifts `.1`→`.2` … `.(N-1)`→`.N`, then renames
+ * the active file to `.1`.
+ *
+ * @param[in] base_path   Active log file path (e.g. `"logs/server.log"`).
+ * @param[in] max_backups Number of numbered backups to retain (`N`).
+ * @return 0 always (best-effort; rename/unlink errors are ignored).
+ */
 int file_rotate_file(const char *base_path, int max_backups);
 
-#endif // ROTATE_H
+#endif /* ROTATE_H */

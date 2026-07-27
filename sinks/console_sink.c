@@ -1,3 +1,7 @@
+/**
+ * @file console_sink.c
+ * @brief Console sinks (stdout/stderr); color preference queried by dispatcher.
+ */
 #include <stdio.h>
 #include <stdlib.h>
 #include <stdbool.h>

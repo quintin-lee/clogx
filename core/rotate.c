@@ -1,3 +1,7 @@
+/**
+ * @file rotate.c
+ * @brief Size-based log file rotation (shift numbered backups, rename active).
+ */
 #include <stdio.h>
 #include <string.h>
 #include <unistd.h>

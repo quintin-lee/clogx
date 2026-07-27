@@ -1,3 +1,7 @@
+/**
+ * @file async.c
+ * @brief Async logger: deep-copy records into a queue consumed by one worker.
+ */
 #include <stdio.h>
 #include <stdlib.h>
 #include <string.h>
@@ -24,6 +28,7 @@ static char *dup_field(const char *s) {
     return strdup(s);
 }
 
+/** @brief Free string fields previously allocated by @ref log_record_clone. */
 static void log_record_free_owned(log_record_t *record) {
     if (!record) return;
 
@@ -40,6 +45,12 @@ static void log_record_free_owned(log_record_t *record) {
     record->tag = NULL;
 }
 
+/**
+ * @brief Deep-copy string fields so the record outlives the producer stack frame.
+ * @param[out] dst Destination record (owned strings on success).
+ * @param[in]  src Source record (may reference stack storage).
+ * @return 0 on success, -1 on allocation failure (dst fields freed).
+ */
 static int log_record_clone(log_record_t *dst, const log_record_t *src) {
     if (!dst || !src) return -1;
 
@@ -62,6 +73,11 @@ static int log_record_clone(log_record_t *dst, const log_record_t *src) {
     return 0;
 }
 
+/**
+ * @brief Worker loop; exits when @ref mpsc_queue_get returns -1 (closed & empty).
+ * @param[in] arg Pointer to async_logger_t.
+ * @return Always NULL.
+ */
 void *async_worker(void *arg) {
     async_logger_t *logger = (async_logger_t *)arg;
     log_record_t record;
@@ -121,6 +137,7 @@ int log_async_is_running(void) {
 
 int log_async_write(log_record_t *record) {
     if (!g_async_logger.queue) {
+        /* Async not started: write synchronously with the caller's pointers. */
         log_dispatcher_dispatch(record);
         return 0;
     }
@@ -133,6 +150,7 @@ int log_async_write(log_record_t *record) {
 
     int ret = mpsc_queue_put(g_async_logger.queue, &owned);
     if (ret != 0) {
+        /* Queue closed or shutting down: drop the clone and write sync. */
         log_record_free_owned(&owned);
         log_dispatcher_dispatch(record);
     }

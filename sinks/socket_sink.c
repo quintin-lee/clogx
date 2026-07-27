@@ -1,3 +1,7 @@
+/**
+ * @file socket_sink.c
+ * @brief TCP socket sink with lazy connect and reconnect-on-send-failure.
+ */
 #define _DEFAULT_SOURCE
 #include <stdio.h>
 #include <stdlib.h>

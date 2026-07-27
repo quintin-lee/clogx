@@ -191,6 +191,15 @@ ctest --test-dir build --output-on-failure
 
 覆盖异步生命周期、reload 启停 worker、dispatcher 复用、文件轮转、嵌套目录创建、配置热更新等。
 
+## API 文档（Doxygen）
+
+头文件与实现均含 Doxygen 注释。生成 HTML：
+
+```bash
+make docs   # 需要安装 doxygen
+# 输出：docs/api/html/index.html
+```
+
 ## 许可证
 
 以仓库内声明为准；若尚未添加许可证文件，使用前请自行补充。

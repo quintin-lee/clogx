@@ -1,3 +1,7 @@
+/**
+ * @file queue.c
+ * @brief Mutex-protected bounded ring buffer used by the async logger.
+ */
 #include <stdlib.h>
 #include <string.h>
 #include <pthread.h>

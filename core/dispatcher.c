@@ -1,3 +1,7 @@
+/**
+ * @file dispatcher.c
+ * @brief Format once, then fan-out to configured sinks (color only on console).
+ */
 #include <stdio.h>
 #include <stdlib.h>
 #include <string.h>

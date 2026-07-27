@@ -1,3 +1,7 @@
+/**
+ * @file file_sink.c
+ * @brief File sink with size-based rotation and parent-directory creation.
+ */
 #define _DEFAULT_SOURCE
 #include <stdio.h>
 #include <stdlib.h>
@@ -16,6 +20,7 @@ typedef struct {
     int backups;
 } file_sink_data_t;
 
+/** @brief mkdir -p for the parent directory of @p path. */
 static int ensure_parent_dirs(const char *path) {
     char dir[1024];
     size_t len;
