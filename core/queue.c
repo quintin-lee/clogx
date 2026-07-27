@@ -55,6 +55,26 @@ int mpsc_queue_put(mpsc_queue_t *q, log_record_t *record) {
     return 0;
 }
 
+int mpsc_queue_try_put(mpsc_queue_t *q, log_record_t *record) {
+    if (!q || !record) return -1;
+
+    pthread_mutex_lock(&q->mutex);
+
+    if (q->closed || q->count == q->capacity) {
+        pthread_mutex_unlock(&q->mutex);
+        return -1;
+    }
+
+    q->buffer[q->head] = *record;
+    q->head = (q->head + 1) % q->capacity;
+    q->count++;
+
+    pthread_cond_signal(&q->not_empty);
+    pthread_mutex_unlock(&q->mutex);
+
+    return 0;
+}
+
 int mpsc_queue_get(mpsc_queue_t *q, log_record_t *record) {
     if (!q || !record) return -1;
 

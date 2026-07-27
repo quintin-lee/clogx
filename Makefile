@@ -15,7 +15,7 @@ TESTS = test_async_lifecycle test_async_reload test_dispatcher_lifecycle \
         test_file_rotate test_file_mkdir test_config_reload \
         test_pipeline verify_config \
         test_invalid_config test_double_init test_empty_sink \
-        test_async_fallback
+        test_async_fallback test_queue_try_put
 TEST_BINS = $(addprefix $(BUILD_DIR)/,$(TESTS))
 
 .PHONY: all clean example test docs

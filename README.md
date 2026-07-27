@@ -198,7 +198,10 @@ When `async: true`:
 3. background worker dequeues and passes to dispatcher
 4. `log_flush()` / `log_destroy()` / `log_reload()` correctly drain or stop the worker
 
-When the async path cannot accept a record (queue closed, OOM, or worker not running), the library falls back to synchronous dispatch. Register `log_set_async_fallback_cb()` to observe these fallbacks.
+When the async path cannot accept a record (queue full, queue closed, OOM, or
+worker not running), the library falls back to synchronous dispatch without
+blocking the caller. Register `log_set_async_fallback_cb()` to observe these
+fallbacks.
 
 ## Architecture
 
@@ -226,7 +229,7 @@ make test
 ctest --test-dir build --output-on-failure
 ```
 
-Covers async lifecycle, reload start/stop worker, dispatcher reuse, file rotation, nested directory creation, config hot reload, invalid config handling, double init protection, empty sink rejection, and async fallback notification. Total: 12 tests.
+Covers async lifecycle, reload start/stop worker, dispatcher reuse, file rotation, nested directory creation, config hot reload, invalid config handling, double init protection, empty sink rejection, async fallback notification, and non-blocking queue overflow. Total: 13 tests.
 
 ## CI
 

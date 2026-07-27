@@ -52,6 +52,14 @@ mpsc_queue_t *mpsc_queue_create(size_t capacity);
 int mpsc_queue_put(mpsc_queue_t *q, log_record_t *record);
 
 /**
+ * @brief Enqueue a record without blocking.
+ * @param[in,out] q      Queue instance.
+ * @param[in]     record Record to copy into the buffer.
+ * @return 0 on success, -1 if full, closed, or arguments are invalid.
+ */
+int mpsc_queue_try_put(mpsc_queue_t *q, log_record_t *record);
+
+/**
  * @brief Dequeue a record (blocks while empty).
  * @param[in,out] q      Queue instance.
  * @param[out]    record Receives the dequeued record.

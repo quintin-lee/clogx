@@ -148,7 +148,7 @@ int log_async_write(log_record_t *record) {
         return CLOG_ERR_OOM;
     }
 
-    int ret = mpsc_queue_put(g_async_logger.queue, &owned);
+    int ret = mpsc_queue_try_put(g_async_logger.queue, &owned);
     if (ret != 0) {
         log_record_free_owned(&owned);
         log_dispatcher_dispatch(record);
