@@ -87,6 +87,7 @@ if(CLOG_BUILD_TESTS)
         test_invalid_config
         test_double_init
         test_empty_sink
+        test_async_fallback
     )
 
     foreach(test_name IN LISTS CLOG_TEST_SOURCES)

@@ -105,7 +105,11 @@ void log_writevprintf(
     record.message = message;
 
     if (cfg->async) {
-        log_async_write(&record);
+        int ar = log_async_write(&record);
+        if (ar != 0) {
+            void (*cb)(void) = log_get_async_fallback_cb();
+            if (cb) cb();
+        }
     } else {
         log_dispatcher_dispatch(&record);
     }

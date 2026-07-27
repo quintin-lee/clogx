@@ -12,7 +12,8 @@ static int write_config(void) {
     if (!f) return -1;
     fprintf(f,
             "level: INFO\n"
-            "async: false\n"
+            "async: true\n"
+            "queue_size: 16\n"
             "color: false\n"
             "format: [%%level] %%msg\n"
             "console_enable: false\n"
@@ -29,7 +30,7 @@ static int write_config(void) {
 static int callback_invoked = 0;
 
 static void fallback_cb(void) {
-    callback_invoked = 1;
+    callback_invoked++;
 }
 
 int main(void) {
@@ -41,20 +42,18 @@ int main(void) {
 
     log_set_async_fallback_cb(fallback_cb);
 
-    if (log_get_async_fallback_cb() != fallback_cb) {
-        fprintf(stderr, "fallback callback not stored\n");
-        return 1;
-    }
+    log_async_shutdown();
 
-    LOG_INFO("sync-message");
+    LOG_INFO("after-shutdown");
+
     log_flush();
     log_destroy();
 
-    if (!callback_invoked) {
+    if (callback_invoked == 0) {
         fprintf(stderr, "fallback callback was not invoked\n");
         return 1;
     }
 
-    printf("async fallback test passed\n");
+    printf("async fallback test passed (callbacks=%d)\n", callback_invoked);
     return 0;
 }

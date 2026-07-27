@@ -139,7 +139,7 @@ int log_async_is_running(void) {
 int log_async_write(log_record_t *record) {
     if (!g_async_logger.queue) {
         log_dispatcher_dispatch(record);
-        return 0;
+        return CLOG_ERR_QUEUE_FULL;
     }
 
     log_record_t owned;
