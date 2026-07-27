@@ -55,13 +55,25 @@ static int file_write(log_sink_t *sink, const char *buf, size_t len) {
     file_sink_data_t *data = (file_sink_data_t *)sink->private_data;
     if (!data || !data->file || !buf) return -1;
 
-    size_t written = fwrite(buf, 1, len, data->file);
-    if (written != len) return -1;
+    size_t written = 0;
+    while (written < len) {
+        size_t n = fwrite(buf + written, 1, len - written, data->file);
+        if (n == 0) {
+            if (ferror(data->file)) {
+                clearerr(data->file);
+                return -1;
+            }
+            break;
+        }
+        written += n;
+    }
 
-    data->current_size += (uint64_t)written;
+    data->current_size += written;
 
     if (data->max_size > 0 && data->current_size >= data->max_size) {
-        fflush(data->file);
+        if (fflush(data->file) != 0) {
+            return -1;
+        }
         fclose(data->file);
         data->file = NULL;
 
@@ -135,7 +147,7 @@ log_sink_t *file_sink_create(const char *path, uint64_t max_size, int backups) {
 
     if (fseek(data->file, 0, SEEK_END) == 0) {
         long sz = ftell(data->file);
-        if (sz > 0) {
+        if (sz > 0 && sz != -1L) {
             data->current_size = (uint64_t)sz;
         }
     }
