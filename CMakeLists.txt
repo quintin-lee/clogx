@@ -121,9 +121,12 @@ install(TARGETS clogx
     INCLUDES DESTINATION ${CMAKE_INSTALL_INCLUDEDIR}
 )
 
-install(DIRECTORY include/
+install(FILES
+    include/log.h
+    include/log_config.h
+    include/log_record.h
+    include/log_sink.h
     DESTINATION ${CMAKE_INSTALL_INCLUDEDIR}/clogx
-    FILES_MATCHING PATTERN "*.h"
 )
 
 if(CLOG_BUILD_EXAMPLES)
