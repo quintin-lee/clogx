@@ -123,33 +123,52 @@ int log_dispatcher_dispatch(log_record_t *record) {
 
 int log_dispatcher_init(void) {
     log_config_t *cfg = log_config_get();
-    log_dispatcher_destroy();
+
+    log_sink_t *sinks[8] = {0};
+    int count = 0;
 
     if (cfg->console_enable) {
         log_sink_t *sink = console_sink_create(cfg->color);
         if (sink) {
-            log_dispatcher_add_sink(sink);
+            sinks[count++] = sink;
         }
     }
 
     if (cfg->file_enable && strlen(cfg->file_path) > 0) {
         log_sink_t *sink = file_sink_create(cfg->file_path, cfg->file_max_size, cfg->file_backups);
         if (sink) {
-            log_dispatcher_add_sink(sink);
+            sinks[count++] = sink;
         }
     }
 
     if (cfg->socket_enable && strlen(cfg->socket_host) > 0) {
         log_sink_t *sink = socket_sink_create(cfg->socket_host, cfg->socket_port);
         if (sink) {
-            log_dispatcher_add_sink(sink);
+            sinks[count++] = sink;
         }
     }
 
-    if (g_dispatcher.sink_count == 0) {
+    if (count == 0) {
         fprintf(stderr, "No sinks configured; logging will be dropped\n");
         return -1;
     }
+
+    log_dispatcher_destroy();
+
+    pthread_mutex_lock(&g_dispatcher.mutex);
+    g_dispatcher.sinks = malloc((size_t)count * sizeof(log_sink_t *));
+    if (!g_dispatcher.sinks) {
+        pthread_mutex_unlock(&g_dispatcher.mutex);
+        for (int i = 0; i < count; i++) {
+            sinks[i]->destroy(sinks[i]);
+        }
+        return -1;
+    }
+    for (int i = 0; i < count; i++) {
+        g_dispatcher.sinks[i] = sinks[i];
+    }
+    g_dispatcher.sink_count = count;
+    pthread_mutex_unlock(&g_dispatcher.mutex);
 
     return 0;
 }
