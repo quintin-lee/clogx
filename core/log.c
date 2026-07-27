@@ -20,6 +20,8 @@
 static pthread_mutex_t g_init_mutex = PTHREAD_MUTEX_INITIALIZER;
 static int g_initialized = 0;
 static void (*g_async_fallback_cb)(void);
+static pthread_mutex_t g_module_mutex = PTHREAD_MUTEX_INITIALIZER;
+static char g_module[64] = "main";
 
 const char *log_strerror(int err) {
     switch (err) {
@@ -62,6 +64,26 @@ void (*log_get_async_fallback_cb(void))(void) {
     return g_async_fallback_cb;
 }
 
+void log_set_module(const char *module) {
+    pthread_mutex_lock(&g_module_mutex);
+    if (!module || !*module) {
+        strncpy(g_module, "main", sizeof(g_module) - 1);
+    } else {
+        strncpy(g_module, module, sizeof(g_module) - 1);
+    }
+    g_module[sizeof(g_module) - 1] = '\0';
+    pthread_mutex_unlock(&g_module_mutex);
+}
+
+void log_get_module(char *buf, size_t n) {
+    if (!buf || n == 0)
+        return;
+    pthread_mutex_lock(&g_module_mutex);
+    strncpy(buf, g_module, n - 1);
+    buf[n - 1] = '\0';
+    pthread_mutex_unlock(&g_module_mutex);
+}
+
 /** Wall-clock timestamp in microseconds since the Unix epoch. */
 static inline uint64_t get_timestamp(void) {
     struct timespec ts;
@@ -91,12 +113,22 @@ void log_writevprintf(log_level_t level, const char *file, int line, const char 
     int ret = vsnprintf(message, sizeof(message), fmt, args);
     va_end(args);
 
-    if (ret < 0 || ret >= (int)sizeof(message)) {
-        message[sizeof(message) - 1] = '\0';
+    if (ret < 0) {
+        message[0] = '\0';
+    } else if (ret >= (int)sizeof(message)) {
+        /* Mark truncated messages so callers can detect overflow. */
+        if (sizeof(message) >= 4) {
+            memcpy(message + sizeof(message) - 4, "...", 4);
+        } else {
+            message[sizeof(message) - 1] = '\0';
+        }
     }
 
+    char module_buf[64];
+    log_get_module(module_buf, sizeof(module_buf));
+
     /*
-     * record.message / file / func point at caller stack or static storage.
+     * record.message / file / func / module point at caller stack or static storage.
      * Async mode must deep-copy before the caller returns (see log_async_write).
      */
     log_record_t record;
@@ -107,7 +139,7 @@ void log_writevprintf(log_level_t level, const char *file, int line, const char 
     record.file = file;
     record.func = func;
     record.line = line;
-    record.module = "main";
+    record.module = module_buf;
     record.tag = NULL;
     record.message = message;
 

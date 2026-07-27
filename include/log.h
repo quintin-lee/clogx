@@ -60,6 +60,19 @@ void log_set_async_fallback_cb(void (*cb)(void));
 void (*log_get_async_fallback_cb(void))(void);
 
 /**
+ * @brief Set the process-wide module name used for `%module`.
+ * @param[in] module Module name; NULL or "" resets to `"main"`.
+ */
+void log_set_module(const char *module);
+
+/**
+ * @brief Copy the current module name into @p buf.
+ * @param[out] buf Destination buffer.
+ * @param[in]  n   Buffer capacity.
+ */
+void log_get_module(char *buf, size_t n);
+
+/**
  * @brief Initialize the logging subsystem.
  *
  * Loads configuration, creates sinks, initializes the formatter, and starts

@@ -91,6 +91,7 @@ if(CLOG_BUILD_TESTS)
         test_queue_try_put
         test_max_size
         test_console_stderr
+        test_module_trunc
     )
 
     foreach(test_name IN LISTS CLOG_TEST_SOURCES)
