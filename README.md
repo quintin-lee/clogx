@@ -5,13 +5,16 @@
 [![CMake](https://img.shields.io/badge/CMake-3.14%2B-red.svg)](https://cmake.org/)
 [![CI](https://github.com/quintin-lee/clogx/actions/workflows/ci.yml/badge.svg)](https://github.com/quintin-lee/clogx/actions/workflows/ci.yml)
 
-Lightweight C99 logging library: config-driven, multi-sink output, optional async queue, size-based log file rotation.
+Lightweight C99 logging library: config-driven, multi-sink output, optional async queue, size-based log file rotation, native JSON structured logging, and optional TLS transport security.
 
 ## Features
 
 - Macro API: `LOG_INFO` / `LOG_DEBUG` / `LOG_WARN` / `LOG_ERROR` / `LOG_FATAL` / `LOG_TRACE` (`TRACE` kept as alias)
-- Multi-sink: console (optional ANSI color), file (auto-create directories + rotation), TCP socket
-- Token formatting: `%time` `%level` `%msg` `%file` `%line` `%func` and more
+- Multi-sink: console (optional ANSI color), file (auto-create directories + rotation), TCP socket (optional OpenSSL TLS encryption)
+- Structured Logging: native single-line JSON format (`format: "json"`) with RFC 8259 string escaping
+- Token formatting: `%time` `%level` `%msg` `%file` `%line` `%func` `%module` `%tag` `%thread` `%pid`
+- Buffer Limit Safety: macro-configurable buffer sizes (`include/log_limits.h`) with strict boundary checks
+- Fuzz Testing: built-in AFL / libFuzzer test harnesses (`make fuzz-build`)
 - Sync / async switchable; async path deep-copies records to avoid dangling stack pointers
 - Hot reload: `log_reload()` re-reads config and atomically rebuilds sinks / async worker
 - Per-sink level filtering: `log_sink_set_level()` / `log_sink_get_level()` on any sink
@@ -19,17 +22,18 @@ Lightweight C99 logging library: config-driven, multi-sink output, optional asyn
 - Error handling: structured error codes via `clogx_errno_t` and `log_strerror()`
 - Observability: async fallback callback (`log_set_async_fallback_cb()`)
 - Printf format safety: compile-time format string validation via `CLOGX_PRINTF_FMT`
-- Clean ABI: symbol visibility control exports only 24 public symbols
+- Clean ABI: symbol visibility control exports public symbols cleanly
 - Build: Makefile and CMake (with CTest, `find_package(clogx)`); ASan/UBSan/Valgrind check targets
 
 ## Directory Layout
 
 ```
-include/     public headers
+include/     public headers (log.h, log_config.h, log_limits.h, log_record.h, log_sink.h)
 core/        config, formatting, dispatch, queue, async, rotation
-sinks/       console / file / socket
+sinks/       console / file / socket (with TLS support)
+fuzz/        AFL fuzzing harnesses (fuzz_config.c, fuzz_formatter.c)
 example/     example programs
-tests/       regression tests
+tests/       regression tests (24 test suites)
 cmake/       CMake package config templates
 ```
 
@@ -49,7 +53,7 @@ int main(void) {
     cfg.level = LOG_LEVEL_DEBUG;
     cfg.async = false;
     cfg.color = true;
-    cfg.format = "[%time] [%level] %msg";
+    cfg.format = "json";  /* or "[%time] [%level] %msg" */
     cfg.file_enable = true;
     snprintf(cfg.file_path, sizeof(cfg.file_path), "logs/app.log");
     log_config_set(&cfg);
@@ -72,17 +76,25 @@ Linking requires pthread:
 gcc -Iinclude app.c -Lbuild -lclogx -lpthread -o app
 ```
 
+If built with OpenSSL TLS support (`TLS=1` / `CLOG_ENABLE_TLS=ON`):
+
+```bash
+gcc -Iinclude app.c -Lbuild -lclogx -lpthread -lssl -lcrypto -o app
+```
+
 ## Build
 
 ### Makefile
 
 ```bash
 make              # generates build/libclogx.a, build/libclogx.so, build/example
-make test         # compiles and runs all 23 regression tests
+make TLS=1        # builds with OpenSSL TLS socket sink support
+make test         # compiles and runs all 24 regression tests
 make asan         # build + test with AddressSanitizer
 make ubsan        # build + test with UndefinedBehaviorSanitizer
 make check        # full quality gate: format check → build → test
 make test-valgrind  # all tests under Valgrind leak check (skipped if not installed)
+make fuzz-build   # builds AFL fuzzing binaries (build/fuzz_config, build/fuzz_formatter)
 make format       # apply clang-format to all sources
 make docs         # generate Doxygen API docs
 make install      # install library + headers + pkg-config
@@ -98,7 +110,7 @@ ctest --test-dir build --output-on-failure
 cmake --install build --prefix /usr/local
 ```
 
-Common options:
+Common CMake options:
 
 | Option | Default | Description |
 |--------|---------|-------------|
@@ -106,6 +118,7 @@ Common options:
 | `CLOG_BUILD_TESTS` | ON | build and register CTest |
 | `CLOG_BUILD_SHARED` | OFF | build shared library when ON |
 | `CLOG_USE_SYSTEM_YAML` | OFF | use system libyaml instead of auto-downloading |
+| `CLOG_ENABLE_TLS` | OFF | enable OpenSSL TLS support for socket sink |
 
 Downstream projects:
 
@@ -125,8 +138,7 @@ pkg-config --cflags --libs clogx
 The config file is YAML with all settings under a top-level `log:` mapping.
 Pass the path to `log_init(path)`; when empty, defaults to `./config.yaml`.
 
-For backward compatibility, old-style top-level `key: value` pairs (without a
-`log:` wrapper) are also accepted.
+For backward compatibility, old-style top-level `key: value` pairs (without a `log:` wrapper) are also accepted.
 
 Example:
 
@@ -136,7 +148,7 @@ log:
   async: false
   queue_size: 8192
   color: true
-  format: "[%time] [%level] [%module] %msg (%file:%line)"
+  format: "json"   # Use "json" for structured logging, or "[%time] [%level] %msg"
   time_format: "%Y-%m-%d %H:%M:%S"
   console_enable: true
   console_stderr: false
@@ -144,40 +156,57 @@ log:
   file_path: logs/server.log
   max_size: 100MB
   backups: 10
-  socket_enable: false
+  socket_enable: true
+  socket_host: "127.0.0.1"
+  socket_port: 9000
+  socket_tls: true
+  socket_tls_ca_file: "certs/ca.crt"
+  socket_tls_skip_verify: false
 ```
 
 | Key | Meaning |
 |-----|---------|
-| `level` | minimum output level: `TRACE` / `DEBUG` / `INFO` / `WARN` / `ERROR` / `FATAL` (unknown values are rejected) |
+| `level` | minimum output level: `TRACE` / `DEBUG` / `INFO` / `WARN` / `ERROR` / `FATAL` |
 | `async` | enable background consumer thread when `true` |
 | `queue_size` | async queue capacity |
 | `color` | console ANSI coloring (does not affect file / socket) |
-| `format` | format string |
+| `format` | format string, or `"json"` for single-line JSON structured logging |
 | `time_format` | strftime template for `%time` (default: `%Y-%m-%d %H:%M:%S`); microseconds always appended after `.` |
 | `console_enable` | enable console sink |
 | `console_stderr` | when `true`, console sink writes to stderr instead of stdout |
 | `file_enable` / `file_path` | file sink |
 | `max_size` | rotation threshold: raw bytes, or `K`/`KB`, `M`/`MB`, `G`/`GB` |
 | `backups` | number of backups to retain (`.1` … `.N`) |
-| `socket_enable` / `host` / `port` | TCP socket sink |
+| `socket_enable` / `socket_host` / `socket_port` | TCP socket sink |
+| `socket_tls` | enable OpenSSL TLS encryption for socket sink (`socket_tls: true`) |
+| `socket_tls_ca_file` / `tls_ca_file` | path to CA certificate file (optional) |
+| `socket_tls_skip_verify` / `tls_skip_verify` | skip server certificate verification (`true`/`false`) |
 
-Runtime adjustment:
+## Structured Logging (JSON)
 
-```c
-log_set_level(LOG_LEVEL_DEBUG);
-log_get_level();
-log_reload();   // re-read config path passed to init
+Set `format: "json"` in configuration to emit structured JSON log lines:
 
-/* Or set configuration programmatically */
-log_config_t cfg = {0};
-cfg.level = LOG_LEVEL_WARN;
-cfg.file_enable = true;
-snprintf(cfg.file_path, sizeof(cfg.file_path), "logs/app.log");
-log_config_set(&cfg);
+```json
+{"timestamp":"2026-07-28 14:44:25.123456","level":"INFO","module":"main","file":"app.c","line":42,"func":"main","thread":1234,"pid":5678,"tag":"","message":"Server started successfully"}
 ```
 
-## Format Tokens
+String fields (`message`, `file`, `func`, `module`, `tag`) are automatically escaped per RFC 8259 (`"`, `\`, `\n`, `\r`, `\t`, control bytes).
+
+## Buffer Limits & Safety (`include/log_limits.h`)
+
+Buffer capacities are centralized and macro-configurable:
+
+| Macro | Default | Purpose |
+|-------|---------|---------|
+| `CLOG_MAX_MESSAGE_SIZE` | 4096 | formatted message body |
+| `CLOG_MAX_FORMATTED_SIZE` | 8192 | formatted log line buffer |
+| `CLOG_MAX_COLORED_SIZE` | 16384 | ANSI colorized output buffer |
+| `CLOG_MAX_FORMAT_SIZE` | 1024 | format string template storage |
+| `CLOG_MAX_PATH_SIZE` | 512 | file and socket path strings |
+
+Override at compile time: `-DCLOG_MAX_MESSAGE_SIZE=8192`.
+
+## Format Tokens (Text Mode)
 
 | Token | Content |
 |-------|---------|
@@ -187,7 +216,7 @@ log_config_set(&cfg);
 | `%thread` | thread ID |
 | `%pid` | process ID |
 | `%file` / `%line` / `%func` | source location |
-| `%module` / `%tag` | module (via `log_set_module`) and tag (currently unused / empty) |
+| `%module` / `%tag` | module (via `log_set_module`) and tag |
 | `%newline` | newline |
 
 Example: `[%time] [%level] %file:%line %msg`
@@ -215,6 +244,8 @@ void           log_sink_set_level(log_sink_t *sink, log_level_t level);
 log_level_t    log_sink_get_level(const log_sink_t *sink);
 log_config_t  *log_config_get(void);
 int            log_config_set(const log_config_t *cfg);
+log_sink_t    *socket_sink_create_tls(const char *host, int port, bool use_tls,
+                                      const char *ca_file, bool skip_verify);
 
 LOG_INFO("...");
 LOG_DEBUG("...");
@@ -222,88 +253,18 @@ LOG_WARN("...");
 LOG_ERROR("...");
 LOG_FATAL("...");
 LOG_TRACE("...");
-TRACE("..."); /* deprecated alias for LOG_TRACE */
 ```
 
-Error codes:
+Installed public headers: `log.h`, `log_config.h`, `log_limits.h`, `log_record.h`, `log_sink.h` under `include/clogx/`.
 
-| Code | Meaning |
-|------|---------|
-| `CLOG_OK` | success |
-| `CLOG_ERR_INIT_REENTRANT` | `log_init` called without `log_destroy` |
-| `CLOG_ERR_CONFIG_OPEN` | failed to open or parse config file |
-| `CLOG_ERR_NO_SINKS` | no sinks configured |
-| `CLOG_ERR_FILE_OPEN` | failed to open log file |
-| `CLOG_ERR_FILE_WRITE` | file write error or short write |
-| `CLOG_ERR_QUEUE_FULL` | async queue full or closed |
-| `CLOG_ERR_THREAD_CREATE` | failed to create async worker |
-| `CLOG_ERR_SOCKET_CONNECT` | socket connect failed |
-| `CLOG_ERR_OOM` | out of memory during clone |
-| `CLOG_ERR_RELOAD` | reload without init |
-| `CLOG_ERR_INVALID_ARG` | invalid argument |
+## Fuzzing
 
-Installed public headers: `log.h`, `log_config.h`, `log_record.h`, `log_sink.h` under `include/clogx/`.
-Internal headers (`queue.h`, `dispatcher.h`, `log_async.h`, `log_formatter.h`, …) stay in-tree and are not installed.
-
-## Async Mode
-
-When `async: true`:
-
-1. calling thread formats message and deep-copies string fields
-2. record is enqueued to a bounded MPSC queue
-3. background worker dequeues and passes to dispatcher
-4. `log_flush()` / `log_destroy()` / `log_reload()` correctly drain or stop the worker
-
-When the async path cannot accept a record (queue full, queue closed, OOM, or
-worker not running), the library falls back to synchronous dispatch without
-blocking the caller. Register `log_set_async_fallback_cb()` to observe these
-fallbacks.
-
-## Architecture
-
-```
-LOG_* ──► log_writevprintf
-               ├─ level filter
-               ├─ assemble log_record_t
-               └─ async? ──► queue ──► worker ──► dispatcher
-                            └─ sync ─────────────► dispatcher
-                                                     ├─ formatter
-                                                     └─ console / file / socket
-```
-
-Reload path uses an atomic snapshot swap so old sinks stay alive until new sinks are ready:
-
-```
-config reload → build new snapshot → shutdown async → commit snapshot → restart async if needed
-```
-
-## Tests
+AFL / libFuzzer test targets:
 
 ```bash
-make test
-# or
-ctest --test-dir build --output-on-failure
-```
-
-Covers async lifecycle, reload start/stop worker, dispatcher reuse, file rotation, nested directory creation, config hot reload, invalid config handling, double init protection, empty sink rejection, async fallback notification, non-blocking queue overflow, max_size unit parsing, stderr console routing, module/truncation behavior, custom sink registration, multi-threaded sync correctness, socket sink TCP output, per-sink level filtering, runtime log level changes, programmatic config via `log_config_set`, and boundary conditions (empty YAML, comments, old-style top-level keys, unknown keys, NULL path). Total: 23 tests.
-
-## CI
-
-GitHub Actions runs:
-
-- Makefile and CMake build/test matrix
-- AddressSanitizer (`clang` + `-fsanitize=address`)
-- Valgrind leak check on all tests
-- clang-format compliance check
-- `cppcheck --enable=warning,performance,portability` on `include/`, `core/`, `sinks/`
-
-## API Documentation (Doxygen)
-
-Headers and implementations include Doxygen comments. Generate HTML:
-
-```bash
-make docs   # requires doxygen
-# Output: docs/api/html/index.html
+make fuzz-build      # builds build/fuzz_config and build/fuzz_formatter
+make fuzz-config     # launches afl-fuzz on config parser
+make fuzz-formatter  # launches afl-fuzz on log line formatter
 ```
 
 ## License

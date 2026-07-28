@@ -5,6 +5,19 @@ All notable changes to this project will be documented in this file.
 ## [Unreleased]
 
 ### Added
+- Native JSON structured logging: setting `format: "json"` (or `format: "JSON"`)
+  emits single-line JSON log objects with RFC 8259 string escaping for quotes,
+  backslashes, newlines, and control bytes
+- Optional Socket sink OpenSSL TLS encryption: `socket_tls`, `socket_tls_ca_file`,
+  `socket_tls_skip_verify` YAML options and `socket_sink_create_tls()` factory
+  guarded by `#ifdef CLOG_USE_TLS`; supported via Makefile (`make TLS=1`) and
+  CMake (`CLOG_ENABLE_TLS=ON`)
+- Centralized buffer limit configuration: `include/log_limits.h` defines
+  `CLOG_MAX_MESSAGE_SIZE` (4096), `CLOG_MAX_FORMATTED_SIZE` (8192),
+  `CLOG_MAX_COLORED_SIZE` (16384), `CLOG_MAX_FORMAT_SIZE` (1024), and
+  `CLOG_MAX_PATH_SIZE` (512) with `#ifndef` guards for compile-time override
+- AFL / libFuzzer fuzzing targets: `fuzz/fuzz_config.c` and `fuzz/fuzz_formatter.c`
+  harnesses with Makefile targets `fuzz-build`, `fuzz-config`, `fuzz-formatter`
 - Programmatic configuration API: `log_config_set()` applies a caller-provided
   `log_config_t` directly; `log_config_get()` returns the current config
 - Configurable time format: `time_format` key sets the strftime template for
@@ -13,7 +26,7 @@ All notable changes to this project will be documented in this file.
 - Printf format attribute on `log_writevprintf` for compile-time format string
   validation (`CLOGX_PRINTF_FMT` portability macro)
 - Symbol visibility control: `CLOGX_API` macro (`__attribute__((visibility("default")))`)
-  on all 24 public functions, `-fvisibility=hidden` for shared lib — ABI exports
+  on all public functions, `-fvisibility=hidden` for shared lib — ABI exports
   only public API symbols
 - `restrict` qualifiers on hot-path internal function parameters (formatter,
   queue, dispatcher, async) for compiler aliasing optimization
