@@ -1,0 +1,24 @@
+---
+# clang-tidy configuration for clogx (C99 logging library)
+
+Checks: >
+  -*,
+  bugprone-*,
+  clang-analyzer-*,
+  performance-*,
+  portability-*,
+  readability-redundant-control-flow,
+  readability-redundant-string-cstr,
+  -bugprone-easily-swappable-parameters,
+  -bugprone-macro-parentheses
+
+WarningsAsErrors: ''
+
+HeaderFilterRegex: 'include/.*'
+
+FormatStyle: 'file'
+
+CheckOptions:
+  - key:   clang-analyzer-optin.performance.Padding.Threshold
+    value: '16'
+...

@@ -104,9 +104,7 @@ jobs:
         run: cmake -S . -B build -DCMAKE_EXPORT_COMPILE_COMMANDS=ON
 
       - name: Run clang-tidy
-        run: >
-          clang-tidy --checks='bugprone-*,clang-analyzer-*,performance-*,portability-*'
-          -p build core/*.c sinks/*.c
+        run: clang-tidy -p build core/*.c sinks/*.c
 
   format:
     runs-on: ubuntu-latest
