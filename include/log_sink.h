@@ -11,6 +11,14 @@
 #include <stdbool.h>
 #include "log_record.h"
 
+#ifndef CLOGX_API
+#if defined(__GNUC__) || defined(__clang__)
+#define CLOGX_API __attribute__((visibility("default")))
+#else
+#define CLOGX_API
+#endif
+#endif
+
 /**
  * @struct log_sink
  * @brief Polymorphic sink: write/flush/destroy plus private state.
@@ -48,21 +56,21 @@ struct log_sink {
  * @param[in] use_color When true, the dispatcher may wrap output in ANSI colors.
  * @return New sink, or NULL on allocation failure.
  */
-log_sink_t *console_sink_create(bool use_color);
+CLOGX_API log_sink_t *console_sink_create(bool use_color);
 
 /**
  * @brief Create a stderr console sink.
  * @param[in] use_color When true, the dispatcher may wrap output in ANSI colors.
  * @return New sink, or NULL on allocation failure.
  */
-log_sink_t *console_sink_create_stderr(bool use_color);
+CLOGX_API log_sink_t *console_sink_create_stderr(bool use_color);
 
 /**
  * @brief Test whether @p sink is a color-enabled console sink.
  * @param[in] sink Sink to query (may be NULL).
  * @return true if color output is enabled for this sink.
  */
-bool console_sink_is_color_enabled(log_sink_t *sink);
+CLOGX_API bool console_sink_is_color_enabled(log_sink_t *sink);
 
 /**
  * @brief Create an append-only file sink with size-based rotation.
@@ -75,7 +83,7 @@ bool console_sink_is_color_enabled(log_sink_t *sink);
  * @param[in] backups  Number of numbered backups to retain (`.1` .. `.N`).
  * @return New sink, or NULL on error.
  */
-log_sink_t *file_sink_create(const char *path, uint64_t max_size, int backups);
+CLOGX_API log_sink_t *file_sink_create(const char *path, uint64_t max_size, int backups);
 
 /**
  * @brief Create a lazy-connect TCP socket sink.
@@ -83,7 +91,7 @@ log_sink_t *file_sink_create(const char *path, uint64_t max_size, int backups);
  * @param[in] port Destination port in host byte order (1..65535).
  * @return New sink, or NULL on invalid arguments / allocation failure.
  */
-log_sink_t *socket_sink_create(const char *host, int port);
+CLOGX_API log_sink_t *socket_sink_create(const char *host, int port);
 
 /**
  * @brief Set the minimum severity level for a sink.

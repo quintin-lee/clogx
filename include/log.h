@@ -23,8 +23,10 @@
 /* Compiler portability macros. */
 #if defined(__GNUC__) || defined(__clang__)
 #define CLOGX_PRINTF_FMT(n, m) __attribute__((format(printf, n, m)))
+#define CLOGX_API __attribute__((visibility("default")))
 #else
 #define CLOGX_PRINTF_FMT(n, m)
+#define CLOGX_API
 #endif
 
 /**
@@ -51,7 +53,7 @@ typedef enum {
  * @brief Get a string description for the last error.
  * @return Static error string.
  */
-const char *log_strerror(int err);
+CLOGX_API const char *log_strerror(int err);
 
 /**
  * @brief Register a callback invoked when async mode degrades to sync.
@@ -59,26 +61,26 @@ const char *log_strerror(int err);
  *
  * @note Called with async fallback context (not async-signal-safe).
  */
-void log_set_async_fallback_cb(void (*cb)(void));
+CLOGX_API void log_set_async_fallback_cb(void (*cb)(void));
 
 /**
  * @brief Get the currently registered async fallback callback.
  * @return Callback function pointer, or NULL if none registered.
  */
-void (*log_get_async_fallback_cb(void))(void);
+CLOGX_API void (*log_get_async_fallback_cb(void))(void);
 
 /**
  * @brief Set the process-wide module name used for `%module`.
  * @param[in] module Module name; NULL or "" resets to `"main"`.
  */
-void log_set_module(const char *module);
+CLOGX_API void log_set_module(const char *module);
 
 /**
  * @brief Copy the current module name into @p buf.
  * @param[out] buf Destination buffer.
  * @param[in]  n   Buffer capacity.
  */
-void log_get_module(char *buf, size_t n);
+CLOGX_API void log_get_module(char *buf, size_t n);
 
 /**
  * @brief Append a custom sink after @ref log_init.
@@ -87,7 +89,7 @@ void log_get_module(char *buf, size_t n);
  *
  * @note Custom sinks added this way are discarded on @ref log_reload.
  */
-int log_add_sink(log_sink_t *sink);
+CLOGX_API int log_add_sink(log_sink_t *sink);
 
 /**
  * @brief Remove a previously added sink without destroying it.
@@ -96,7 +98,7 @@ int log_add_sink(log_sink_t *sink);
  *
  * @note Caller retains ownership and must call @c sink->destroy when finished.
  */
-int log_remove_sink(log_sink_t *sink);
+CLOGX_API int log_remove_sink(log_sink_t *sink);
 
 /**
  * @brief Initialize the logging subsystem.
@@ -111,14 +113,14 @@ int log_remove_sink(log_sink_t *sink);
  * @note Call @ref log_destroy when finished. Calling @ref log_init again
  *       without destroy is not supported.
  */
-int log_init(const char *yaml_path);
+CLOGX_API int log_init(const char *yaml_path);
 
 /**
  * @brief Shut down logging.
  *
  * Stops the async worker (draining pending records) and destroys all sinks.
  */
-void log_destroy(void);
+CLOGX_API void log_destroy(void);
 
 /**
  * @brief Flush pending log output.
@@ -126,7 +128,7 @@ void log_destroy(void);
  * When async mode is enabled, waits until the queue is empty, then flushes
  * every sink. In sync mode, only flushes sinks.
  */
-void log_flush(void);
+CLOGX_API void log_flush(void);
 
 /**
  * @brief Reload configuration and rebuild sinks.
@@ -136,7 +138,7 @@ void log_flush(void);
  *
  * @return @p CLOG_OK on success, negative @ref clogx_errno_t on failure.
  */
-int log_reload(void);
+CLOGX_API int log_reload(void);
 
 /**
  * @brief Format a message and dispatch a log record.
@@ -151,7 +153,7 @@ int log_reload(void);
  * @param[in] fmt   printf-style format string.
  * @param[in] ...   Format arguments.
  */
-void log_writevprintf(log_level_t level, const char *file, int line, const char *func,
+CLOGX_API void log_writevprintf(log_level_t level, const char *file, int line, const char *func,
                       const char *fmt, ...) CLOGX_PRINTF_FMT(5, 6);
 
 /**

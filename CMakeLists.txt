@@ -46,7 +46,7 @@ target_compile_definitions(clogx
 
 target_compile_options(clogx
     PRIVATE
-        $<$<C_COMPILER_ID:GNU,Clang,AppleClang>:-Wall -Wextra -Wconversion>
+        $<$<C_COMPILER_ID:GNU,Clang,AppleClang>:-Wall -Wextra -Wconversion -fvisibility=hidden>
 )
 
 target_link_libraries(clogx

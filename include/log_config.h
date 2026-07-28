@@ -10,6 +10,15 @@
 #include <stdint.h>
 #include "log_record.h"
 
+/* Reuse CLOGX_API from log.h if already included, otherwise define it. */
+#ifndef CLOGX_API
+#if defined(__GNUC__) || defined(__clang__)
+#define CLOGX_API __attribute__((visibility("default")))
+#else
+#define CLOGX_API
+#endif
+#endif
+
 /**
  * @struct log_config_t
  * @brief Process-wide logging configuration.
@@ -40,7 +49,7 @@ typedef struct {
  * @brief Access the process-wide configuration object.
  * @return Pointer valid after @ref log_config_init.
  */
-log_config_t *log_config_get(void);
+CLOGX_API log_config_t *log_config_get(void);
 
 /**
  * @brief Initialize configuration from defaults and an optional file.
@@ -50,38 +59,38 @@ log_config_t *log_config_get(void);
  * @param[in] yaml_path Config path. NULL or "" defaults to `./config.yaml`.
  * @return 0 on success.
  */
-int log_config_init(const char *yaml_path);
+CLOGX_API int log_config_init(const char *yaml_path);
 
 /**
  * @brief Re-parse the config path remembered by @ref log_config_init.
  * @return 0 on success.
  */
-int log_config_reload(void);
+CLOGX_API int log_config_reload(void);
 
 /**
  * @brief Set the minimum emit level (thread-safe).
  * @param[in] level New minimum level.
  * @return 0 on success.
  */
-int log_set_level(log_level_t level);
+CLOGX_API int log_set_level(log_level_t level);
 
 /**
  * @brief Get the current minimum emit level (thread-safe).
  * @return Current @ref log_level_t.
  */
-log_level_t log_get_level(void);
+CLOGX_API log_level_t log_get_level(void);
 
 /**
  * @brief Whether async mode is enabled (thread-safe).
  * @return true when the async worker path is configured.
  */
-bool log_config_is_async(void);
+CLOGX_API bool log_config_is_async(void);
 
 /**
  * @brief Whether console ANSI coloring is enabled (thread-safe).
  * @return true when color output is configured.
  */
-bool log_config_color_enabled(void);
+CLOGX_API bool log_config_color_enabled(void);
 
 /**
  * @brief Check whether @p level should be emitted under the current config.
