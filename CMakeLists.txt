@@ -249,6 +249,20 @@ install(FILES ${CMAKE_CURRENT_BINARY_DIR}/clogx.pc
     DESTINATION ${CMAKE_INSTALL_LIBDIR}/pkgconfig
 )
 
+# --- CPack Configuration ---
+set(CPACK_PACKAGE_NAME "clogx")
+set(CPACK_PACKAGE_VERSION "${PROJECT_VERSION}")
+set(CPACK_PACKAGE_DESCRIPTION_SUMMARY "Lightweight C99 logging library")
+set(CPACK_PACKAGE_VENDOR "quintin-lee")
+set(CPACK_PACKAGE_LICENSE "MIT")
+set(CPACK_GENERATOR "TGZ;ZIP;DEB;RPM")
+set(CPACK_DEBIAN_PACKAGE_MAINTAINER "quintin-lee")
+set(CPACK_RPM_PACKAGE_LICENSE "MIT")
+set(CPACK_DEBIAN_PACKAGE_DEPENDS "libyaml-0-2 (>= 0.2.5), libpthread")
+set(CPACK_RPM_PACKAGE_REQUIRES "libyaml >= 0.2.5")
+
+include(CPack)
+
 # --- Docs (optional; requires doxygen) ---
 find_program(DOXYGEN_EXECUTABLE doxygen)
 if(DOXYGEN_EXECUTABLE)
