@@ -1,6 +1,6 @@
 /**
  * @file async.c
- * @brief Async logger: deep-copy records into a queue consumed by one worker.
+ * @brief Async logger: single-allocation record cloning into a queue consumed by one worker.
  */
 #include <stdio.h>
 #include <stdlib.h>
@@ -20,24 +20,19 @@ typedef struct {
     volatile int processing;
 } async_logger_t;
 
-static async_logger_t g_async_logger = {.queue = NULL, .running = 0, .processing = 0};
+static async_logger_t g_async_logger = {
+    .queue = NULL, .running = 0, .processing = 0};
 
-static char *dup_field(const char *s) {
-    if (!s)
-        return NULL;
-    return strdup(s);
-}
-
-/** @brief Free string fields previously allocated by @ref log_record_clone. */
+/** @brief Free string fields allocated as a single block by @ref log_record_clone. */
 static void log_record_free_owned(log_record_t *record) {
     if (!record)
         return;
 
-    free((void *)record->message);
-    free((void *)record->file);
-    free((void *)record->func);
-    free((void *)record->module);
-    free((void *)record->tag);
+    const char *block = record->message ? record->message :
+                        (record->module ? record->module : record->tag);
+    if (block) {
+        free((void *)block);
+    }
 
     record->message = NULL;
     record->file = NULL;
@@ -47,26 +42,61 @@ static void log_record_free_owned(log_record_t *record) {
 }
 
 /**
- * @brief Deep-copy string fields so the record outlives the producer stack frame.
- * @param[out] dst Destination record (owned strings on success).
+ * @brief Deep-copy dynamic string fields into a single block so the record outlives the producer stack frame.
+ * @param[out] dst Destination record (owned strings in a contiguous block on success).
  * @param[in]  src Source record (may reference stack storage).
- * @return 0 on success, -1 on allocation failure (dst fields freed).
+ * @return 0 on success, -1 on allocation failure.
  */
 static int log_record_clone(log_record_t *restrict dst, const log_record_t *restrict src) {
     if (!dst || !src)
         return -1;
 
     *dst = *src;
-    dst->message = dup_field(src->message);
-    dst->file = dup_field(src->file);
-    dst->func = dup_field(src->func);
-    dst->module = dup_field(src->module);
-    dst->tag = dup_field(src->tag);
+    /* Static string literals (__FILE__, __func__) do not need deep copy */
+    dst->file = src->file;
+    dst->func = src->func;
 
-    if ((src->message && !dst->message) || (src->file && !dst->file) || (src->func && !dst->func) ||
-        (src->module && !dst->module) || (src->tag && !dst->tag)) {
-        log_record_free_owned(dst);
-        return -1;
+    size_t msg_len = src->message ? strlen(src->message) : 0;
+    size_t mod_len = src->module ? strlen(src->module) : 0;
+    size_t tag_len = src->tag ? strlen(src->tag) : 0;
+
+    size_t total_bytes = (src->message ? msg_len + 1 : 0) +
+                         (src->module ? mod_len + 1 : 0) +
+                         (src->tag ? tag_len + 1 : 0);
+
+    if (total_bytes == 0) {
+        dst->message = NULL;
+        dst->module = NULL;
+        dst->tag = NULL;
+        return 0;
+    }
+
+    char *block = malloc(total_bytes);
+    if (!block) return -1;
+
+    char *p = block;
+    if (src->message) {
+        memcpy(p, src->message, msg_len + 1);
+        dst->message = p;
+        p += msg_len + 1;
+    } else {
+        dst->message = NULL;
+    }
+
+    if (src->module) {
+        memcpy(p, src->module, mod_len + 1);
+        dst->module = p;
+        p += mod_len + 1;
+    } else {
+        dst->module = NULL;
+    }
+
+    if (src->tag) {
+        memcpy(p, src->tag, tag_len + 1);
+        dst->tag = p;
+        p += tag_len + 1;
+    } else {
+        dst->tag = NULL;
     }
 
     return 0;
