@@ -13,17 +13,17 @@ static int write_config(const char *extra) {
     if (!f)
         return -1;
     fprintf(f,
-            "level: INFO\n"
-            "async: false\n"
-            "color: false\n"
-            "format: '[%%level] %%msg'\n"
-            "console_enable: false\n"
-            "file_enable: true\n"
-            "file_path: %s\n"
-            "max_size: 100MB\n"
-            "backups: 2\n"
-            "%s\n"
-            "socket_enable: false\n",
+            "log:\n"
+            "  async: false\n"
+            "  color: false\n"
+            "  format: '[%%level] %%msg'\n"
+            "  console_enable: false\n"
+            "  file_enable: true\n"
+            "  file_path: %s\n"
+            "  max_size: 100MB\n"
+            "  backups: 2\n"
+            "  %s\n"
+            "  socket_enable: false\n",
             LOG_PATH, extra);
     fclose(f);
     return 0;

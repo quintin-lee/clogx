@@ -13,17 +13,17 @@ static int write_config(int async) {
     if (!f)
         return -1;
     fprintf(f,
-            "level: INFO\n"
-            "async: %s\n"
-            "queue_size: 1024\n"
-            "color: false\n"
-            "format: '[%%level] %%msg'\n"
-            "console_enable: false\n"
-            "file_enable: true\n"
-            "file_path: %s\n"
-            "max_size: 100MB\n"
-            "backups: 2\n"
-            "socket_enable: false\n",
+            "log:\n"
+            "  async: %s\n"
+            "  queue_size: 1024\n"
+            "  color: false\n"
+            "  format: '[%%level] %%msg'\n"
+            "  console_enable: false\n"
+            "  file_enable: true\n"
+            "  file_path: %s\n"
+            "  max_size: 100MB\n"
+            "  backups: 2\n"
+            "  socket_enable: false\n",
             async ? "true" : "false", LOG_PATH);
     fclose(f);
     return 0;

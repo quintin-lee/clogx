@@ -1,14 +1,15 @@
-level: TRACE
-async: false
-queue_size: 8192
-color: true
-format: '[%time] [%level] [%module] %msg (%file:%line)'
-console_enable: true
-console_stderr: false
-file_enable: true
-file_path: logs/server.log
-max_size: 100MB
-backups: 10
-time_format: '%Y-%m-%d %H:%M:%S'
-socket_enable: false
+log:
+  level: TRACE
+  async: false
+  queue_size: 8192
+  color: true
+  format: '[%time] [%level] [%module] %msg (%file:%line)'
+  console_enable: true
+  console_stderr: false
+  file_enable: true
+  file_path: logs/server.log
+  max_size: 100MB
+  backups: 10
+  time_format: '%Y-%m-%d %H:%M:%S'
+  socket_enable: false
 

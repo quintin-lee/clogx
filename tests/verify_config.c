@@ -9,17 +9,17 @@ static int write_config(void) {
     FILE *f = fopen(CONFIG_PATH, "w");
     if (!f)
         return -1;
-    fprintf(f, "level: INFO\n"
-               "async: false\n"
-               "queue_size: 4096\n"
-               "color: true\n"
-               "format: '[%%time] [%%level] %%msg'\n"
-               "console_enable: true\n"
-               "file_enable: true\n"
-               "file_path: logs/verify_config.log\n"
-               "max_size: 50MB\n"
-               "backups: 3\n"
-               "socket_enable: false\n");
+    fprintf(f, "log:\n"
+               "  async: false\n"
+               "  queue_size: 4096\n"
+               "  color: true\n"
+               "  format: '[%%time] [%%level] %%msg'\n"
+               "  console_enable: true\n"
+               "  file_enable: true\n"
+               "  file_path: logs/verify_config.log\n"
+               "  max_size: 50MB\n"
+               "  backups: 3\n"
+               "  socket_enable: false\n");
     fclose(f);
     return 0;
 }

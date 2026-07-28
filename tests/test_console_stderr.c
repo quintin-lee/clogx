@@ -10,14 +10,14 @@ static int write_config(void) {
     FILE *f = fopen(CONFIG_PATH, "w");
     if (!f)
         return -1;
-    fprintf(f, "level: INFO\n"
-               "async: false\n"
-               "color: false\n"
-               "format: '%%msg'\n"
-               "console_enable: true\n"
-               "console_stderr: true\n"
-               "file_enable: false\n"
-               "socket_enable: false\n");
+    fprintf(f, "log:\n"
+               "  async: false\n"
+               "  color: false\n"
+               "  format: '%%msg'\n"
+               "  console_enable: true\n"
+               "  console_stderr: true\n"
+               "  file_enable: false\n"
+               "  socket_enable: false\n");
     fclose(f);
     return 0;
 }

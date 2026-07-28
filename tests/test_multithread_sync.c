@@ -16,16 +16,16 @@ static int write_config(void) {
         return -1;
 
     fprintf(f,
-            "level: TRACE\n"
-            "async: false\n"
-            "color: false\n"
-            "format: '[%%level] [%%module] %%msg'\n"
-            "console_enable: false\n"
-            "file_enable: true\n"
-            "file_path: %s\n"
-            "max_size: 100MB\n"
-            "backups: 3\n"
-            "socket_enable: false\n",
+            "log:\n"
+            "  async: false\n"
+            "  color: false\n"
+            "  format: '[%%level] [%%module] %%msg'\n"
+            "  console_enable: false\n"
+            "  file_enable: true\n"
+            "  file_path: %s\n"
+            "  max_size: 100MB\n"
+            "  backups: 3\n"
+            "  socket_enable: false\n",
             LOG_PATH);
     fclose(f);
     return 0;

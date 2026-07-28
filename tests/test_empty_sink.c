@@ -10,17 +10,17 @@ static int write_config(int console, int file, int socket) {
     if (!f)
         return -1;
     fprintf(f,
-            "level: INFO\n"
-            "async: false\n"
-            "color: false\n"
-            "format: '[%%level] %%msg'\n"
-            "console_enable: %s\n"
-            "file_enable: %s\n"
-            "%s"
-            "max_size: 100MB\n"
-            "backups: 2\n"
-            "%s\n"
-            "socket_enable: %s\n",
+            "log:\n"
+            "  async: false\n"
+            "  color: false\n"
+            "  format: '[%%level] %%msg'\n"
+            "  console_enable: %s\n"
+            "  file_enable: %s\n"
+            "  %s"
+            "  max_size: 100MB\n"
+            "  backups: 2\n"
+            "  %s\n"
+            "  socket_enable: %s\n",
             console ? "true" : "false", file ? "true" : "false",
             file ? "file_path: logs/empty_sink_test.log\n" : "",
             socket ? "host: 127.0.0.1\nport: 1" : "socket_enable: false",
