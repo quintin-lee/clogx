@@ -165,18 +165,18 @@ void log_async_atfork_child(void) {
         return;
     }
 
-    size_t cap = g_async_logger.queue->capacity;
-    mpsc_queue_destroy(g_async_logger.queue);
-    g_async_logger.queue = mpsc_queue_create(cap);
-    if (!g_async_logger.queue) {
-        g_async_logger.running = 0;
-        return;
-    }
+    mpsc_queue_t *q = g_async_logger.queue;
+    pthread_mutex_init(&q->mutex, NULL);
+    pthread_cond_init(&q->not_full, NULL);
+    pthread_cond_init(&q->not_empty, NULL);
+    pthread_cond_init(&q->drained, NULL);
+    q->head = 0;
+    q->tail = 0;
+    q->count = 0;
+    q->closed = 0;
 
     g_async_logger.running = 1;
     if (pthread_create(&g_async_logger.worker_thread, NULL, async_worker, &g_async_logger) != 0) {
-        mpsc_queue_destroy(g_async_logger.queue);
-        g_async_logger.queue = NULL;
         g_async_logger.running = 0;
     }
 }
