@@ -62,7 +62,7 @@ jobs:
         run: |
           make
           for f in tests/test_*.c tests/verify_config.c; do \
-            make "build/$$(basename "$$f" .c)" || exit 1; \
+            make "build/$(basename "$f" .c)" || exit 1; \
           done
 
       - name: Install valgrind
@@ -71,7 +71,7 @@ jobs:
       - name: Run tests under valgrind
         run: |
           for t in build/test_*; do \
-            valgrind --error-exitcode=1 --leak-check=full --track-origins=yes "./$$t"; \
+            valgrind --error-exitcode=1 --leak-check=full --track-origins=yes "./$t"; \
           done
 
   cppcheck:
