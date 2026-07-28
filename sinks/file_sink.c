@@ -123,7 +123,7 @@ static void file_atfork_child(log_sink_t *sink) {
         data->file = NULL;
     }
 
-    data->file = fopen(data->path, "a");
+    data->file = fopen(data->path, "ab");
     if (data->file) {
         clog_stat_t st;
         if (clog_fstat(fileno(data->file), &st) == 0 && st.st_size > 0) {
@@ -164,7 +164,7 @@ log_sink_t *file_sink_create(const char *path, uint64_t max_size, int backups) {
         return NULL;
     }
 
-    data->file = fopen(path, "a");
+    data->file = fopen(path, "ab");
     if (!data->file) {
         perror("Failed to open file for logging");
         free(data->path);
