@@ -1,8 +1,9 @@
 CC = gcc
-CFLAGS = -std=c99 -Wall -Wextra -Wconversion -Iinclude -O2 -D_GNU_SOURCE
+CFLAGS = -std=c99 -Wall -Wextra -Wconversion -Iinclude -O2 -D_GNU_SOURCE -fPIC -fvisibility=hidden
 LDFLAGS = -lpthread
 BUILD_DIR = build
 LIB_TARGET = $(BUILD_DIR)/libclogx.a
+SO_TARGET = $(BUILD_DIR)/libclogx.so
 EXAMPLE_BIN = $(BUILD_DIR)/example
 
 CORE_SRCS = config.c formatter.c dispatcher.c queue.c async.c log.c rotate.c
@@ -20,18 +21,23 @@ TESTS = test_async_lifecycle test_async_reload test_dispatcher_lifecycle \
         test_multithread_sync test_socket_sink test_sink_level test_log_level
 TEST_BINS = $(addprefix $(BUILD_DIR)/,$(TESTS))
 
+# Sanitizer configs (O1 -g for meaningful stack traces)
+ASAN_CFLAGS = -std=c99 -Wall -Wextra -Wconversion -Iinclude -O1 -g -D_GNU_SOURCE -fPIC -fvisibility=hidden -fsanitize=address -fno-omit-frame-pointer -fno-optimize-sibling-calls
+UBSAN_CFLAGS = -std=c99 -Wall -Wextra -Wconversion -Iinclude -O1 -g -D_GNU_SOURCE -fPIC -fvisibility=hidden -fsanitize=undefined
+
 VERSION = 0.1.0
+SO_VERSION = 0
 PREFIX ?= /usr/local
 LIBDIR ?= $(PREFIX)/lib
 INCLUDEDIR ?= $(PREFIX)/include
 
 PUBLIC_HEADERS := include/log.h include/log_config.h include/log_record.h include/log_sink.h
 
-.PHONY: all clean example test docs format check-format install uninstall
+.PHONY: all clean example test docs format check-format install uninstall asan ubsan test-asan test-ubsan
 
 FORMAT_FILES := $(shell find include core sinks example tests -name '*.c' -o -name '*.h')
 
-all: $(LIB_TARGET) $(EXAMPLE_BIN)
+all: $(LIB_TARGET) $(SO_TARGET) $(EXAMPLE_BIN)
 
 $(BUILD_DIR):
 	mkdir -p $@
@@ -45,14 +51,17 @@ $(BUILD_DIR)/%.o: sinks/%.c | $(BUILD_DIR)
 $(LIB_TARGET): $(ALL_OBJS)
 	ar rcs $@ $^
 
+$(SO_TARGET): $(ALL_OBJS)
+	$(CC) -shared -Wl,-soname,libclogx.so.$(SO_VERSION) -o $@ $^ $(LDFLAGS)
+
 $(EXAMPLE_BIN): example/main.c $(LIB_TARGET) | $(BUILD_DIR)
-	$(CC) $(CFLAGS) -o $@ example/main.c -L$(BUILD_DIR) -lclogx $(LDFLAGS)
+	$(CC) $(CFLAGS) -o $@ example/main.c $(LIB_TARGET) $(LDFLAGS)
 
 $(BUILD_DIR)/test_%: tests/test_%.c $(LIB_TARGET) | $(BUILD_DIR)
-	$(CC) $(CFLAGS) -o $@ $< -L$(BUILD_DIR) -lclogx $(LDFLAGS)
+	$(CC) $(CFLAGS) -o $@ $< $(LIB_TARGET) $(LDFLAGS)
 
 $(BUILD_DIR)/verify_config: tests/verify_config.c $(LIB_TARGET) | $(BUILD_DIR)
-	$(CC) $(CFLAGS) -o $@ $< -L$(BUILD_DIR) -lclogx $(LDFLAGS)
+	$(CC) $(CFLAGS) -o $@ $< $(LIB_TARGET) $(LDFLAGS)
 
 example: $(EXAMPLE_BIN)
 
@@ -64,6 +73,28 @@ test: $(TEST_BINS)
 		$$t || status=1; \
 	done; \
 	exit $$status
+
+## Sanitizer convenience targets
+
+asan:
+	$(MAKE) clean
+	$(MAKE) test CC=$(CC) CFLAGS="$(ASAN_CFLAGS)"
+
+ubsan:
+	$(MAKE) clean
+	$(MAKE) test CC=$(CC) CFLAGS="$(UBSAN_CFLAGS)"
+
+test-asan:
+	$(MAKE) clean
+	$(MAKE) all CC=$(CC) CFLAGS="$(ASAN_CFLAGS)"
+	$(MAKE) test CC=$(CC) CFLAGS="$(ASAN_CFLAGS)"
+
+test-ubsan:
+	$(MAKE) clean
+	$(MAKE) all CC=$(CC) CFLAGS="$(UBSAN_CFLAGS)"
+	$(MAKE) test CC=$(CC) CFLAGS="$(UBSAN_CFLAGS)"
+
+## Documentation
 
 docs:
 	@command -v doxygen >/dev/null || { echo "doxygen not found; install it to generate API docs"; exit 1; }
@@ -78,9 +109,11 @@ check-format:
 	@clang-format --dry-run --Werror $(FORMAT_FILES) || \
 		(echo "Formatting check failed! Run 'make format' to fix." && exit 1)
 
-install: $(LIB_TARGET)
+install: $(LIB_TARGET) $(SO_TARGET)
 	install -d $(DESTDIR)$(LIBDIR)
 	install -m 644 $(LIB_TARGET) $(DESTDIR)$(LIBDIR)/
+	install -m 755 $(SO_TARGET) $(DESTDIR)$(LIBDIR)/libclogx.so.$(SO_VERSION)
+	ln -sf libclogx.so.$(SO_VERSION) $(DESTDIR)$(LIBDIR)/libclogx.so
 	install -d $(DESTDIR)$(INCLUDEDIR)/clogx
 	install -m 644 $(PUBLIC_HEADERS) $(DESTDIR)$(INCLUDEDIR)/clogx/
 	install -d $(DESTDIR)$(LIBDIR)/pkgconfig
@@ -96,6 +129,8 @@ install: $(LIB_TARGET)
 
 uninstall:
 	-rm -f $(DESTDIR)$(LIBDIR)/libclogx.a
+	-rm -f $(DESTDIR)$(LIBDIR)/libclogx.so
+	-rm -f $(DESTDIR)$(LIBDIR)/libclogx.so.$(SO_VERSION)
 	-rm -rf $(DESTDIR)$(INCLUDEDIR)/clogx
 	-rm -f $(DESTDIR)$(LIBDIR)/pkgconfig/clogx.pc
 
