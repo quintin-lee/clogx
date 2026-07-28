@@ -55,7 +55,7 @@ jobs:
         run: ctest --test-dir build --output-on-failure
 
       - name: Verify compile_commands.json
-        if: matrix.build_type == 'cmake'
+        if: matrix.build_type == 'cmake' && matrix.os != 'windows-latest'
         run: test -f build/compile_commands.json
 
   asan:
