@@ -15,10 +15,8 @@ static void bench_mode(const char *label, log_config_t *cfg) {
     }
 
     clock_gettime(CLOCK_MONOTONIC, &ts_end);
-    double elapsed = (ts_end.tv_sec - ts_start.tv_sec) +
-                     (ts_end.tv_nsec - ts_start.tv_nsec) / 1e9;
-    printf("mode=%s elapsed=%.4fs msgs/sec=%.0f\n",
-           label, elapsed, N / elapsed);
+    double elapsed = (ts_end.tv_sec - ts_start.tv_sec) + (ts_end.tv_nsec - ts_start.tv_nsec) / 1e9;
+    printf("mode=%s elapsed=%.4fs msgs/sec=%.0f\n", label, elapsed, N / elapsed);
 
     log_destroy();
 }

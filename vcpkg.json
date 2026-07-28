@@ -4,7 +4,10 @@
   "description": "Lightweight C99 logging library with multi-sink, async queue, log rotation, JSON output, and TLS support",
   "homepage": "https://github.com/quintin-lee/clogx",
   "license": "MIT",
-  "dependencies": [],
+  "dependencies": [
+    "yaml-cpp",
+    "openssl"
+  ],
   "features": {
     "tls": {
       "description": "Enable OpenSSL TLS support for socket sink",

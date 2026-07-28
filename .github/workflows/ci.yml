@@ -32,8 +32,7 @@ jobs:
 
       - name: Install dependencies (Windows)
         if: matrix.os == 'windows-latest'
-        run: |
-          vcpkg install yaml-cpp openssl
+        run: vcpkg install
 
       - name: Build with Makefile
         if: matrix.build_type == 'makefile' && matrix.os != 'windows-latest'

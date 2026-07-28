@@ -18,8 +18,7 @@ int main(void) {
     }
 
     clock_gettime(CLOCK_MONOTONIC, &ts_end);
-    double elapsed = (ts_end.tv_sec - ts_start.tv_sec) +
-                     (ts_end.tv_nsec - ts_start.tv_nsec) / 1e9;
+    double elapsed = (ts_end.tv_sec - ts_start.tv_sec) + (ts_end.tv_nsec - ts_start.tv_nsec) / 1e9;
     printf("throughput: %.0f msgs/sec\n", N / elapsed);
 
     log_destroy();
