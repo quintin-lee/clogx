@@ -12,6 +12,55 @@
 #include "log_config.h"
 #include "log_formatter.h"
 
+typedef enum {
+    HANDLER_ASYNC,
+    HANDLER_BACKUP,
+    HANDLER_COLOR,
+    HANDLER_CONSOLE_ENABLE,
+    HANDLER_CONSOLE_STDERR,
+    HANDLER_FILE_ENABLE,
+    HANDLER_FILE_PATH,
+    HANDLER_FORMAT,
+    HANDLER_HOST,
+    HANDLER_LEVEL,
+    HANDLER_MAX_SIZE,
+    HANDLER_PORT,
+    HANDLER_QUEUE_SIZE,
+    HANDLER_SOCKET_ENABLE,
+    HANDLER_TIME_FORMAT,
+} config_handler_t;
+
+typedef struct {
+    const char *key;
+    config_handler_t handler;
+} config_key_t;
+
+static int compare_config_keys(const void *a, const void *b) {
+    const config_key_t *ka = (const config_key_t *)a;
+    const config_key_t *kb = (const config_key_t *)b;
+    return strcmp(ka->key, kb->key);
+}
+
+static const config_key_t g_config_keys[] = {
+    {"async",         HANDLER_ASYNC},
+    {"backup",        HANDLER_BACKUP},
+    {"backups",       HANDLER_BACKUP},
+    {"color",         HANDLER_COLOR},
+    {"console_enable", HANDLER_CONSOLE_ENABLE},
+    {"console_stderr", HANDLER_CONSOLE_STDERR},
+    {"file_enable",   HANDLER_FILE_ENABLE},
+    {"file_path",     HANDLER_FILE_PATH},
+    {"format",        HANDLER_FORMAT},
+    {"host",          HANDLER_HOST},
+    {"level",         HANDLER_LEVEL},
+    {"max_size",      HANDLER_MAX_SIZE},
+    {"path",          HANDLER_FILE_PATH},
+    {"port",          HANDLER_PORT},
+    {"queue_size",    HANDLER_QUEUE_SIZE},
+    {"socket_enable", HANDLER_SOCKET_ENABLE},
+    {"time_format",   HANDLER_TIME_FORMAT},
+};
+
 static log_config_t g_config;
 static pthread_rwlock_t g_config_rwlock = PTHREAD_RWLOCK_INITIALIZER;
 static char g_config_format[512] = "";
@@ -70,137 +119,159 @@ static int parse_config_file(const char *filepath, log_config_t *cfg) {
             } else {
                 expect_key = 1; /* ready for next key */
 
-                if (strcmp(current_key, "level") == 0) {
-                    if (strcmp(val, "TRACE") == 0)
-                        cfg->level = LOG_LEVEL_TRACE;
-                    else if (strcmp(val, "DEBUG") == 0)
-                        cfg->level = LOG_LEVEL_DEBUG;
-                    else if (strcmp(val, "INFO") == 0)
-                        cfg->level = LOG_LEVEL_INFO;
-                    else if (strcmp(val, "WARN") == 0)
-                        cfg->level = LOG_LEVEL_WARN;
-                    else if (strcmp(val, "ERROR") == 0)
-                        cfg->level = LOG_LEVEL_ERROR;
-                    else if (strcmp(val, "FATAL") == 0)
-                        cfg->level = LOG_LEVEL_FATAL;
-                    else {
-                        fprintf(stderr, "Unknown log level: %s\n", val);
-                        has_errors = 1;
-                    }
-                } else if (strcmp(current_key, "async") == 0) {
-                    cfg->async = (strcmp(val, "true") == 0);
-                } else if (strcmp(current_key, "queue_size") == 0) {
-                    char *end = NULL;
-                    errno = 0;
-                    long qs = strtol(val, &end, 10);
-                    if (end == val || *end != '\0' || errno == ERANGE || qs <= 0) {
-                        fprintf(stderr, "Invalid queue_size: %s (must be a positive integer)\n",
-                                val);
-                        has_errors = 1;
-                    } else {
-                        cfg->queue_size = (int)qs;
-                    }
-                } else if (strcmp(current_key, "color") == 0) {
-                    cfg->color = (strcmp(val, "true") == 0);
-                } else if (strcmp(current_key, "format") == 0) {
-                    snprintf(g_config_format, sizeof(g_config_format), "%s", val);
-                    cfg->format = g_config_format;
-                } else if (strcmp(current_key, "time_format") == 0) {
-                    snprintf(g_config_time_format, sizeof(g_config_time_format), "%s", val);
-                    cfg->time_format = g_config_time_format;
-                } else if (strcmp(current_key, "console_enable") == 0) {
-                    cfg->console_enable = (strcmp(val, "true") == 0);
-                } else if (strcmp(current_key, "console_stderr") == 0) {
-                    cfg->console_stderr = (strcmp(val, "true") == 0);
-                } else if (strcmp(current_key, "file_enable") == 0) {
-                    cfg->file_enable = (strcmp(val, "true") == 0);
-                } else if (strcmp(current_key, "socket_enable") == 0) {
-                    cfg->socket_enable = (strcmp(val, "true") == 0);
-                } else if (strcmp(current_key, "path") == 0 ||
-                           strcmp(current_key, "file_path") == 0) {
-                    snprintf(cfg->file_path, sizeof(cfg->file_path), "%s", val);
-                    cfg->file_enable = 1;
-                } else if (strcmp(current_key, "max_size") == 0) {
-                    size_t vlen = strlen(val);
-                    char size_buf[64];
-                    char *end = NULL;
-                    unsigned long long n;
-                    uint64_t mult = 1;
-
-                    if (vlen == 0 || vlen >= sizeof(size_buf)) {
-                        fprintf(stderr, "Invalid max_size: %s\n", val);
-                        has_errors = 1;
+                config_key_t key = { current_key, 0 };
+                const config_key_t *found = bsearch(&key, g_config_keys,
+                    sizeof(g_config_keys) / sizeof(g_config_keys[0]),
+                    sizeof(g_config_keys[0]), compare_config_keys);
+                if (found) {
+                    switch (found->handler) {
+                    case HANDLER_LEVEL: {
+                        if (strcmp(val, "TRACE") == 0)
+                            cfg->level = LOG_LEVEL_TRACE;
+                        else if (strcmp(val, "DEBUG") == 0)
+                            cfg->level = LOG_LEVEL_DEBUG;
+                        else if (strcmp(val, "INFO") == 0)
+                            cfg->level = LOG_LEVEL_INFO;
+                        else if (strcmp(val, "WARN") == 0)
+                            cfg->level = LOG_LEVEL_WARN;
+                        else if (strcmp(val, "ERROR") == 0)
+                            cfg->level = LOG_LEVEL_ERROR;
+                        else if (strcmp(val, "FATAL") == 0)
+                            cfg->level = LOG_LEVEL_FATAL;
+                        else {
+                            fprintf(stderr, "Unknown log level: %s\n", val);
+                            has_errors = 1;
+                        }
                         break;
                     }
-                    memcpy(size_buf, val, vlen + 1);
-
-                    /* Accept optional unit suffix: K/KB, M/MB, G/GB (case-insensitive). */
-                    if (vlen >= 2) {
-                        char u0 = size_buf[vlen - 2];
-                        char u1 = size_buf[vlen - 1];
-                        if ((u0 == 'K' || u0 == 'k') && (u1 == 'B' || u1 == 'b')) {
-                            size_buf[vlen - 2] = '\0';
-                            mult = 1024ULL;
-                        } else if ((u0 == 'M' || u0 == 'm') && (u1 == 'B' || u1 == 'b')) {
-                            size_buf[vlen - 2] = '\0';
-                            mult = 1024ULL * 1024ULL;
-                        } else if ((u0 == 'G' || u0 == 'g') && (u1 == 'B' || u1 == 'b')) {
-                            size_buf[vlen - 2] = '\0';
-                            mult = 1024ULL * 1024ULL * 1024ULL;
+                    case HANDLER_ASYNC:
+                        cfg->async = (strcmp(val, "true") == 0);
+                        break;
+                    case HANDLER_QUEUE_SIZE: {
+                        char *end = NULL;
+                        errno = 0;
+                        long qs = strtol(val, &end, 10);
+                        if (end == val || *end != '\0' || errno == ERANGE || qs <= 0) {
+                            fprintf(stderr, "Invalid queue_size: %s (must be a positive integer)\n", val);
+                            has_errors = 1;
+                        } else {
+                            cfg->queue_size = (int)qs;
                         }
+                        break;
                     }
-                    if (mult == 1 && vlen >= 1) {
-                        char u = size_buf[vlen - 1];
-                        if (u == 'K' || u == 'k') {
-                            size_buf[vlen - 1] = '\0';
-                            mult = 1024ULL;
-                        } else if (u == 'M' || u == 'm') {
-                            size_buf[vlen - 1] = '\0';
-                            mult = 1024ULL * 1024ULL;
-                        } else if (u == 'G' || u == 'g') {
-                            size_buf[vlen - 1] = '\0';
-                            mult = 1024ULL * 1024ULL * 1024ULL;
-                        }
-                    }
+                    case HANDLER_COLOR:
+                        cfg->color = (strcmp(val, "true") == 0);
+                        break;
+                    case HANDLER_FORMAT:
+                        snprintf(g_config_format, sizeof(g_config_format), "%s", val);
+                        cfg->format = g_config_format;
+                        break;
+                    case HANDLER_TIME_FORMAT:
+                        snprintf(g_config_time_format, sizeof(g_config_time_format), "%s", val);
+                        cfg->time_format = g_config_time_format;
+                        break;
+                    case HANDLER_CONSOLE_ENABLE:
+                        cfg->console_enable = (strcmp(val, "true") == 0);
+                        break;
+                    case HANDLER_CONSOLE_STDERR:
+                        cfg->console_stderr = (strcmp(val, "true") == 0);
+                        break;
+                    case HANDLER_FILE_ENABLE:
+                        cfg->file_enable = (strcmp(val, "true") == 0);
+                        break;
+                    case HANDLER_FILE_PATH:
+                        snprintf(cfg->file_path, sizeof(cfg->file_path), "%s", val);
+                        cfg->file_enable = 1;
+                        break;
+                    case HANDLER_MAX_SIZE: {
+                        size_t vlen = strlen(val);
+                        char size_buf[64];
+                        char *end = NULL;
+                        unsigned long long n;
+                        uint64_t mult = 1;
 
-                    errno = 0;
-                    n = strtoull(size_buf, &end, 10);
-                    if (end == size_buf || *end != '\0' || errno == ERANGE) {
-                        fprintf(stderr, "Invalid max_size: %s\n", val);
-                        has_errors = 1;
-                    } else if (mult > 1 && n > UINT64_MAX / mult) {
-                        fprintf(stderr, "max_size overflow: %s (too large)\n", val);
-                        has_errors = 1;
-                    } else {
-                        cfg->file_max_size = n * mult;
+                        if (vlen == 0 || vlen >= sizeof(size_buf)) {
+                            fprintf(stderr, "Invalid max_size: %s\n", val);
+                            has_errors = 1;
+                            break;
+                        }
+                        memcpy(size_buf, val, vlen + 1);
+
+                        if (vlen >= 2) {
+                            char u0 = size_buf[vlen - 2];
+                            char u1 = size_buf[vlen - 1];
+                            if ((u0 == 'K' || u0 == 'k') && (u1 == 'B' || u1 == 'b')) {
+                                size_buf[vlen - 2] = '\0';
+                                mult = 1024ULL;
+                            } else if ((u0 == 'M' || u0 == 'm') && (u1 == 'B' || u1 == 'b')) {
+                                size_buf[vlen - 2] = '\0';
+                                mult = 1024ULL * 1024ULL;
+                            } else if ((u0 == 'G' || u0 == 'g') && (u1 == 'B' || u1 == 'b')) {
+                                size_buf[vlen - 2] = '\0';
+                                mult = 1024ULL * 1024ULL * 1024ULL;
+                            }
+                        }
+                        if (mult == 1 && vlen >= 1) {
+                            char u = size_buf[vlen - 1];
+                            if (u == 'K' || u == 'k') {
+                                size_buf[vlen - 1] = '\0';
+                                mult = 1024ULL;
+                            } else if (u == 'M' || u == 'm') {
+                                size_buf[vlen - 1] = '\0';
+                                mult = 1024ULL * 1024ULL;
+                            } else if (u == 'G' || u == 'g') {
+                                size_buf[vlen - 1] = '\0';
+                                mult = 1024ULL * 1024ULL * 1024ULL;
+                            }
+                        }
+
+                        errno = 0;
+                        n = strtoull(size_buf, &end, 10);
+                        if (end == size_buf || *end != '\0' || errno == ERANGE) {
+                            fprintf(stderr, "Invalid max_size: %s\n", val);
+                            has_errors = 1;
+                        } else if (mult > 1 && n > UINT64_MAX / mult) {
+                            fprintf(stderr, "max_size overflow: %s (too large)\n", val);
+                            has_errors = 1;
+                        } else {
+                            cfg->file_max_size = n * mult;
+                        }
+                        break;
                     }
-                } else if (strcmp(current_key, "backup") == 0 ||
-                           strcmp(current_key, "backups") == 0) {
-                    char *end = NULL;
-                    errno = 0;
-                    long bk = strtol(val, &end, 10);
-                    if (end == val || *end != '\0' || errno == ERANGE || bk < 0) {
-                        fprintf(stderr, "Invalid backups: %s (must be a non-negative integer)\n",
-                                val);
-                        has_errors = 1;
-                    } else {
-                        cfg->file_backups = (int)bk;
+                    case HANDLER_BACKUP: {
+                        char *end = NULL;
+                        errno = 0;
+                        long bk = strtol(val, &end, 10);
+                        if (end == val || *end != '\0' || errno == ERANGE || bk < 0) {
+                            fprintf(stderr, "Invalid backups: %s (must be a non-negative integer)\n", val);
+                            has_errors = 1;
+                        } else {
+                            cfg->file_backups = (int)bk;
+                        }
+                        break;
                     }
-                } else if (strcmp(current_key, "host") == 0) {
-                    snprintf(cfg->socket_host, sizeof(cfg->socket_host), "%s", val);
-                    cfg->socket_enable = 1;
-                } else if (strcmp(current_key, "port") == 0) {
-                    char *end = NULL;
-                    errno = 0;
-                    long p = strtol(val, &end, 10);
-                    if (end == val || *end != '\0' || errno == ERANGE || p <= 0 || p > 65535) {
-                        fprintf(stderr, "Invalid port: %s (must be 1..65535)\n", val);
-                        has_errors = 1;
-                    } else {
-                        cfg->socket_port = (int)p;
+                    case HANDLER_HOST:
+                        snprintf(cfg->socket_host, sizeof(cfg->socket_host), "%s", val);
+                        cfg->socket_enable = 1;
+                        break;
+                    case HANDLER_PORT: {
+                        char *end = NULL;
+                        errno = 0;
+                        long p = strtol(val, &end, 10);
+                        if (end == val || *end != '\0' || errno == ERANGE || p <= 0 || p > 65535) {
+                            fprintf(stderr, "Invalid port: %s (must be 1..65535)\n", val);
+                            has_errors = 1;
+                        } else {
+                            cfg->socket_port = (int)p;
+                        }
+                        break;
+                    }
+                    case HANDLER_SOCKET_ENABLE:
+                        cfg->socket_enable = (strcmp(val, "true") == 0);
+                        break;
                     }
                 }
-                /* unknown keys at top-level are silently skipped */
+                /* unknown keys are silently skipped */
             }
             break;
         }
