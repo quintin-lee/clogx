@@ -15,6 +15,7 @@
 #include "log_formatter.h"
 #include "log_limits.h"
 #include "log_rate_limit.h"
+#include "log_signal.h"
 #include "dispatcher.h"
 #include "log_async.h"
 #include "log_record.h"
@@ -260,6 +261,10 @@ int log_init(const char *yaml_path) {
         }
     }
 
+    if (cfg->catch_signals) {
+        log_install_signal_handlers();
+    }
+
     g_initialized = 1;
     pthread_mutex_unlock(&g_init_mutex);
     return CLOG_OK;
@@ -270,6 +275,7 @@ void log_destroy(void) {
     g_initialized = 0;
     pthread_mutex_unlock(&g_init_mutex);
 
+    log_restore_signal_handlers();
     log_rate_limit_reset();
     log_async_shutdown();
     log_dispatcher_destroy();

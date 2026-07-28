@@ -54,6 +54,7 @@ typedef struct {
     bool rate_limit_enable;                      /**< Enable global rate limiting. */
     int rate_limit_max_per_sec;                  /**< Max allowed log events per second. */
     int rate_limit_burst;                        /**< Maximum burst capacity. */
+    bool catch_signals;                          /**< Catch SIGTERM/SIGINT for graceful shutdown. */
 } log_config_t;
 
 /**

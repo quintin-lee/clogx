@@ -15,6 +15,7 @@
 typedef enum {
     HANDLER_ASYNC,
     HANDLER_BACKUP,
+    HANDLER_CATCH_SIGNALS,
     HANDLER_COLOR,
     HANDLER_CONSOLE_ENABLE,
     HANDLER_CONSOLE_STDERR,
@@ -51,6 +52,7 @@ static const config_key_t g_config_keys[] = {
     {"async", HANDLER_ASYNC},
     {"backup", HANDLER_BACKUP},
     {"backups", HANDLER_BACKUP},
+    {"catch_signals", HANDLER_CATCH_SIGNALS},
     {"color", HANDLER_COLOR},
     {"console_enable", HANDLER_CONSOLE_ENABLE},
     {"console_stderr", HANDLER_CONSOLE_STDERR},
@@ -175,6 +177,9 @@ static int parse_config_file(const char *filepath, log_config_t *cfg) {
                         }
                         break;
                     }
+                    case HANDLER_CATCH_SIGNALS:
+                        cfg->catch_signals = (strcmp(val, "true") == 0);
+                        break;
                     case HANDLER_COLOR:
                         cfg->color = (strcmp(val, "true") == 0);
                         break;
@@ -437,6 +442,7 @@ static int apply_config(const log_config_t *cfg) {
     g_config.rate_limit_enable = cfg->rate_limit_enable;
     g_config.rate_limit_max_per_sec = cfg->rate_limit_max_per_sec;
     g_config.rate_limit_burst = cfg->rate_limit_burst;
+    g_config.catch_signals = cfg->catch_signals;
 
     if (cfg->format) {
         snprintf(g_config_format, sizeof(g_config_format), "%s", cfg->format);

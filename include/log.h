@@ -131,6 +131,18 @@ CLOGX_API void log_destroy(void);
 CLOGX_API void log_flush(void);
 
 /**
+ * @brief Install POSIX sigaction handlers for SIGTERM and SIGINT for graceful shutdown.
+ * @return CLOG_OK on success.
+ */
+CLOGX_API clogx_errno_t log_install_signal_handlers(void);
+
+/**
+ * @brief Signal-safe handler for graceful shutdown.
+ * @param[in] sig Signal number (SIGTERM, SIGINT).
+ */
+CLOGX_API void log_signal_handler(int sig);
+
+/**
  * @brief Reload configuration and rebuild sinks.
  *
  * Always shuts down the async worker before replacing sinks, then restarts
