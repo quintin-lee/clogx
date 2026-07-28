@@ -32,7 +32,7 @@ mpsc_queue_t *mpsc_queue_create(size_t capacity) {
     return q;
 }
 
-int mpsc_queue_put(mpsc_queue_t *q, log_record_t *record) {
+int mpsc_queue_put(mpsc_queue_t *restrict q, log_record_t *restrict record) {
     if (!q || !record)
         return -1;
 
@@ -57,7 +57,7 @@ int mpsc_queue_put(mpsc_queue_t *q, log_record_t *record) {
     return 0;
 }
 
-int mpsc_queue_try_put(mpsc_queue_t *q, log_record_t *record) {
+int mpsc_queue_try_put(mpsc_queue_t *restrict q, log_record_t *restrict record) {
     if (!q || !record)
         return -1;
 
@@ -78,7 +78,7 @@ int mpsc_queue_try_put(mpsc_queue_t *q, log_record_t *record) {
     return 0;
 }
 
-int mpsc_queue_get(mpsc_queue_t *q, log_record_t *record) {
+int mpsc_queue_get(mpsc_queue_t *restrict q, log_record_t *restrict record) {
     if (!q || !record)
         return -1;
 

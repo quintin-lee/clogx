@@ -49,7 +49,7 @@ mpsc_queue_t *mpsc_queue_create(size_t capacity);
  * @param[in]     record Record to copy into the buffer.
  * @return 0 on success, -1 if @p q is closed or arguments are invalid.
  */
-int mpsc_queue_put(mpsc_queue_t *q, log_record_t *record);
+int mpsc_queue_put(mpsc_queue_t *restrict q, log_record_t *restrict record);
 
 /**
  * @brief Enqueue a record without blocking.
@@ -57,7 +57,7 @@ int mpsc_queue_put(mpsc_queue_t *q, log_record_t *record);
  * @param[in]     record Record to copy into the buffer.
  * @return 0 on success, -1 if full, closed, or arguments are invalid.
  */
-int mpsc_queue_try_put(mpsc_queue_t *q, log_record_t *record);
+int mpsc_queue_try_put(mpsc_queue_t *restrict q, log_record_t *restrict record);
 
 /**
  * @brief Dequeue a record (blocks while empty).
@@ -65,7 +65,7 @@ int mpsc_queue_try_put(mpsc_queue_t *q, log_record_t *record);
  * @param[out]    record Receives the dequeued record.
  * @return 0 on success, -1 when the queue is closed and empty.
  */
-int mpsc_queue_get(mpsc_queue_t *q, log_record_t *record);
+int mpsc_queue_get(mpsc_queue_t *restrict q, log_record_t *restrict record);
 
 /**
  * @brief Mark the queue closed and wake all waiters.

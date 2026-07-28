@@ -21,7 +21,7 @@ typedef struct {
 static log_dispatcher_t g_dispatcher = {
     .sinks = NULL, .sink_count = 0, .mutex = PTHREAD_MUTEX_INITIALIZER};
 
-int log_dispatcher_add_sink(log_sink_t *sink) {
+int log_dispatcher_add_sink(log_sink_t *restrict sink) {
     if (!sink)
         return -1;
 
@@ -39,7 +39,7 @@ int log_dispatcher_add_sink(log_sink_t *sink) {
     return 0;
 }
 
-int log_dispatcher_remove_sink(log_sink_t *sink) {
+int log_dispatcher_remove_sink(log_sink_t *restrict sink) {
     if (!sink)
         return -1;
 
@@ -193,7 +193,7 @@ int log_dispatcher_init(void) {
     return 0;
 }
 
-int log_dispatcher_build_snapshot(log_config_t *cfg, log_dispatcher_snapshot_t *snap) {
+int log_dispatcher_build_snapshot(log_config_t *restrict cfg, log_dispatcher_snapshot_t *restrict snap) {
     log_sink_t *sinks[8] = {0};
     int count = 0;
 
@@ -238,7 +238,7 @@ int log_dispatcher_build_snapshot(log_config_t *cfg, log_dispatcher_snapshot_t *
     return 0;
 }
 
-void log_dispatcher_destroy_snapshot(log_dispatcher_snapshot_t *snap) {
+void log_dispatcher_destroy_snapshot(log_dispatcher_snapshot_t *restrict snap) {
     if (!snap)
         return;
     for (int i = 0; i < snap->sink_count; i++) {
@@ -251,7 +251,7 @@ void log_dispatcher_destroy_snapshot(log_dispatcher_snapshot_t *snap) {
     snap->sink_count = 0;
 }
 
-void log_dispatcher_commit_snapshot(log_dispatcher_snapshot_t *snap) {
+void log_dispatcher_commit_snapshot(log_dispatcher_snapshot_t *restrict snap) {
     log_sink_t **old_sinks = NULL;
     int old_count = 0;
     int i;

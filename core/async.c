@@ -50,7 +50,7 @@ static void log_record_free_owned(log_record_t *record) {
  * @param[in]  src Source record (may reference stack storage).
  * @return 0 on success, -1 on allocation failure (dst fields freed).
  */
-static int log_record_clone(log_record_t *dst, const log_record_t *src) {
+static int log_record_clone(log_record_t *restrict dst, const log_record_t *restrict src) {
     if (!dst || !src)
         return -1;
 
@@ -137,7 +137,7 @@ int log_async_is_running(void) {
     return g_async_logger.running && g_async_logger.queue != NULL;
 }
 
-int log_async_write(log_record_t *record) {
+int log_async_write(log_record_t *restrict record) {
     if (!g_async_logger.queue) {
         log_dispatcher_dispatch(record);
         return CLOG_ERR_QUEUE_FULL;

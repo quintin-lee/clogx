@@ -19,7 +19,7 @@
  * @param[in]  buf_size Capacity of @p buf in bytes.
  * @return Bytes written excluding the terminating NUL, or <= 0 on failure.
  */
-int log_formatter_format(log_record_t *record, char *buf, size_t buf_size);
+int log_formatter_format(log_record_t *restrict record, char *restrict buf, size_t buf_size);
 
 /**
  * @brief Set the active format string (copied into internal storage).

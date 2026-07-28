@@ -48,6 +48,6 @@ int log_async_is_running(void);
  * @return 0 on successful enqueue (or sync fallback without clone failure),
  *         -1 if clone failed (sync fallback still attempted).
  */
-int log_async_write(log_record_t *record);
+int log_async_write(log_record_t *restrict record);
 
 #endif /* LOG_ASYNC_H */

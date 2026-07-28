@@ -48,7 +48,7 @@ static int append_token(char **out, size_t *remaining, const char *token, size_t
     return (int)token_len;
 }
 
-int log_formatter_format(log_record_t *record, char *buf, size_t buf_size) {
+int log_formatter_format(log_record_t *restrict record, char *restrict buf, size_t buf_size) {
     const char *fmt;
     pthread_mutex_lock(&g_format_mutex);
     fmt = g_format_ptr;
