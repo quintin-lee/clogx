@@ -1,0 +1,46 @@
+name: Release
+
+on:
+  push:
+    tags:
+      - "v*.*.*"
+
+permissions:
+  contents: write
+
+jobs:
+  release:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v7
+        with:
+          fetch-depth: 0
+
+      - name: Build
+        run: |
+          mkdir -p dist
+          cmake -S . -B dist/build -DCMAKE_BUILD_TYPE=Release
+          cmake --build dist/build --target clogx -j$(nproc)
+
+      - name: Generate changelog snippet
+        run: |
+          git log ${{ github.event.before }}..${{ github.ref_name }} \
+            --oneline > /tmp/release-notes.txt || true
+
+      - name: Create GitHub Release
+        uses: softprops/action-gh-release@v1
+        with:
+          body_path: /tmp/release-notes.txt
+          files: |
+            dist/build/libclogx.a
+            dist/build/libclogx.so
+
+      - name: Upload artifacts
+        uses: actions/upload-artifact@v4
+        with:
+          name: clogx-${{ github.ref_name }}
+          path: |
+            dist/build/libclogx.a
+            dist/build/libclogx.so
+            dist/build/clogx.pc
