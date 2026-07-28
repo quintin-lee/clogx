@@ -9,6 +9,7 @@
 #include <stdbool.h>
 #include <stdint.h>
 #include "log_record.h"
+#include "log_limits.h"
 
 /* Reuse CLOGX_API from log.h if already included, otherwise define it. */
 #ifndef CLOGX_API
@@ -38,11 +39,11 @@ typedef struct {
     int console_enable;      /**< Non-zero to enable stdout/stderr sink. */
     int console_stderr;      /**< Non-zero to use stderr instead of stdout. */
     int file_enable;         /**< Non-zero to enable file sink. */
-    char file_path[256];     /**< Log file path. */
+    char file_path[CLOG_MAX_PATH_SIZE];     /**< Log file path. */
     uint64_t file_max_size;  /**< Rotate when file reaches this many bytes. */
     int file_backups;        /**< Number of rotated backups to keep. */
     int socket_enable;       /**< Non-zero to enable TCP socket sink. */
-    char socket_host[256];   /**< Socket peer IPv4 address. */
+    char socket_host[CLOG_MAX_PATH_SIZE];   /**< Socket peer IPv4 address. */
     int socket_port;         /**< Socket peer port. */
 } log_config_t;
 
