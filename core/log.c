@@ -206,14 +206,17 @@ static pthread_once_t g_atfork_once = PTHREAD_ONCE_INIT;
 static void log_atfork_prepare(void) {
     pthread_mutex_lock(&g_init_mutex);
     pthread_mutex_lock(&g_module_mutex);
+    log_dispatcher_atfork_prepare();
 }
 
 static void log_atfork_parent(void) {
+    log_dispatcher_atfork_parent();
     pthread_mutex_unlock(&g_module_mutex);
     pthread_mutex_unlock(&g_init_mutex);
 }
 
 static void log_atfork_child(void) {
+    log_dispatcher_atfork_child();
     pthread_mutex_unlock(&g_module_mutex);
     pthread_mutex_unlock(&g_init_mutex);
     log_async_atfork_child();
