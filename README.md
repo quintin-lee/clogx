@@ -78,7 +78,7 @@ gcc -Iinclude app.c -Lbuild -lclogx -lpthread -o app
 
 ```bash
 make              # generates build/libclogx.a, build/libclogx.so, build/example
-make test         # compiles and runs all 22 regression tests
+make test         # compiles and runs all 23 regression tests
 make asan         # build + test with AddressSanitizer
 make ubsan        # build + test with UndefinedBehaviorSanitizer
 make check        # full quality gate: format check → build → test
@@ -105,6 +105,7 @@ Common options:
 | `CLOG_BUILD_EXAMPLES` | ON | build examples |
 | `CLOG_BUILD_TESTS` | ON | build and register CTest |
 | `CLOG_BUILD_SHARED` | OFF | build shared library when ON |
+| `CLOG_USE_SYSTEM_YAML` | OFF | use system libyaml instead of auto-downloading |
 
 Downstream projects:
 
@@ -123,6 +124,9 @@ pkg-config --cflags --libs clogx
 
 The config file is YAML with all settings under a top-level `log:` mapping.
 Pass the path to `log_init(path)`; when empty, defaults to `./config.yaml`.
+
+For backward compatibility, old-style top-level `key: value` pairs (without a
+`log:` wrapper) are also accepted.
 
 Example:
 
@@ -281,7 +285,7 @@ make test
 ctest --test-dir build --output-on-failure
 ```
 
-Covers async lifecycle, reload start/stop worker, dispatcher reuse, file rotation, nested directory creation, config hot reload, invalid config handling, double init protection, empty sink rejection, async fallback notification, non-blocking queue overflow, max_size unit parsing, stderr console routing, module/truncation behavior, custom sink registration, multi-threaded sync correctness, socket sink TCP output, per-sink level filtering, runtime log level changes, and programmatic config via `log_config_set`. Total: 22 tests.
+Covers async lifecycle, reload start/stop worker, dispatcher reuse, file rotation, nested directory creation, config hot reload, invalid config handling, double init protection, empty sink rejection, async fallback notification, non-blocking queue overflow, max_size unit parsing, stderr console routing, module/truncation behavior, custom sink registration, multi-threaded sync correctness, socket sink TCP output, per-sink level filtering, runtime log level changes, programmatic config via `log_config_set`, and boundary conditions (empty YAML, comments, old-style top-level keys, unknown keys, NULL path). Total: 23 tests.
 
 ## CI
 

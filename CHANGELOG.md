@@ -23,15 +23,22 @@ All notable changes to this project will be documented in this file.
   and CMake (`CLOG_BUILD_SHARED=ON`)
 - CMake OBJECT library: shared-build internal-symbol tests link directly with
   objects, avoiding symbol-resolution failures
+- Backward compatibility: old-style top-level `key: value` YAML (without `log:`
+  wrapper) is accepted alongside the new nested format
+- Boundary condition tests: empty YAML, comment-only YAML, old-style top-level
+  keys, unknown keys, NULL path, and invalid numeric values
+- Example program extended with `log_config_set` demonstration
 
 ### Changed
 - Config parser migrated from hand-rolled key:value to libyaml event API; all
   settings now live under a top-level `log:` mapping in YAML
+- Config key lookup optimized from O(n) `strcmp` chain to O(log n) binary search
+  via `bsearch` on a sorted static key table
 - Move formatting and color computation outside the global dispatcher lock to
   reduce lock contention in multi-threaded sync mode
 - CMakeLists.txt: parallel test targets matching Makefile, `-fvisibility=hidden`
   for shared build
-- CI: clang-format check step, expanded Valgrind coverage to all 21 tests
+- CI: clang-format check step, expanded Valgrind coverage to all 23 tests
 
 ### Fixed
 - Replace `atoi` with `strtol` for robust numeric parsing of `queue_size`,
@@ -48,10 +55,12 @@ All notable changes to this project will be documented in this file.
 - libyaml auto-download: CMake uses FetchContent; Makefile downloads and
   compiles libyaml sources when pkg-config is unavailable — no system package
   required
+- New CMake option `CLOG_USE_SYSTEM_YAML=ON` to force using system libyaml
+  instead of auto-downloading
 - Makefile install/uninstall: install library, public headers, pkg-config `.pc`
 - ASan / UBSan build and test targets (`make asan`, `make ubsan`, `make test-*`)
 - `make check`: runs clang-format → clean build → all tests in sequence
-- `make test-valgrind`: all 22 tests under Valgrind (gracefully skipped if
+- `make test-valgrind`: all 23 tests under Valgrind (gracefully skipped if
   valgrind not installed)
 
 ## [0.1.0] - 2024
