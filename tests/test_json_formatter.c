@@ -37,7 +37,7 @@ int main(void) {
     log_flush();
     log_destroy();
 
-    FILE *f = fopen(LOG_PATH, "r");
+    FILE *f = fopen(LOG_PATH, "rb");
     if (!f) {
         fprintf(stderr, "missing json log file\n");
         return 1;

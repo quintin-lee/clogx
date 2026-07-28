@@ -79,7 +79,7 @@ int main(void) {
     log_flush();
     log_destroy();
 
-    FILE *f = fopen(LOG_PATH, "r");
+    FILE *f = fopen(LOG_PATH, "rb");
     if (!f) {
         fprintf(stderr, "log file missing\n");
         return 1;

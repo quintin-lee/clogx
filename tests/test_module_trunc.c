@@ -54,7 +54,7 @@ int main(void) {
     log_flush();
     log_destroy();
 
-    f = fopen(LOG_PATH, "r");
+    f = fopen(LOG_PATH, "rb");
     if (!f) {
         fprintf(stderr, "missing log file\n");
         return 1;

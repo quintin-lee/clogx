@@ -8,7 +8,7 @@
 #define LOG_PATH "logs/sink_level.log"
 
 static int count_lines(const char *path) {
-    FILE *f = fopen(path, "r");
+    FILE *f = fopen(path, "rb");
     if (!f)
         return -1;
     int n = 0;
@@ -64,7 +64,7 @@ int main(void) {
     }
 
     /* Quick content check */
-    FILE *f = fopen(LOG_PATH, "r");
+    FILE *f = fopen(LOG_PATH, "rb");
     if (!f)
         return 1;
     char line[256];

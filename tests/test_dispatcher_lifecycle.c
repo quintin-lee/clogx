@@ -28,7 +28,7 @@ static int write_config(void) {
 }
 
 static int count_lines(const char *path) {
-    FILE *f = fopen(path, "r");
+    FILE *f = fopen(path, "rb");
     if (!f)
         return -1;
     int n = 0;

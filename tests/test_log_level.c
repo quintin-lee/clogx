@@ -7,7 +7,7 @@
 #define LOG_PATH "logs/log_level_test.log"
 
 static int count_lines(const char *path) {
-    FILE *f = fopen(path, "r");
+    FILE *f = fopen(path, "rb");
     if (!f)
         return -1;
     int n = 0;
@@ -86,7 +86,7 @@ int main(void) {
     }
 
     /* Verify content: no filtered messages leaked. */
-    FILE *f = fopen(LOG_PATH, "r");
+    FILE *f = fopen(LOG_PATH, "rb");
     if (!f) {
         fprintf(stderr, "cannot open log\n");
         return 1;

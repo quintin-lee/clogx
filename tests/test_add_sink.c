@@ -27,7 +27,7 @@ static int write_config(void) {
 
 static int file_contains(const char *path, const char *needle) {
     char buf[1024];
-    FILE *f = fopen(path, "r");
+    FILE *f = fopen(path, "rb");
     size_t n;
     if (!f)
         return 0;

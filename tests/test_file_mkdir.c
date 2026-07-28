@@ -31,7 +31,7 @@ int main(void) {
     sink->flush(sink);
     sink->destroy(sink);
 
-    FILE *f = fopen(LOG_PATH, "r");
+    FILE *f = fopen(LOG_PATH, "rb");
     if (!f) {
         fprintf(stderr, "log file missing under nested dir\n");
         return 1;

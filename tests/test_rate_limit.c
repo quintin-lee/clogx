@@ -29,7 +29,7 @@ static int write_config(void) {
 }
 
 static int count_lines(const char *path) {
-    FILE *f = fopen(path, "r");
+    FILE *f = fopen(path, "rb");
     if (!f)
         return 0;
     int count = 0;
@@ -68,7 +68,7 @@ int main(void) {
     log_flush();
     log_destroy();
 
-    FILE *f = fopen(LOG_PATH, "r");
+    FILE *f = fopen(LOG_PATH, "rb");
     if (!f) {
         fprintf(stderr, "missing log file\n");
         return 1;

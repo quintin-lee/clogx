@@ -67,7 +67,7 @@ int main(void) {
         return 1;
     }
 
-    FILE *f = fopen(LOG_PATH, "r");
+    FILE *f = fopen(LOG_PATH, "rb");
     if (!f) {
         fprintf(stderr, "missing signal log file\n");
         return 1;

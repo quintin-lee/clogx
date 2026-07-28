@@ -8,7 +8,7 @@
 #define LOG_PATH "logs/config_set_test.log"
 
 static int count_lines(const char *path) {
-    FILE *f = fopen(path, "r");
+    FILE *f = fopen(path, "rb");
     if (!f)
         return -1;
     int n = 0;
@@ -127,7 +127,7 @@ int main(void) {
         return 1;
     }
 
-    FILE *f = fopen(LOG_PATH, "r");
+    FILE *f = fopen(LOG_PATH, "rb");
     if (!f)
         return 1;
     char content[1024] = {0};
