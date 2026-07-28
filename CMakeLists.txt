@@ -8,6 +8,7 @@ set(CMAKE_EXPORT_COMPILE_COMMANDS ON)
 
 option(CLOG_BUILD_EXAMPLES "Build example programs" ON)
 option(CLOG_BUILD_TESTS "Build and register tests" ON)
+option(CLOG_BUILD_BENCHMARKS "Build benchmark programs" OFF)
 option(CLOG_BUILD_SHARED "Build shared library instead of static" OFF)
 option(CLOG_USE_SYSTEM_YAML "Use system libyaml instead of auto-downloading" OFF)
 option(CLOG_ENABLE_TLS "Enable OpenSSL TLS support for socket sink" OFF)
@@ -181,6 +182,10 @@ if(CLOG_BUILD_TESTS)
             WORKING_DIRECTORY ${CMAKE_CURRENT_SOURCE_DIR}
         )
     endforeach()
+endif()
+
+if(CLOG_BUILD_BENCHMARKS)
+    add_subdirectory(benchmarks)
 endif()
 
 # --- Install / export ---

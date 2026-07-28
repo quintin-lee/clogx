@@ -1,0 +1,7 @@
+add_executable(benchmark_throughput benchmark_throughput.c)
+target_link_libraries(benchmark_throughput clogx_objects Threads::Threads ${CLOG_YAML_TARGET})
+target_include_directories(benchmark_throughput PRIVATE ${CMAKE_CURRENT_SOURCE_DIR}/include)
+
+add_executable(benchmark_async_vs_sync benchmark_async_vs_sync.c)
+target_link_libraries(benchmark_async_vs_sync clogx_objects Threads::Threads ${CLOG_YAML_TARGET})
+target_include_directories(benchmark_async_vs_sync PRIVATE ${CMAKE_CURRENT_SOURCE_DIR}/include)

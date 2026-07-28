@@ -76,6 +76,9 @@ TESTS = test_async_lifecycle test_async_reload test_dispatcher_lifecycle \
         test_rate_limit test_fork_safety test_signal_handler
 TEST_BINS = $(addprefix $(BUILD_DIR)/,$(TESTS))
 
+BENCHMARK_SOURCES = $(wildcard benchmarks/*.c)
+BENCHMARK_BINS = $(patsubst benchmarks/%.c,$(BUILD_DIR)/benchmark_%,$(BENCHMARK_SOURCES))
+
 # Sanitizer configs (O1 -g for meaningful stack traces)
 ASAN_CFLAGS = -std=c99 -Wall -Wextra -Wconversion -Iinclude -O1 -g -D_GNU_SOURCE -fPIC -fvisibility=hidden -fsanitize=address -fno-omit-frame-pointer -fno-optimize-sibling-calls
 UBSAN_CFLAGS = -std=c99 -Wall -Wextra -Wconversion -Iinclude -O1 -g -D_GNU_SOURCE -fPIC -fvisibility=hidden -fsanitize=undefined
@@ -88,9 +91,9 @@ INCLUDEDIR ?= $(PREFIX)/include
 
 PUBLIC_HEADERS := include/log.h include/log_config.h include/log_limits.h include/log_record.h include/log_sink.h
 
-.PHONY: all clean example test docs format check-format check test-valgrind install uninstall asan ubsan test-asan test-ubsan fuzz-build fuzz-config fuzz-formatter
+.PHONY: all clean example test docs format check-format check test-valgrind install uninstall asan ubsan test-asan test-ubsan fuzz-build fuzz-config fuzz-formatter benchmark
 
-FORMAT_FILES := $(shell find include core sinks example tests fuzz -name '*.c' -o -name '*.h' 2>/dev/null)
+FORMAT_FILES := $(shell find include core sinks example tests fuzz benchmarks -name '*.c' -o -name '*.h' 2>/dev/null)
 
 all: $(LIB_TARGET) $(SO_TARGET) $(EXAMPLE_BIN)
 
@@ -124,6 +127,9 @@ $(BUILD_DIR)/fuzz_config: fuzz/fuzz_config.c $(LIB_TARGET) | $(BUILD_DIR)
 $(BUILD_DIR)/fuzz_formatter: fuzz/fuzz_formatter.c $(LIB_TARGET) | $(BUILD_DIR)
 	$(CC) $(EXTRA_LDFLAGS) $(CFLAGS) -o $@ $< $(LIB_TARGET) $(LDFLAGS)
 
+$(BUILD_DIR)/benchmark_%: benchmarks/%.c $(LIB_TARGET) | $(BUILD_DIR)
+	$(CC) $(EXTRA_LDFLAGS) $(CFLAGS) -o $@ $< $(LIB_TARGET) $(LDFLAGS) -lm
+
 fuzz-build: $(BUILD_DIR)/fuzz_config $(BUILD_DIR)/fuzz_formatter
 
 fuzz-config: $(BUILD_DIR)/fuzz_config
@@ -144,6 +150,13 @@ test: $(TEST_BINS)
 		$$t || status=1; \
 	done; \
 	exit $$status
+
+benchmark: $(BENCHMARK_BINS)
+	@mkdir -p logs
+	@for b in $(BENCHMARK_BINS); do \
+		echo "=== $$b ==="; \
+		$$b; \
+	done
 
 ## Sanitizer convenience targets
 
