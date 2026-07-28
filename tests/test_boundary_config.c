@@ -64,17 +64,16 @@ int main(void) {
     log_destroy();
 
     /* 3. Old-style top-level keys (no log: section) -> backward compat */
-    if (write_config(
-            "level: WARN\n"
-            "async: false\n"
-            "color: false\n"
-            "format: '[%level] %msg'\n"
-            "console_enable: false\n"
-            "file_enable: true\n"
-            "file_path: " LOG_PATH "\n"
-            "max_size: 100MB\n"
-            "backups: 2\n"
-            "socket_enable: false\n") != 0) {
+    if (write_config("level: WARN\n"
+                     "async: false\n"
+                     "color: false\n"
+                     "format: '[%level] %msg'\n"
+                     "console_enable: false\n"
+                     "file_enable: true\n"
+                     "file_path: " LOG_PATH "\n"
+                     "max_size: 100MB\n"
+                     "backups: 2\n"
+                     "socket_enable: false\n") != 0) {
         fprintf(stderr, "write old-style config failed\n");
         return 1;
     }
@@ -106,11 +105,10 @@ int main(void) {
     remove(LOG_PATH);
 
     /* 4. Unknown keys -> silently skipped, defaults preserved */
-    if (write_config(
-            "log:\n"
-            "  unknown_key: 123\n"
-            "  level: DEBUG\n"
-            "  another_unknown: abc\n") != 0) {
+    if (write_config("log:\n"
+                     "  unknown_key: 123\n"
+                     "  level: DEBUG\n"
+                     "  another_unknown: abc\n") != 0) {
         fprintf(stderr, "write unknown-keys config failed\n");
         return 1;
     }
@@ -136,10 +134,9 @@ int main(void) {
     log_destroy();
 
     /* 6. Invalid queue_size (non-numeric) -> log_init fails */
-    if (write_config(
-            "log:\n"
-            "  queue_size: not_a_number\n"
-            "  async: false\n") != 0) {
+    if (write_config("log:\n"
+                     "  queue_size: not_a_number\n"
+                     "  async: false\n") != 0) {
         fprintf(stderr, "write invalid queue_size config failed\n");
         return 1;
     }

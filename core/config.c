@@ -42,23 +42,23 @@ static int compare_config_keys(const void *a, const void *b) {
 }
 
 static const config_key_t g_config_keys[] = {
-    {"async",         HANDLER_ASYNC},
-    {"backup",        HANDLER_BACKUP},
-    {"backups",       HANDLER_BACKUP},
-    {"color",         HANDLER_COLOR},
+    {"async", HANDLER_ASYNC},
+    {"backup", HANDLER_BACKUP},
+    {"backups", HANDLER_BACKUP},
+    {"color", HANDLER_COLOR},
     {"console_enable", HANDLER_CONSOLE_ENABLE},
     {"console_stderr", HANDLER_CONSOLE_STDERR},
-    {"file_enable",   HANDLER_FILE_ENABLE},
-    {"file_path",     HANDLER_FILE_PATH},
-    {"format",        HANDLER_FORMAT},
-    {"host",          HANDLER_HOST},
-    {"level",         HANDLER_LEVEL},
-    {"max_size",      HANDLER_MAX_SIZE},
-    {"path",          HANDLER_FILE_PATH},
-    {"port",          HANDLER_PORT},
-    {"queue_size",    HANDLER_QUEUE_SIZE},
+    {"file_enable", HANDLER_FILE_ENABLE},
+    {"file_path", HANDLER_FILE_PATH},
+    {"format", HANDLER_FORMAT},
+    {"host", HANDLER_HOST},
+    {"level", HANDLER_LEVEL},
+    {"max_size", HANDLER_MAX_SIZE},
+    {"path", HANDLER_FILE_PATH},
+    {"port", HANDLER_PORT},
+    {"queue_size", HANDLER_QUEUE_SIZE},
     {"socket_enable", HANDLER_SOCKET_ENABLE},
-    {"time_format",   HANDLER_TIME_FORMAT},
+    {"time_format", HANDLER_TIME_FORMAT},
 };
 
 static log_config_t g_config;
@@ -92,9 +92,9 @@ static int parse_config_file(const char *filepath, log_config_t *cfg) {
     yaml_parser_set_input_file(&parser, f);
 
     int has_errors = 0;
-    int depth = 0;          /* mapping nesting depth */
-    int expect_key = 1;     /* 1 = expect key, 0 = expect value at current depth */
-    int in_log_section = 0; /* 1 when we're inside the top-level "log" mapping */
+    int depth = 0;             /* mapping nesting depth */
+    int expect_key = 1;        /* 1 = expect key, 0 = expect value at current depth */
+    int in_log_section = 0;    /* 1 when we're inside the top-level "log" mapping */
     int found_log_section = 0; /* 1 if a top-level "log:" mapping was found */
     char current_key[128] = "";
     yaml_event_t event;
@@ -119,10 +119,10 @@ static int parse_config_file(const char *filepath, log_config_t *cfg) {
             } else {
                 expect_key = 1; /* ready for next key */
 
-                config_key_t key = { current_key, 0 };
-                const config_key_t *found = bsearch(&key, g_config_keys,
-                    sizeof(g_config_keys) / sizeof(g_config_keys[0]),
-                    sizeof(g_config_keys[0]), compare_config_keys);
+                config_key_t key = {current_key, 0};
+                const config_key_t *found =
+                    bsearch(&key, g_config_keys, sizeof(g_config_keys) / sizeof(g_config_keys[0]),
+                            sizeof(g_config_keys[0]), compare_config_keys);
                 if (found) {
                     switch (found->handler) {
                     case HANDLER_LEVEL: {
@@ -152,7 +152,8 @@ static int parse_config_file(const char *filepath, log_config_t *cfg) {
                         errno = 0;
                         long qs = strtol(val, &end, 10);
                         if (end == val || *end != '\0' || errno == ERANGE || qs <= 0) {
-                            fprintf(stderr, "Invalid queue_size: %s (must be a positive integer)\n", val);
+                            fprintf(stderr, "Invalid queue_size: %s (must be a positive integer)\n",
+                                    val);
                             has_errors = 1;
                         } else {
                             cfg->queue_size = (int)qs;
@@ -243,7 +244,8 @@ static int parse_config_file(const char *filepath, log_config_t *cfg) {
                         errno = 0;
                         long bk = strtol(val, &end, 10);
                         if (end == val || *end != '\0' || errno == ERANGE || bk < 0) {
-                            fprintf(stderr, "Invalid backups: %s (must be a non-negative integer)\n", val);
+                            fprintf(stderr,
+                                    "Invalid backups: %s (must be a non-negative integer)\n", val);
                             has_errors = 1;
                         } else {
                             cfg->file_backups = (int)bk;
