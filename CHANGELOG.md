@@ -5,6 +5,9 @@ All notable changes to this project will be documented in this file.
 ## [Unreleased]
 
 ### Added
+- POSIX `pthread_atfork` process safety: registers fork handlers to lock internal
+  mutexes during `fork()`, release them in parent/child, and safely re-initialize
+  `mpsc_queue` condition variables and restart the async worker thread in the child
 - Built-in Token Bucket Rate Limiter: global throttling via `rate_limit_enable`,
   `rate_limit_max_per_sec`, and `rate_limit_burst` YAML settings with automatic
   suppression notice logging when tokens replenish
