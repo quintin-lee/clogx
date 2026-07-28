@@ -8,7 +8,7 @@
 #include <pthread.h>
 #include <time.h>
 
-static bool g_enabled = false;
+static volatile bool g_enabled = false;
 static double g_tokens = 0.0;
 static double g_max_tokens = 0.0;
 static double g_fill_rate = 0.0; /* tokens per microsecond */
@@ -40,6 +40,10 @@ void log_rate_limit_init(bool enable, int max_per_sec, int burst) {
 bool log_rate_limit_allow(uint64_t *out_suppressed_count) {
     if (out_suppressed_count) {
         *out_suppressed_count = 0;
+    }
+
+    if (!g_enabled) {
+        return true;
     }
 
     pthread_mutex_lock(&g_rate_mutex);
