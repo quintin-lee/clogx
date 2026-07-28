@@ -9,5 +9,5 @@ file_enable: true
 file_path: logs/server.log
 max_size: 100MB
 backups: 10
-time_format: "%Y-%m-%d %H:%M:%S"
+time_format: %Y-%m-%d %H:%M:%S
 socket_enable: false
