@@ -8,6 +8,50 @@ LIB_TARGET = $(BUILD_DIR)/libclogx.a
 SO_TARGET = $(BUILD_DIR)/libclogx.so
 EXAMPLE_BIN = $(BUILD_DIR)/example
 
+# Auto-download libyaml if not available via pkg-config
+ifeq ($(shell pkg-config --exists yaml-0.1 && echo yes 2>/dev/null),)
+$(info libyaml not found via pkg-config, downloading...)
+YAML_BUILD := deps/libyaml
+YAML_STATIC_LIB := $(BUILD_DIR)/libyaml.a
+YAML_CFLAGS := -I$(abspath $(YAML_BUILD)/include) -DYAML_VERSION_MAJOR=0 -DYAML_VERSION_MINOR=2 -DYAML_VERSION_PATCH=5 -DYAML_VERSION_STRING=\"0.2.5\"
+YAML_SRCS := $(YAML_BUILD)/src/api.c $(YAML_BUILD)/src/dumper.c \
+             $(YAML_BUILD)/src/emitter.c $(YAML_BUILD)/src/loader.c \
+             $(YAML_BUILD)/src/parser.c $(YAML_BUILD)/src/reader.c \
+             $(YAML_BUILD)/src/scanner.c $(YAML_BUILD)/src/writer.c
+YAML_OBJS := $(patsubst $(YAML_BUILD)/%.c,$(BUILD_DIR)/yaml_%.o,$(YAML_SRCS))
+override CFLAGS += $(YAML_CFLAGS)
+
+$(YAML_STATIC_LIB): $(YAML_OBJS)
+	ar rcs $@ $^
+
+$(YAML_BUILD)/src/%.c: $(YAML_BUILD)/Makefile
+	@:
+
+$(BUILD_DIR)/yaml_%.o: $(YAML_BUILD)/%.c | $(BUILD_DIR) $(YAML_BUILD)/Makefile
+	mkdir -p $(dir $@)
+	$(CC) $(CFLAGS) -c $< -o $@
+
+$(YAML_BUILD)/src/api.c: $(YAML_BUILD)/include/yaml.h
+
+$(YAML_BUILD)/include/yaml.h: $(YAML_BUILD)/Makefile
+	@:
+
+$(YAML_BUILD)/Makefile:
+	mkdir -p deps && \
+	cd deps && \
+	rm -rf libyaml libyaml-0.2.5 libyaml.tar.gz && \
+	curl -L -o libyaml.tar.gz https://codeload.github.com/yaml/libyaml/tar.gz/refs/tags/0.2.5 && \
+	tar xzf libyaml.tar.gz && \
+	mv libyaml-0.2.5 libyaml && \
+	rm libyaml.tar.gz
+
+$(LIB_TARGET): $(YAML_STATIC_LIB)
+$(SO_TARGET): $(YAML_STATIC_LIB)
+$(EXAMPLE_BIN): $(YAML_STATIC_LIB)
+$(BUILD_DIR)/test_%: $(YAML_STATIC_LIB)
+$(BUILD_DIR)/verify_config: $(YAML_STATIC_LIB)
+endif
+
 CORE_SRCS = config.c formatter.c dispatcher.c queue.c async.c log.c rotate.c
 SINK_SRCS = console_sink.c file_sink.c socket_sink.c
 CORE_OBJS = $(addprefix $(BUILD_DIR)/,$(CORE_SRCS:.c=.o))
