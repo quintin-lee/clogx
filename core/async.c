@@ -159,3 +159,24 @@ int log_async_write(log_record_t *restrict record) {
 
     return CLOG_OK;
 }
+
+void log_async_atfork_child(void) {
+    if (!g_async_logger.running || !g_async_logger.queue) {
+        return;
+    }
+
+    size_t cap = g_async_logger.queue->capacity;
+    mpsc_queue_destroy(g_async_logger.queue);
+    g_async_logger.queue = mpsc_queue_create(cap);
+    if (!g_async_logger.queue) {
+        g_async_logger.running = 0;
+        return;
+    }
+
+    g_async_logger.running = 1;
+    if (pthread_create(&g_async_logger.worker_thread, NULL, async_worker, &g_async_logger) != 0) {
+        mpsc_queue_destroy(g_async_logger.queue);
+        g_async_logger.queue = NULL;
+        g_async_logger.running = 0;
+    }
+}

@@ -201,7 +201,31 @@ void log_writevprintf(log_level_t level, const char *file, int line, const char 
     }
 }
 
+static pthread_once_t g_atfork_once = PTHREAD_ONCE_INIT;
+
+static void log_atfork_prepare(void) {
+    pthread_mutex_lock(&g_init_mutex);
+    pthread_mutex_lock(&g_module_mutex);
+}
+
+static void log_atfork_parent(void) {
+    pthread_mutex_unlock(&g_module_mutex);
+    pthread_mutex_unlock(&g_init_mutex);
+}
+
+static void log_atfork_child(void) {
+    pthread_mutex_unlock(&g_module_mutex);
+    pthread_mutex_unlock(&g_init_mutex);
+    log_async_atfork_child();
+}
+
+static void register_atfork(void) {
+    pthread_atfork(log_atfork_prepare, log_atfork_parent, log_atfork_child);
+}
+
 int log_init(const char *yaml_path) {
+    pthread_once(&g_atfork_once, register_atfork);
+
     pthread_mutex_lock(&g_init_mutex);
     if (g_initialized) {
         pthread_mutex_unlock(&g_init_mutex);

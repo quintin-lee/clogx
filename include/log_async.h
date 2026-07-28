@@ -50,4 +50,9 @@ int log_async_is_running(void);
  */
 int log_async_write(log_record_t *restrict record);
 
+/**
+ * @brief Handle fork in child process: recreate queue and restart worker.
+ */
+void log_async_atfork_child(void);
+
 #endif /* LOG_ASYNC_H */
