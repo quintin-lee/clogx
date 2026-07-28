@@ -79,7 +79,8 @@ static void *listener_thread(void *arg) {
 
     int lines = 0;
     for (int i = 0; i < total; i++) {
-        if (buf[i] == '\n') lines++;
+        if (buf[i] == '\n')
+            lines++;
     }
     ctx->received_lines = lines;
 

@@ -52,8 +52,8 @@ int log_dispatcher_remove_sink(log_sink_t *sink) {
             g_dispatcher.sinks[g_dispatcher.sink_count - 1] = NULL;
             g_dispatcher.sink_count--;
             if (g_dispatcher.sink_count > 0) {
-                g_dispatcher.sinks =
-                    realloc(g_dispatcher.sinks, (size_t)g_dispatcher.sink_count * sizeof(log_sink_t *));
+                g_dispatcher.sinks = realloc(g_dispatcher.sinks, (size_t)g_dispatcher.sink_count *
+                                                                     sizeof(log_sink_t *));
             } else {
                 free(g_dispatcher.sinks);
                 g_dispatcher.sinks = NULL;

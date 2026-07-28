@@ -9,10 +9,12 @@
 
 static int count_lines(const char *path) {
     FILE *f = fopen(path, "r");
-    if (!f) return -1;
+    if (!f)
+        return -1;
     int n = 0;
     char buf[256];
-    while (fgets(buf, sizeof(buf), f)) n++;
+    while (fgets(buf, sizeof(buf), f))
+        n++;
     fclose(f);
     return n;
 }
@@ -63,7 +65,8 @@ int main(void) {
 
     /* Quick content check */
     FILE *f = fopen(LOG_PATH, "r");
-    if (!f) return 1;
+    if (!f)
+        return 1;
     char line[256];
     while (fgets(line, sizeof(line), f)) {
         if (strstr(line, "TRACE") || strstr(line, "DEBUG") || strstr(line, "INFO")) {

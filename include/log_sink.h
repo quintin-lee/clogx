@@ -95,7 +95,8 @@ log_sink_t *socket_sink_create(const char *host, int port);
  * @param[in] level Minimum level to accept.
  */
 static inline void log_sink_set_level(log_sink_t *sink, log_level_t level) {
-    if (sink) sink->min_level = level;
+    if (sink)
+        sink->min_level = level;
 }
 
 /**
