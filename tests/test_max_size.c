@@ -13,7 +13,7 @@ static int write_config(const char *max_size) {
             "level: INFO\n"
             "async: false\n"
             "color: false\n"
-            "format: %%msg\n"
+            "format: '%%msg'\n"
             "console_enable: true\n"
             "file_enable: false\n"
             "max_size: %s\n"

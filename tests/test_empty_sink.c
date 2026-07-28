@@ -13,7 +13,7 @@ static int write_config(int console, int file, int socket) {
             "level: INFO\n"
             "async: false\n"
             "color: false\n"
-            "format: [%%level] %%msg\n"
+            "format: '[%%level] %%msg'\n"
             "console_enable: %s\n"
             "file_enable: %s\n"
             "%s"

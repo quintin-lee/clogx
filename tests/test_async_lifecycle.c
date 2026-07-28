@@ -18,7 +18,7 @@ static int write_async_config(void) {
             "async: true\n"
             "queue_size: 8192\n"
             "color: false\n"
-            "format: [%%time] [%%level] %%msg\n"
+            "format: '[%%time] [%%level] %%msg'\n"
             "console_enable: false\n"
             "file_enable: true\n"
             "file_path: %s\n"

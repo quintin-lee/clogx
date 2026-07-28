@@ -16,7 +16,7 @@ static int write_config(void) {
             "async: true\n"
             "queue_size: 16\n"
             "color: false\n"
-            "format: [%%level] %%msg\n"
+            "format: '[%%level] %%msg'\n"
             "console_enable: false\n"
             "file_enable: true\n"
             "file_path: %s\n"

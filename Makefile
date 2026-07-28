@@ -1,6 +1,8 @@
 CC = gcc
 CFLAGS = -std=c99 -Wall -Wextra -Wconversion -Iinclude -O2 -D_GNU_SOURCE -fPIC -fvisibility=hidden
 LDFLAGS = -lpthread
+YAML_LIBS = $(shell pkg-config --libs yaml-0.1 2>/dev/null || echo "-lyaml")
+LDFLAGS += $(YAML_LIBS)
 BUILD_DIR = build
 LIB_TARGET = $(BUILD_DIR)/libclogx.a
 SO_TARGET = $(BUILD_DIR)/libclogx.so

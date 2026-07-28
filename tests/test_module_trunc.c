@@ -14,7 +14,7 @@ static int write_config(void) {
             "level: INFO\n"
             "async: false\n"
             "color: false\n"
-            "format: [%%module] %%msg\n"
+            "format: '[%%module] %%msg'\n"
             "console_enable: false\n"
             "file_enable: true\n"
             "file_path: %s\n"

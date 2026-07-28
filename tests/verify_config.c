@@ -13,7 +13,7 @@ static int write_config(void) {
                "async: false\n"
                "queue_size: 4096\n"
                "color: true\n"
-               "format: [%%time] [%%level] %%msg\n"
+               "format: '[%%time] [%%level] %%msg'\n"
                "console_enable: true\n"
                "file_enable: true\n"
                "file_path: logs/verify_config.log\n"

@@ -13,7 +13,7 @@ static int write_config(void) {
     fprintf(f, "level: INFO\n"
                "async: false\n"
                "color: false\n"
-               "format: %%msg\n"
+               "format: '%%msg'\n"
                "console_enable: true\n"
                "console_stderr: true\n"
                "file_enable: false\n"

@@ -15,7 +15,7 @@ static int write_config(const char *level) {
             "level: %s\n"
             "async: false\n"
             "color: false\n"
-            "format: [%%level] %%msg\n"
+            "format: '[%%level] %%msg'\n"
             "console_enable: false\n"
             "file_enable: true\n"
             "file_path: %s\n"

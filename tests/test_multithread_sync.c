@@ -19,7 +19,7 @@ static int write_config(void) {
             "level: TRACE\n"
             "async: false\n"
             "color: false\n"
-            "format: [%%level] [%%module] %%msg\n"
+            "format: '[%%level] [%%module] %%msg'\n"
             "console_enable: false\n"
             "file_enable: true\n"
             "file_path: %s\n"
