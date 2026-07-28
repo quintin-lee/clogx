@@ -12,8 +12,9 @@
 #include <pthread.h>
 #include "log.h"
 #include "log_config.h"
-#include "log_limits.h"
 #include "log_formatter.h"
+#include "log_limits.h"
+#include "log_rate_limit.h"
 #include "dispatcher.h"
 #include "log_async.h"
 #include "log_record.h"
@@ -164,6 +165,30 @@ void log_writevprintf(log_level_t level, const char *file, int line, const char 
     record.tag = NULL;
     record.message = message;
 
+    uint64_t suppressed = 0;
+    if (!log_rate_limit_allow(&suppressed)) {
+        return;
+    }
+
+    if (suppressed > 0) {
+        char supp_msg[128];
+        snprintf(supp_msg, sizeof(supp_msg),
+                 "[clogx] Suppressed %llu log messages due to rate limit",
+                 (unsigned long long)suppressed);
+        log_record_t supp_rec = record;
+        supp_rec.level = LOG_LEVEL_WARN;
+        supp_rec.message = supp_msg;
+        if (log_config_is_async()) {
+            if (log_async_write(&supp_rec) != 0) {
+                void (*cb)(void) = log_get_async_fallback_cb();
+                if (cb)
+                    cb();
+            }
+        } else {
+            log_dispatcher_dispatch(&supp_rec);
+        }
+    }
+
     if (log_config_is_async()) {
         int ar = log_async_write(&record);
         if (ar != 0) {
@@ -193,6 +218,8 @@ int log_init(const char *yaml_path) {
 
     log_config_t *cfg = log_config_get();
     log_formatter_init(cfg->format, cfg->time_format);
+    log_rate_limit_init(cfg->rate_limit_enable, cfg->rate_limit_max_per_sec,
+                        cfg->rate_limit_burst);
 
     if (log_dispatcher_init() != 0) {
         pthread_mutex_unlock(&g_init_mutex);
@@ -217,6 +244,7 @@ void log_destroy(void) {
     g_initialized = 0;
     pthread_mutex_unlock(&g_init_mutex);
 
+    log_rate_limit_reset();
     log_async_shutdown();
     log_dispatcher_destroy();
 }
@@ -244,6 +272,8 @@ int log_reload(void) {
 
     log_config_t *cfg = log_config_get();
     log_formatter_init(cfg->format, cfg->time_format);
+    log_rate_limit_init(cfg->rate_limit_enable, cfg->rate_limit_max_per_sec,
+                        cfg->rate_limit_burst);
 
     log_dispatcher_snapshot_t snap = {0};
     ret = log_dispatcher_build_snapshot(cfg, &snap);

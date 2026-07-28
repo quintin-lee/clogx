@@ -57,6 +57,7 @@ set(CLOG_SOURCES
     core/async.c
     core/log.c
     core/rotate.c
+    core/rate_limit.c
     sinks/console_sink.c
     sinks/file_sink.c
     sinks/socket_sink.c
@@ -150,6 +151,7 @@ if(CLOG_BUILD_TESTS)
         test_sink_level
         test_log_level
         test_json_formatter
+        test_rate_limit
     )
 
     # Tests that directly reference internal symbols (not exported from shared lib)
