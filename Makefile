@@ -16,7 +16,8 @@ TESTS = test_async_lifecycle test_async_reload test_dispatcher_lifecycle \
         test_pipeline verify_config \
         test_invalid_config test_double_init test_empty_sink \
         test_async_fallback test_queue_try_put test_max_size test_console_stderr \
-        test_module_trunc test_add_sink
+        test_module_trunc test_add_sink \
+        test_multithread_sync test_socket_sink
 TEST_BINS = $(addprefix $(BUILD_DIR)/,$(TESTS))
 
 .PHONY: all clean example test docs format check-format
