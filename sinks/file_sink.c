@@ -164,5 +164,6 @@ log_sink_t *file_sink_create(const char *path, uint64_t max_size, int backups) {
     sink->flush = file_flush;
     sink->destroy = file_destroy;
     sink->private_data = data;
+    sink->min_level = LOG_LEVEL_TRACE;
     return sink;
 }

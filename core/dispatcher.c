@@ -112,20 +112,26 @@ int log_dispatcher_dispatch(log_record_t *record) {
     /* Short critical section: iterate sink array and write. */
     pthread_mutex_lock(&g_dispatcher.mutex);
     for (int i = 0; i < g_dispatcher.sink_count; i++) {
-        if (!g_dispatcher.sinks[i])
+        log_sink_t *sink = g_dispatcher.sinks[i];
+        if (!sink)
+            continue;
+
+        /* Per-sink level gate: skip if the record is below this sink's
+         * minimum level.  The global level has already been checked above. */
+        if ((int)record->level < (int)sink->min_level)
             continue;
 
         const char *write_buf = formatted_buf;
         size_t write_len = (size_t)len;
 
-        if (colored_len > 0 && console_sink_is_color_enabled(g_dispatcher.sinks[i])) {
+        if (colored_len > 0 && console_sink_is_color_enabled(sink)) {
             write_buf = colored_buf;
             write_len = (size_t)colored_len;
         }
 
-        g_dispatcher.sinks[i]->write(g_dispatcher.sinks[i], write_buf, write_len);
+        sink->write(sink, write_buf, write_len);
         if (write_len > 0 && write_buf[write_len - 1] != '\n') {
-            g_dispatcher.sinks[i]->write(g_dispatcher.sinks[i], "\n", 1);
+            sink->write(sink, "\n", 1);
         }
     }
     pthread_mutex_unlock(&g_dispatcher.mutex);

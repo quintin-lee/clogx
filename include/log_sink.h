@@ -32,6 +32,15 @@ struct log_sink {
 
     /** @brief Implementation-private data. */
     void *private_data;
+
+    /**
+     * @brief Minimum severity level this sink accepts.
+     *
+     * Messages below this level are silently dropped by the dispatcher.
+     * Initialised to LOG_LEVEL_TRACE (accepts everything) in the factory
+     * helpers; override with log_sink_set_level().
+     */
+    log_level_t min_level;
 };
 
 /**
@@ -75,5 +84,27 @@ log_sink_t *file_sink_create(const char *path, uint64_t max_size, int backups);
  * @return New sink, or NULL on invalid arguments / allocation failure.
  */
 log_sink_t *socket_sink_create(const char *host, int port);
+
+/**
+ * @brief Set the minimum severity level for a sink.
+ *
+ * Messages below this level are dropped by the dispatcher before reaching
+ * the sink's write callback.  Default is LOG_LEVEL_TRACE (no filtering).
+ *
+ * @param[in] sink  Target sink (must not be NULL).
+ * @param[in] level Minimum level to accept.
+ */
+static inline void log_sink_set_level(log_sink_t *sink, log_level_t level) {
+    if (sink) sink->min_level = level;
+}
+
+/**
+ * @brief Get the minimum severity level for a sink.
+ * @param[in] sink Sink to query (may be NULL).
+ * @return Current minimum level, or LOG_LEVEL_TRACE if sink is NULL.
+ */
+static inline log_level_t log_sink_get_level(const log_sink_t *sink) {
+    return sink ? sink->min_level : LOG_LEVEL_TRACE;
+}
 
 #endif /* LOG_SINK_H */

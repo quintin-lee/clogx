@@ -61,6 +61,7 @@ log_sink_t *console_sink_create(bool use_color) {
     sink->flush = console_flush;
     sink->destroy = console_destroy;
     sink->private_data = data;
+    sink->min_level = LOG_LEVEL_TRACE;
 
     return sink;
 }
@@ -83,6 +84,7 @@ log_sink_t *console_sink_create_stderr(bool use_color) {
     sink->flush = console_flush;
     sink->destroy = console_destroy;
     sink->private_data = data;
+    sink->min_level = LOG_LEVEL_TRACE;
 
     return sink;
 }

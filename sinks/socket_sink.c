@@ -113,5 +113,6 @@ log_sink_t *socket_sink_create(const char *host, int port) {
     sink->flush = socket_flush;
     sink->destroy = socket_destroy;
     sink->private_data = data;
+    sink->min_level = LOG_LEVEL_TRACE;
     return sink;
 }
