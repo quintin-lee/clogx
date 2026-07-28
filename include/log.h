@@ -76,7 +76,7 @@ void log_get_module(char *buf, size_t n);
 /**
  * @brief Append a custom sink after @ref log_init.
  * @param[in] sink Sink to take ownership of (destroyed by @ref log_destroy / reload).
- * @return @ref CLOG_OK on success, negative @ref clogx_errno_t on failure.
+ * @return @p CLOG_OK on success, negative @ref clogx_errno_t on failure.
  *
  * @note Custom sinks added this way are discarded on @ref log_reload.
  */
@@ -85,7 +85,7 @@ int log_add_sink(log_sink_t *sink);
 /**
  * @brief Remove a previously added sink without destroying it.
  * @param[in] sink Sink pointer previously passed to @ref log_add_sink.
- * @return @ref CLOG_OK on success, @ref CLOG_ERR_INVALID_ARG if @p sink is NULL.
+ * @return @p CLOG_OK on success, @p CLOG_ERR_INVALID_ARG if @p sink is NULL.
  *
  * @note Caller retains ownership and must call @c sink->destroy when finished.
  */
@@ -99,7 +99,7 @@ int log_remove_sink(log_sink_t *sink);
  *
  * @param[in] yaml_path Path to a key:value config file. NULL or "" uses
  *                      `./config.yaml` if present.
- * @return @ref CLOG_OK on success, negative @ref clogx_errno_t on failure.
+ * @return @p CLOG_OK on success, negative @ref clogx_errno_t on failure.
  *
  * @note Call @ref log_destroy when finished. Calling @ref log_init again
  *       without destroy is not supported.
@@ -127,7 +127,7 @@ void log_flush(void);
  * Always shuts down the async worker before replacing sinks, then restarts
  * it if the new config enables async mode.
  *
- * @return @ref CLOG_OK on success, negative @ref clogx_errno_t on failure.
+ * @return @p CLOG_OK on success, negative @ref clogx_errno_t on failure.
  */
 int log_reload(void);
 
@@ -138,7 +138,7 @@ int log_reload(void);
  * either enqueues it asynchronously or dispatches it synchronously.
  *
  * @param[in] level Log severity.
- * @param[in] file  Source file name (usually from @ref LOG_FILENAME_ONLY).
+ * @param[in] file  Source file name (usually from @p LOG_FILENAME_ONLY).
  * @param[in] line  Source line number.
  * @param[in] func  Source function name.
  * @param[in] fmt   printf-style format string.
@@ -151,6 +151,7 @@ void log_writevprintf(log_level_t level, const char *file, int line, const char 
  * @brief Extract the basename of @c __FILE__.
  * @return Pointer to the file name portion of @c __FILE__.
  */
+/** @brief Extract the basename from a file path. Used by @p LOG_FILENAME_ONLY. */
 static inline const char *clogx_filename_only(const char *path) {
     const char *slash;
     const char *base = path ? path : "";
@@ -164,6 +165,11 @@ static inline const char *clogx_filename_only(const char *path) {
 }
 
 #define LOG_FILENAME_ONLY() clogx_filename_only(__FILE__)
+
+/**
+ * @def LOG_FILENAME_ONLY
+ * @brief Convenience wrapper around @c clogx_filename_only() using @c __FILE__.
+ */
 
 /**
  * @def LOG_INFO(...)
