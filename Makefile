@@ -78,11 +78,11 @@ PREFIX ?= /usr/local
 LIBDIR ?= $(PREFIX)/lib
 INCLUDEDIR ?= $(PREFIX)/include
 
-PUBLIC_HEADERS := include/log.h include/log_config.h include/log_record.h include/log_sink.h
+PUBLIC_HEADERS := include/log.h include/log_config.h include/log_limits.h include/log_record.h include/log_sink.h
 
-.PHONY: all clean example test docs format check-format check test-valgrind install uninstall asan ubsan test-asan test-ubsan
+.PHONY: all clean example test docs format check-format check test-valgrind install uninstall asan ubsan test-asan test-ubsan fuzz-build fuzz-config fuzz-formatter
 
-FORMAT_FILES := $(shell find include core sinks example tests -name '*.c' -o -name '*.h')
+FORMAT_FILES := $(shell find include core sinks example tests fuzz -name '*.c' -o -name '*.h' 2>/dev/null)
 
 all: $(LIB_TARGET) $(SO_TARGET) $(EXAMPLE_BIN)
 
@@ -109,6 +109,22 @@ $(BUILD_DIR)/test_%: tests/test_%.c $(LIB_TARGET) | $(BUILD_DIR)
 
 $(BUILD_DIR)/verify_config: tests/verify_config.c $(LIB_TARGET) | $(BUILD_DIR)
 	$(CC) $(CFLAGS) -o $@ $< $(LIB_TARGET) $(LDFLAGS)
+
+$(BUILD_DIR)/fuzz_config: fuzz/fuzz_config.c $(LIB_TARGET) | $(BUILD_DIR)
+	$(CC) $(CFLAGS) -o $@ $< $(LIB_TARGET) $(LDFLAGS)
+
+$(BUILD_DIR)/fuzz_formatter: fuzz/fuzz_formatter.c $(LIB_TARGET) | $(BUILD_DIR)
+	$(CC) $(CFLAGS) -o $@ $< $(LIB_TARGET) $(LDFLAGS)
+
+fuzz-build: $(BUILD_DIR)/fuzz_config $(BUILD_DIR)/fuzz_formatter
+
+fuzz-config: $(BUILD_DIR)/fuzz_config
+	@mkdir -p fuzz/out_config
+	afl-fuzz -i fuzz/seeds -o fuzz/out_config -- $(BUILD_DIR)/fuzz_config @@
+
+fuzz-formatter: $(BUILD_DIR)/fuzz_formatter
+	@mkdir -p fuzz/out_formatter
+	afl-fuzz -i fuzz/seeds -o fuzz/out_formatter -- $(BUILD_DIR)/fuzz_formatter @@
 
 example: $(EXAMPLE_BIN)
 

@@ -1,0 +1,6 @@
+log:
+  level: DEBUG
+  async: false
+  format: "[%time] [%level] [%module] %msg"
+  console_enable: true
+  file_enable: false
