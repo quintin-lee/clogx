@@ -9,10 +9,11 @@
 #include <ctype.h>
 #include <pthread.h>
 #include "log_formatter.h"
+#include "log_limits.h"
 #include "log_record.h"
 
-static char g_default_format[512] = "%msg";
-static char g_format_buf[512];
+static char g_default_format[CLOG_MAX_FORMAT_SIZE] = "%msg";
+static char g_format_buf[CLOG_MAX_FORMAT_SIZE];
 static char *g_format_ptr = g_default_format;
 static char g_time_format_buf[64] = "%Y-%m-%d %H:%M:%S";
 static pthread_mutex_t g_format_mutex = PTHREAD_MUTEX_INITIALIZER;

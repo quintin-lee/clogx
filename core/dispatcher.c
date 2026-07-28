@@ -10,6 +10,7 @@
 #include "log_sink.h"
 #include "log_formatter.h"
 #include "log_config.h"
+#include "log_limits.h"
 #include "log_record.h"
 
 typedef struct {
@@ -76,7 +77,7 @@ int log_dispatcher_dispatch(log_record_t *record) {
     /* Format and pre-compute colored output OUTSIDE the dispatcher lock.
      * Formatter has its own mutex for the format string; config reads use
      * an rwlock.  This keeps the dispatcher critical section short (I/O only). */
-    char formatted_buf[2048];
+    char formatted_buf[CLOG_MAX_FORMATTED_SIZE];
     int len = log_formatter_format(record, formatted_buf, sizeof(formatted_buf));
     if (len <= 0) {
         return -1;
@@ -96,7 +97,7 @@ int log_dispatcher_dispatch(log_record_t *record) {
     const char *reset_code = "\x1b[0m";
     bool color_enabled = log_config_color_enabled();
 
-    char colored_buf[4096];
+    char colored_buf[CLOG_MAX_COLORED_SIZE];
     int colored_len = -1;
 
     if (color_enabled) {

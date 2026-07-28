@@ -25,10 +25,10 @@ static int write_config(void) {
 }
 
 int main(void) {
-    char big[1200];
+    char big[5000];
     char module[64];
     FILE *f;
-    char buf[2048];
+    char buf[6000];
     size_t n;
     size_t i;
 

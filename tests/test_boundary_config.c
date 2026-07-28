@@ -146,6 +146,14 @@ int main(void) {
         ret = 1;
     }
 
+    if (log_init(NULL) == 0) {
+        char big_msg[3000];
+        memset(big_msg, 'A', sizeof(big_msg) - 1);
+        big_msg[sizeof(big_msg) - 1] = '\0';
+        LOG_INFO("%s", big_msg);
+        log_destroy();
+    }
+
     if (ret == 0)
         printf("boundary config test passed\n");
     return ret;

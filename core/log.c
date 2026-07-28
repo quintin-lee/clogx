@@ -12,6 +12,7 @@
 #include <pthread.h>
 #include "log.h"
 #include "log_config.h"
+#include "log_limits.h"
 #include "log_formatter.h"
 #include "dispatcher.h"
 #include "log_async.h"
@@ -129,7 +130,7 @@ void log_writevprintf(log_level_t level, const char *file, int line, const char 
     va_list args;
     va_start(args, fmt);
 
-    char message[1024];
+    char message[CLOG_MAX_MESSAGE_SIZE];
     int ret = vsnprintf(message, sizeof(message), fmt, args);
     va_end(args);
 
