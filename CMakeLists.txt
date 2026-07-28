@@ -58,6 +58,7 @@ set(CLOG_SOURCES
     core/log.c
     core/rotate.c
     core/rate_limit.c
+    core/signal_handler.c
     sinks/console_sink.c
     sinks/file_sink.c
     sinks/socket_sink.c
@@ -153,6 +154,7 @@ if(CLOG_BUILD_TESTS)
         test_json_formatter
         test_rate_limit
         test_fork_safety
+        test_signal_handler
     )
 
     # Tests that directly reference internal symbols (not exported from shared lib)

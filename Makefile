@@ -59,7 +59,7 @@ $(BUILD_DIR)/test_%: $(YAML_STATIC_LIB)
 $(BUILD_DIR)/verify_config: $(YAML_STATIC_LIB)
 endif
 
-CORE_SRCS = config.c formatter.c dispatcher.c queue.c async.c log.c rotate.c rate_limit.c
+CORE_SRCS = config.c formatter.c dispatcher.c queue.c async.c log.c rotate.c rate_limit.c signal_handler.c
 SINK_SRCS = console_sink.c file_sink.c socket_sink.c
 CORE_OBJS = $(addprefix $(BUILD_DIR)/,$(CORE_SRCS:.c=.o))
 SINK_OBJS = $(addprefix $(BUILD_DIR)/,$(SINK_SRCS:.c=.o))
@@ -73,7 +73,7 @@ TESTS = test_async_lifecycle test_async_reload test_dispatcher_lifecycle \
         test_module_trunc test_add_sink \
         test_multithread_sync test_config_set test_boundary_config \
         test_socket_sink test_sink_level test_log_level test_json_formatter \
-        test_rate_limit test_fork_safety
+        test_rate_limit test_fork_safety test_signal_handler
 TEST_BINS = $(addprefix $(BUILD_DIR)/,$(TESTS))
 
 # Sanitizer configs (O1 -g for meaningful stack traces)
