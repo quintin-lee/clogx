@@ -206,6 +206,9 @@ log:
 | `socket_tls` | enable OpenSSL TLS encryption for socket sink (`socket_tls: true`) |
 | `socket_tls_ca_file` / `tls_ca_file` | path to CA certificate file (optional) |
 | `socket_tls_skip_verify` / `tls_skip_verify` | skip server certificate verification (`true`/`false`) |
+| `rate_limit_enable` | enable global token bucket rate limiting (`true`/`false`) |
+| `rate_limit_max_per_sec` | max allowed log messages per second (e.g. `1000`) |
+| `rate_limit_burst` | maximum burst capacity (e.g. `100`) |
 
 ## Structured Logging (JSON)
 
