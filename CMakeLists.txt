@@ -113,6 +113,7 @@ if(CLOG_BUILD_TESTS)
         test_module_trunc
         test_add_sink
         test_multithread_sync
+        test_config_set
         test_sink_level
         test_log_level
         test_socket_sink
