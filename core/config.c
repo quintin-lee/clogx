@@ -271,6 +271,8 @@ static int load_default_and_apply(const char *yaml_path) {
     /* Reload passes g_config_path itself; avoid overlapping copy (ASan). */
     if (yaml_path && yaml_path != g_config_path && strlen(yaml_path) > 0) {
         snprintf(g_config_path, sizeof(g_config_path), "%s", yaml_path);
+    } else if (!yaml_path || yaml_path[0] == '\0') {
+        g_config_path[0] = '\0';
     }
 
     if (access(g_config_path, R_OK) == 0) {
