@@ -11,6 +11,8 @@ option(CLOG_BUILD_TESTS "Build and register tests" ON)
 option(CLOG_BUILD_SHARED "Build shared library instead of static" OFF)
 
 find_package(Threads REQUIRED)
+find_package(PkgConfig REQUIRED)
+pkg_check_modules(YAML REQUIRED yaml-0.1)
 
 set(CLOG_SOURCES
     core/config.c
@@ -37,7 +39,9 @@ target_compile_options(clogx_objects
     PRIVATE
         $<$<C_COMPILER_ID:GNU,Clang,AppleClang>:-Wall -Wextra -Wconversion -fvisibility=hidden>
 )
-target_link_libraries(clogx_objects PUBLIC Threads::Threads)
+target_link_libraries(clogx_objects PUBLIC Threads::Threads ${YAML_LIBRARIES})
+target_include_directories(clogx_objects SYSTEM PRIVATE ${YAML_INCLUDE_DIRS})
+target_compile_options(clogx_objects PRIVATE ${YAML_CFLAGS_OTHER})
 set_target_properties(clogx_objects PROPERTIES POSITION_INDEPENDENT_CODE ON)
 
 # Main library (shared or static)
@@ -60,6 +64,10 @@ set_target_properties(clogx PROPERTIES
     VERSION ${PROJECT_VERSION}
     SOVERSION 0
 )
+
+target_link_libraries(clogx PUBLIC Threads::Threads ${YAML_LIBRARIES})
+target_include_directories(clogx SYSTEM PUBLIC ${YAML_INCLUDE_DIRS})
+target_compile_options(clogx PUBLIC ${YAML_CFLAGS_OTHER})
 
 # --- Example ---
 if(CLOG_BUILD_EXAMPLES)
