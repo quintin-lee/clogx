@@ -61,7 +61,7 @@ static int socket_connect(log_sink_t *sink) {
 
     if (data->use_tls) {
 #ifdef CLOG_USE_TLS
-        const SSL_METHOD *method = TLS_client_method();
+        const SSL_METHOD *method = TLS_method();
         data->ssl_ctx = SSL_CTX_new(method);
         if (!data->ssl_ctx) {
             fprintf(stderr, "SSL_CTX_new failed\n");
@@ -90,6 +90,10 @@ static int socket_connect(log_sink_t *sink) {
             close(data->sockfd);
             data->sockfd = -1;
             return -1;
+        }
+
+        if (!data->skip_verify && data->host && strlen(data->host) > 0) {
+            SSL_set1_host(data->ssl, data->host);
         }
 
         SSL_set_fd(data->ssl, data->sockfd);
