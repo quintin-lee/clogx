@@ -1,5 +1,5 @@
 CC = gcc
-CFLAGS = -std=c99 -Wall -Wextra -Iinclude -O2 -D_GNU_SOURCE
+CFLAGS = -std=c99 -Wall -Wextra -Wconversion -Iinclude -O2 -D_GNU_SOURCE
 LDFLAGS = -lpthread
 BUILD_DIR = build
 LIB_TARGET = $(BUILD_DIR)/libclogx.a
