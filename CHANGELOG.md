@@ -5,6 +5,8 @@ All notable changes to this project will be documented in this file.
 ## [Unreleased]
 
 ### Added
+- Programmatic configuration API: `log_config_set()` applies a caller-provided
+  `log_config_t` directly; `log_config_get()` returns the current config
 - Configurable time format: `time_format` key sets the strftime template for
   `%time` (default `%Y-%m-%d %H:%M:%S`); microseconds always appended after `.`
 - Per-sink log level filtering: `log_sink_set_level()` / `log_sink_get_level()`
@@ -23,6 +25,8 @@ All notable changes to this project will be documented in this file.
   objects, avoiding symbol-resolution failures
 
 ### Changed
+- Config parser migrated from hand-rolled key:value to libyaml event API; all
+  settings now live under a top-level `log:` mapping in YAML
 - Move formatting and color computation outside the global dispatcher lock to
   reduce lock contention in multi-threaded sync mode
 - CMakeLists.txt: parallel test targets matching Makefile, `-fvisibility=hidden`
@@ -41,10 +45,13 @@ All notable changes to this project will be documented in this file.
 - Doxygen 6 warnings (enum value references, static inline doc)
 
 ### Build
+- libyaml auto-download: CMake uses FetchContent; Makefile downloads and
+  compiles libyaml sources when pkg-config is unavailable — no system package
+  required
 - Makefile install/uninstall: install library, public headers, pkg-config `.pc`
 - ASan / UBSan build and test targets (`make asan`, `make ubsan`, `make test-*`)
 - `make check`: runs clang-format → clean build → all tests in sequence
-- `make test-valgrind`: all 21 tests under Valgrind (gracefully skipped if
+- `make test-valgrind`: all 22 tests under Valgrind (gracefully skipped if
   valgrind not installed)
 
 ## [0.1.0] - 2024

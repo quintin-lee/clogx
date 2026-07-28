@@ -39,9 +39,20 @@ cmake/       CMake package config templates
 #include "log.h"
 
 int main(void) {
+    /* Option 1: load from YAML config file */
     if (log_init("./config.yaml") != 0) {
         return 1;
     }
+
+    /* Option 2: configure programmatically */
+    log_config_t cfg = {0};
+    cfg.level = LOG_LEVEL_DEBUG;
+    cfg.async = false;
+    cfg.color = true;
+    cfg.format = "[%time] [%level] %msg";
+    cfg.file_enable = true;
+    snprintf(cfg.file_path, sizeof(cfg.file_path), "logs/app.log");
+    log_config_set(&cfg);
 
     LOG_INFO("Server started");
     LOG_WARN("Disk space low: %d%%", 85);
@@ -67,7 +78,7 @@ gcc -Iinclude app.c -Lbuild -lclogx -lpthread -o app
 
 ```bash
 make              # generates build/libclogx.a, build/libclogx.so, build/example
-make test         # compiles and runs all 21 regression tests
+make test         # compiles and runs all 22 regression tests
 make asan         # build + test with AddressSanitizer
 make ubsan        # build + test with UndefinedBehaviorSanitizer
 make check        # full quality gate: format check → build → test
@@ -110,26 +121,26 @@ pkg-config --cflags --libs clogx
 
 ## Configuration
 
-The config file is a simple `key: value` text format (not full YAML). Pass the path to `log_init(path)`; when empty, defaults to `./config.yaml`.
+The config file is YAML with all settings under a top-level `log:` mapping.
+Pass the path to `log_init(path)`; when empty, defaults to `./config.yaml`.
 
 Example:
 
 ```yaml
-level: TRACE
-async: false
-queue_size: 8192
-color: true
-format: "[%time] [%level] [%module] %msg (%file:%line)"
-time_format: "%Y-%m-%d %H:%M:%S"
-console_enable: true
-console_stderr: false
-file_enable: true
-file_path: logs/server.log
-max_size: 100MB
-backups: 10
-socket_enable: false
-host: 127.0.0.1
-port: 5140
+log:
+  level: TRACE
+  async: false
+  queue_size: 8192
+  color: true
+  format: "[%time] [%level] [%module] %msg (%file:%line)"
+  time_format: "%Y-%m-%d %H:%M:%S"
+  console_enable: true
+  console_stderr: false
+  file_enable: true
+  file_path: logs/server.log
+  max_size: 100MB
+  backups: 10
+  socket_enable: false
 ```
 
 | Key | Meaning |
@@ -142,7 +153,7 @@ port: 5140
 | `time_format` | strftime template for `%time` (default: `%Y-%m-%d %H:%M:%S`); microseconds always appended after `.` |
 | `console_enable` | enable console sink |
 | `console_stderr` | when `true`, console sink writes to stderr instead of stdout |
-| `file_enable` / `file_path` | file sink; key `path` also accepted |
+| `file_enable` / `file_path` | file sink |
 | `max_size` | rotation threshold: raw bytes, or `K`/`KB`, `M`/`MB`, `G`/`GB` |
 | `backups` | number of backups to retain (`.1` … `.N`) |
 | `socket_enable` / `host` / `port` | TCP socket sink |
@@ -153,6 +164,13 @@ Runtime adjustment:
 log_set_level(LOG_LEVEL_DEBUG);
 log_get_level();
 log_reload();   // re-read config path passed to init
+
+/* Or set configuration programmatically */
+log_config_t cfg = {0};
+cfg.level = LOG_LEVEL_WARN;
+cfg.file_enable = true;
+snprintf(cfg.file_path, sizeof(cfg.file_path), "logs/app.log");
+log_config_set(&cfg);
 ```
 
 ## Format Tokens
@@ -191,6 +209,8 @@ int            log_set_level(log_level_t level);
 log_level_t    log_get_level(void);
 void           log_sink_set_level(log_sink_t *sink, log_level_t level);
 log_level_t    log_sink_get_level(const log_sink_t *sink);
+log_config_t  *log_config_get(void);
+int            log_config_set(const log_config_t *cfg);
 
 LOG_INFO("...");
 LOG_DEBUG("...");
@@ -261,7 +281,7 @@ make test
 ctest --test-dir build --output-on-failure
 ```
 
-Covers async lifecycle, reload start/stop worker, dispatcher reuse, file rotation, nested directory creation, config hot reload, invalid config handling, double init protection, empty sink rejection, async fallback notification, non-blocking queue overflow, max_size unit parsing, stderr console routing, module/truncation behavior, custom sink registration, multi-threaded sync correctness, socket sink TCP output, per-sink level filtering, and runtime log level changes. Total: 21 tests.
+Covers async lifecycle, reload start/stop worker, dispatcher reuse, file rotation, nested directory creation, config hot reload, invalid config handling, double init protection, empty sink rejection, async fallback notification, non-blocking queue overflow, max_size unit parsing, stderr console routing, module/truncation behavior, custom sink registration, multi-threaded sync correctness, socket sink TCP output, per-sink level filtering, runtime log level changes, and programmatic config via `log_config_set`. Total: 22 tests.
 
 ## CI
 
