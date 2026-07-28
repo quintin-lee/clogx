@@ -58,19 +58,21 @@ jobs:
       - name: Checkout
         uses: actions/checkout@v7
 
-      - name: Build library and selected tests
+      - name: Build all tests
         run: |
           make
-          make build/test_async_lifecycle build/test_file_rotate build/test_pipeline
+          for f in tests/test_*.c tests/verify_config.c; do \
+            make "build/$$(basename "$$f" .c)" || exit 1; \
+          done
 
       - name: Install valgrind
         run: sudo apt-get update && sudo apt-get install -y valgrind
 
       - name: Run tests under valgrind
         run: |
-          valgrind --error-exitcode=1 --leak-check=full --track-origins=yes ./build/test_async_lifecycle
-          valgrind --error-exitcode=1 --leak-check=full --track-origins=yes ./build/test_file_rotate
-          valgrind --error-exitcode=1 --leak-check=full --track-origins=yes ./build/test_pipeline
+          for t in build/test_*; do \
+            valgrind --error-exitcode=1 --leak-check=full --track-origins=yes "./$$t"; \
+          done
 
   cppcheck:
     runs-on: ubuntu-latest
