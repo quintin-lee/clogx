@@ -14,6 +14,10 @@ All notable changes to this project will be documented in this file.
 - Built-in Token Bucket Rate Limiter: global throttling via `rate_limit_enable`,
   `rate_limit_max_per_sec`, and `rate_limit_burst` YAML settings with automatic
   suppression notice logging when tokens replenish
+
+### Changed
+- Migrated Token Bucket Rate Limiter time source from `gettimeofday` (`CLOCK_REALTIME`)
+  to POSIX `CLOCK_MONOTONIC` to ensure immunity against NTP clock adjustments
 - Official package manager integration: `vcpkg.json` manifest with `tls` and
   `system-yaml` feature flags; Conan 2.0+ recipe (`conanfile.py`) supporting
   `shared`, `with_tls`, and `with_yaml` options
