@@ -14,7 +14,7 @@ int main(void) {
     for (int i = 0; i < 3; i++) {
         LOG_INFO("Processing batch %d", i);
     }
-    LOG_WARN("Disk space low: 85% used");
+    LOG_WARN("Disk space low: 85%% used");
     LOG_ERROR("Failed to connect to database");
 
     log_flush();
