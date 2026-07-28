@@ -1,6 +1,7 @@
 build*/
 logs/
 docs/api/
+deps/
 .codegraph/
 
 cmake_build/
