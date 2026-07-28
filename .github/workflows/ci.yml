@@ -130,8 +130,7 @@ jobs:
 
       - name: Build with coverage
         run: |
-          CC=gcc CFLAGS="--coverage -fprofile-arcs -ftest-coverage" EXTRA_LDFLAGS="--coverage" \
-          make clean && make
+          make clean && make CC=gcc CFLAGS="--coverage -fprofile-arcs -ftest-coverage" EXTRA_LDFLAGS="--coverage"
 
       - name: Run tests with coverage
         run: |
