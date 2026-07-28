@@ -107,22 +107,22 @@ $(LIB_TARGET): $(ALL_OBJS)
 	ar rcs $@ $^
 
 $(SO_TARGET): $(ALL_OBJS)
-	$(CC) -shared -Wl,-soname,libclogx.so.$(SO_VERSION) -o $@ $^ $(LDFLAGS)
+	$(CC) $(EXTRA_LDFLAGS) -shared -Wl,-soname,libclogx.so.$(SO_VERSION) -o $@ $^ $(LDFLAGS)
 
 $(EXAMPLE_BIN): example/main.c $(LIB_TARGET) | $(BUILD_DIR)
-	$(CC) $(CFLAGS) -o $@ example/main.c $(LIB_TARGET) $(LDFLAGS)
+	$(CC) $(EXTRA_LDFLAGS) $(CFLAGS) -o $@ example/main.c $(LIB_TARGET) $(LDFLAGS)
 
 $(BUILD_DIR)/test_%: tests/test_%.c $(LIB_TARGET) | $(BUILD_DIR)
-	$(CC) $(CFLAGS) -o $@ $< $(LIB_TARGET) $(LDFLAGS)
+	$(CC) $(EXTRA_LDFLAGS) $(CFLAGS) -o $@ $< $(LIB_TARGET) $(LDFLAGS)
 
 $(BUILD_DIR)/verify_config: tests/verify_config.c $(LIB_TARGET) | $(BUILD_DIR)
-	$(CC) $(CFLAGS) -o $@ $< $(LIB_TARGET) $(LDFLAGS)
+	$(CC) $(EXTRA_LDFLAGS) $(CFLAGS) -o $@ $< $(LIB_TARGET) $(LDFLAGS)
 
 $(BUILD_DIR)/fuzz_config: fuzz/fuzz_config.c $(LIB_TARGET) | $(BUILD_DIR)
-	$(CC) $(CFLAGS) -o $@ $< $(LIB_TARGET) $(LDFLAGS)
+	$(CC) $(EXTRA_LDFLAGS) $(CFLAGS) -o $@ $< $(LIB_TARGET) $(LDFLAGS)
 
 $(BUILD_DIR)/fuzz_formatter: fuzz/fuzz_formatter.c $(LIB_TARGET) | $(BUILD_DIR)
-	$(CC) $(CFLAGS) -o $@ $< $(LIB_TARGET) $(LDFLAGS)
+	$(CC) $(EXTRA_LDFLAGS) $(CFLAGS) -o $@ $< $(LIB_TARGET) $(LDFLAGS)
 
 fuzz-build: $(BUILD_DIR)/fuzz_config $(BUILD_DIR)/fuzz_formatter
 
@@ -149,21 +149,21 @@ test: $(TEST_BINS)
 
 asan:
 	$(MAKE) clean
-	$(MAKE) test CC=$(CC) CFLAGS="$(ASAN_CFLAGS)"
+	$(MAKE) test CC=$(CC) CFLAGS="$(ASAN_CFLAGS)" EXTRA_LDFLAGS="$(ASAN_CFLAGS)"
 
 ubsan:
 	$(MAKE) clean
-	$(MAKE) test CC=$(CC) CFLAGS="$(UBSAN_CFLAGS)"
+	$(MAKE) test CC=$(CC) CFLAGS="$(UBSAN_CFLAGS)" EXTRA_LDFLAGS="$(UBSAN_CFLAGS)"
 
 test-asan:
 	$(MAKE) clean
-	$(MAKE) all CC=$(CC) CFLAGS="$(ASAN_CFLAGS)"
-	$(MAKE) test CC=$(CC) CFLAGS="$(ASAN_CFLAGS)"
+	$(MAKE) all CC=$(CC) CFLAGS="$(ASAN_CFLAGS)" EXTRA_LDFLAGS="$(ASAN_CFLAGS)"
+	LD_PRELOAD=/usr/lib/libasan.so ASAN_OPTIONS=detect_leaks=0 $(MAKE) test CC=$(CC) CFLAGS="$(ASAN_CFLAGS)" EXTRA_LDFLAGS="$(ASAN_CFLAGS)"
 
 test-ubsan:
 	$(MAKE) clean
-	$(MAKE) all CC=$(CC) CFLAGS="$(UBSAN_CFLAGS)"
-	$(MAKE) test CC=$(CC) CFLAGS="$(UBSAN_CFLAGS)"
+	$(MAKE) all CC=$(CC) CFLAGS="$(UBSAN_CFLAGS)" EXTRA_LDFLAGS="$(UBSAN_CFLAGS)"
+	$(MAKE) test CC=$(CC) CFLAGS="$(UBSAN_CFLAGS)" EXTRA_LDFLAGS="$(UBSAN_CFLAGS)"
 
 ## Quality check
 

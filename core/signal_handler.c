@@ -47,7 +47,7 @@ clogx_errno_t log_install_signal_handlers(void) {
     struct sigaction sa;
     memset(&sa, 0, sizeof(sa));
     sa.sa_handler = log_signal_handler;
-    sa.sa_flags = SA_RESETHAND;
+    sa.sa_flags = (int)SA_RESETHAND;
     sigemptyset(&sa.sa_mask);
 
     if (sigaction(SIGTERM, &sa, &g_old_sigterm) != 0) {

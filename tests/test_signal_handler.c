@@ -55,7 +55,8 @@ int main(void) {
 
     /* Verify child process was terminated by SIGINT */
     if (!WIFSIGNALED(status) || WTERMSIG(status) != SIGINT) {
-        fprintf(stderr, "expected child terminated by SIGINT (%d), got status %d\n", SIGINT, status);
+        fprintf(stderr, "expected child terminated by SIGINT (%d), got status %d\n", SIGINT,
+                status);
         return 1;
     }
 
