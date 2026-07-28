@@ -89,4 +89,8 @@ void log_dispatcher_destroy_snapshot(log_dispatcher_snapshot_t *restrict snap);
  */
 void log_dispatcher_commit_snapshot(log_dispatcher_snapshot_t *restrict snap);
 
+void log_dispatcher_atfork_prepare(void);
+void log_dispatcher_atfork_parent(void);
+void log_dispatcher_atfork_child(void);
+
 #endif /* DISPATCHER_H */

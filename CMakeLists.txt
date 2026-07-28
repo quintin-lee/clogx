@@ -152,6 +152,7 @@ if(CLOG_BUILD_TESTS)
         test_log_level
         test_json_formatter
         test_rate_limit
+        test_fork_safety
     )
 
     # Tests that directly reference internal symbols (not exported from shared lib)

@@ -303,3 +303,15 @@ void log_dispatcher_flush(void) {
     }
     pthread_mutex_unlock(&g_dispatcher.mutex);
 }
+
+void log_dispatcher_atfork_prepare(void) {
+    pthread_mutex_lock(&g_dispatcher.mutex);
+}
+
+void log_dispatcher_atfork_parent(void) {
+    pthread_mutex_unlock(&g_dispatcher.mutex);
+}
+
+void log_dispatcher_atfork_child(void) {
+    pthread_mutex_unlock(&g_dispatcher.mutex);
+}
