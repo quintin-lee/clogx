@@ -95,6 +95,7 @@ if(CLOG_BUILD_TESTS)
         test_add_sink
         test_multithread_sync
         test_sink_level
+        test_log_level
         test_socket_sink
     )
 

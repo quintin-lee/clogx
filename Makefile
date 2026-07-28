@@ -17,7 +17,7 @@ TESTS = test_async_lifecycle test_async_reload test_dispatcher_lifecycle \
         test_invalid_config test_double_init test_empty_sink \
         test_async_fallback test_queue_try_put test_max_size test_console_stderr \
         test_module_trunc test_add_sink \
-        test_multithread_sync test_socket_sink test_sink_level
+        test_multithread_sync test_socket_sink test_sink_level test_log_level
 TEST_BINS = $(addprefix $(BUILD_DIR)/,$(TESTS))
 
 VERSION = 0.1.0
