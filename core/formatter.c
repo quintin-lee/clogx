@@ -80,13 +80,11 @@ int log_formatter_format(log_record_t *restrict record, char *restrict buf, size
             tf = g_time_format_buf;
             pthread_mutex_unlock(&g_format_mutex);
             strftime(time_buf, sizeof(time_buf), tf, &tm_buf);
-            int ret = snprintf(out, remaining, "%s.%06llu", time_buf,
-                               (unsigned long long)(record->timestamp % 1000000));
-            if (ret > 0 && (size_t)ret < remaining) {
-                out += ret;
-                remaining -= (size_t)ret;
-                total += ret;
-            }
+            size_t tlen = strlen(time_buf);
+            if (tlen >= sizeof(time_buf))
+                tlen = sizeof(time_buf) - 1;
+            append_token(&out, &remaining, time_buf, tlen);
+            total += (int)tlen;
         } else if (strncmp(fmt, "level", 5) == 0 && (fmt[5] == '\0' || !isalpha(fmt[5]))) {
             fmt += 5;
             const char *level_str = level_to_string(record->level);
