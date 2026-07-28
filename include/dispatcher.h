@@ -74,7 +74,8 @@ int log_dispatcher_remove_sink(log_sink_t *restrict sink);
  * @note Caller must call @ref log_dispatcher_destroy_snapshot on failure, or
  *       @ref log_dispatcher_commit_snapshot on success to take ownership.
  */
-int log_dispatcher_build_snapshot(log_config_t *restrict cfg, log_dispatcher_snapshot_t *restrict snap);
+int log_dispatcher_build_snapshot(log_config_t *restrict cfg,
+                                  log_dispatcher_snapshot_t *restrict snap);
 
 /**
  * @brief Destroy a snapshot without affecting the global dispatcher.

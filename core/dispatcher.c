@@ -193,7 +193,8 @@ int log_dispatcher_init(void) {
     return 0;
 }
 
-int log_dispatcher_build_snapshot(log_config_t *restrict cfg, log_dispatcher_snapshot_t *restrict snap) {
+int log_dispatcher_build_snapshot(log_config_t *restrict cfg,
+                                  log_dispatcher_snapshot_t *restrict snap) {
     log_sink_t *sinks[8] = {0};
     int count = 0;
 

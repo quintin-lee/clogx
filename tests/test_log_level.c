@@ -8,10 +8,12 @@
 
 static int count_lines(const char *path) {
     FILE *f = fopen(path, "r");
-    if (!f) return -1;
+    if (!f)
+        return -1;
     int n = 0;
     char buf[256];
-    while (fgets(buf, sizeof(buf), f)) n++;
+    while (fgets(buf, sizeof(buf), f))
+        n++;
     fclose(f);
     return n;
 }
@@ -21,12 +23,21 @@ int main(void) {
 
     /* Init with defaults, only file sink. */
     log_sink_t *sink = file_sink_create(LOG_PATH, 0, 0);
-    if (!sink) { fprintf(stderr, "file_sink_create failed\n"); return 1; }
+    if (!sink) {
+        fprintf(stderr, "file_sink_create failed\n");
+        return 1;
+    }
 
     /* Start with TRACE — everything passes. */
-    if (log_init(NULL) != 0) { fprintf(stderr, "log_init failed\n"); return 1; }
+    if (log_init(NULL) != 0) {
+        fprintf(stderr, "log_init failed\n");
+        return 1;
+    }
     log_set_level(LOG_LEVEL_TRACE);
-    if (log_add_sink(sink) != 0) { fprintf(stderr, "log_add_sink failed\n"); return 1; }
+    if (log_add_sink(sink) != 0) {
+        fprintf(stderr, "log_add_sink failed\n");
+        return 1;
+    }
 
     LOG_TRACE("trace-1");
     LOG_INFO("info-1");
@@ -69,13 +80,17 @@ int main(void) {
 
     log_flush();
     if (count_lines(LOG_PATH) != 7) {
-        fprintf(stderr, "expected 7 lines after lowering to DEBUG, got %d\n", count_lines(LOG_PATH));
+        fprintf(stderr, "expected 7 lines after lowering to DEBUG, got %d\n",
+                count_lines(LOG_PATH));
         return 1;
     }
 
     /* Verify content: no filtered messages leaked. */
     FILE *f = fopen(LOG_PATH, "r");
-    if (!f) { fprintf(stderr, "cannot open log\n"); return 1; }
+    if (!f) {
+        fprintf(stderr, "cannot open log\n");
+        return 1;
+    }
     char line[256];
     while (fgets(line, sizeof(line), f)) {
         if (strstr(line, "should-not-appear")) {

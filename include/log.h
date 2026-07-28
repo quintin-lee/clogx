@@ -154,7 +154,7 @@ CLOGX_API int log_reload(void);
  * @param[in] ...   Format arguments.
  */
 CLOGX_API void log_writevprintf(log_level_t level, const char *file, int line, const char *func,
-                      const char *fmt, ...) CLOGX_PRINTF_FMT(5, 6);
+                                const char *fmt, ...) CLOGX_PRINTF_FMT(5, 6);
 
 /**
  * @brief Extract the basename of @c __FILE__.

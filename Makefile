@@ -33,7 +33,7 @@ INCLUDEDIR ?= $(PREFIX)/include
 
 PUBLIC_HEADERS := include/log.h include/log_config.h include/log_record.h include/log_sink.h
 
-.PHONY: all clean example test docs format check-format install uninstall asan ubsan test-asan test-ubsan
+.PHONY: all clean example test docs format check-format check test-valgrind install uninstall asan ubsan test-asan test-ubsan
 
 FORMAT_FILES := $(shell find include core sinks example tests -name '*.c' -o -name '*.h')
 
@@ -93,6 +93,26 @@ test-ubsan:
 	$(MAKE) clean
 	$(MAKE) all CC=$(CC) CFLAGS="$(UBSAN_CFLAGS)"
 	$(MAKE) test CC=$(CC) CFLAGS="$(UBSAN_CFLAGS)"
+
+## Quality check
+
+check:
+	$(MAKE) check-format
+	$(MAKE) clean
+	$(MAKE) all
+	$(MAKE) test
+	@echo "=== check passed ==="
+
+test-valgrind:
+	@command -v valgrind >/dev/null || { echo "valgrind not found; test-valgrind skipped"; exit 0; }
+	$(MAKE) clean
+	$(MAKE) test
+	@status=0; \
+	for t in $(TEST_BINS); do \
+		echo "=== valgrind $$t ==="; \
+		valgrind --leak-check=full --error-exitcode=1 --track-origins=yes --child-silent-after-fork=yes -q $$t 2>&1; \
+	done; \
+	exit $$status
 
 ## Documentation
 
