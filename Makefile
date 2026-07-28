@@ -1,5 +1,5 @@
 CC = gcc
-CFLAGS = -std=c99 -Wall -Wextra -Wconversion -Iinclude -O2 -D_GNU_SOURCE -fPIC -fvisibility=hidden
+override CFLAGS := -std=c99 -Wall -Wextra -Wconversion -Iinclude -O2 -D_GNU_SOURCE -fPIC -fvisibility=hidden $(CFLAGS)
 LDFLAGS = -lpthread
 
 TLS ?= 0
