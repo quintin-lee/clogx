@@ -22,9 +22,10 @@ static char g_config_path[512] = "./config.yaml";
  * @brief Parse a YAML config file using libyaml's event-based API.
  *
  * Looks for a top-level "log" mapping and processes all scalar key:value
- * pairs inside it (depth 2).  Other top-level keys and deeper nestings are
- * silently skipped so that a config can contain YAML structure other
- * sinks/providers may want.
+ * pairs inside it (depth 2).  If no "log" mapping exists, falls back to
+ * processing top-level scalar pairs (depth 1) for backward compatibility.
+ * Nested mappings, sequences, and unknown keys are silently skipped so that
+ * a config can contain YAML structure other sinks/providers may want.
  */
 static int parse_config_file(const char *filepath, log_config_t *cfg) {
     FILE *f = fopen(filepath, "r");
@@ -45,6 +46,7 @@ static int parse_config_file(const char *filepath, log_config_t *cfg) {
     int depth = 0;          /* mapping nesting depth */
     int expect_key = 1;     /* 1 = expect key, 0 = expect value at current depth */
     int in_log_section = 0; /* 1 when we're inside the top-level "log" mapping */
+    int found_log_section = 0; /* 1 if a top-level "log:" mapping was found */
     char current_key[128] = "";
     yaml_event_t event;
 
@@ -59,7 +61,7 @@ static int parse_config_file(const char *filepath, log_config_t *cfg) {
         case YAML_SCALAR_EVENT: {
             const char *val = (const char *)event.data.scalar.value;
 
-            if (!in_log_section || depth != 2)
+            if (!in_log_section && !(found_log_section == 0 && depth == 1))
                 break;
 
             if (expect_key) {
@@ -206,15 +208,21 @@ static int parse_config_file(const char *filepath, log_config_t *cfg) {
             depth++;
             if (depth == 1) {
                 in_log_section = 0;
-            } else if (depth == 2) {
+                if (strcmp(current_key, "log") == 0) {
+                    in_log_section = 1;
+                    found_log_section = 1;
+                }
+            } else if (depth == 2 && strcmp(current_key, "log") == 0) {
                 in_log_section = 1;
+            } else {
+                in_log_section = 0;
             }
             expect_key = 1;
             break;
         case YAML_MAPPING_END_EVENT:
             if (depth == 1) {
                 in_log_section = 0;
-            } else if (depth == 2) {
+            } else if (depth == 2 && in_log_section) {
                 in_log_section = 0;
             }
             depth--;
