@@ -175,6 +175,11 @@ static int parse_config_file(const char *filepath, log_config_t *cfg) {
                     case HANDLER_FORMAT:
                         snprintf(g_config_format, sizeof(g_config_format), "%s", val);
                         cfg->format = g_config_format;
+                        if (strcmp(val, "json") == 0 || strcmp(val, "JSON") == 0) {
+                            cfg->format_type = LOG_FORMAT_JSON;
+                        } else {
+                            cfg->format_type = LOG_FORMAT_TEXT;
+                        }
                         break;
                     case HANDLER_TIME_FORMAT:
                         snprintf(g_config_time_format, sizeof(g_config_time_format), "%s", val);

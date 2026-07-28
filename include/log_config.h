@@ -20,6 +20,8 @@
 #endif
 #endif
 
+typedef enum { LOG_FORMAT_TEXT = 0, LOG_FORMAT_JSON } log_format_type_t;
+
 /**
  * @struct log_config_t
  * @brief Process-wide logging configuration.
@@ -30,11 +32,12 @@
  *       on concurrent paths.
  */
 typedef struct {
-    log_level_t level;       /**< Minimum level that will be emitted. */
-    bool async;              /**< Enable background worker + queue. */
-    int queue_size;          /**< Async queue capacity. */
-    bool color;              /**< Enable ANSI color for console sinks. */
-    const char *format;      /**< Format string (points at internal storage). */
+    log_level_t level;             /**< Minimum level that will be emitted. */
+    bool async;                    /**< Enable background worker + queue. */
+    int queue_size;                /**< Async queue capacity. */
+    bool color;                    /**< Enable ANSI color for console sinks. */
+    log_format_type_t format_type; /**< Output format mode (TEXT or JSON). */
+    const char *format;            /**< Format string (points at internal storage). */
     const char *time_format; /**< strftime template for %%time (points at internal storage). */
     int console_enable;      /**< Non-zero to enable stdout/stderr sink. */
     int console_stderr;      /**< Non-zero to use stderr instead of stdout. */
