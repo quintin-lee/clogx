@@ -5,6 +5,7 @@
 #include <stdio.h>
 #include <stdlib.h>
 #include <string.h>
+#include <errno.h>
 #include <pthread.h>
 #include <unistd.h>
 #include "log_config.h"
@@ -85,12 +86,14 @@ static int parse_config_file(const char *filepath, log_config_t *cfg) {
         } else if (strcmp(key, "async") == 0) {
             cfg->async = (strcmp(value, "true") == 0);
         } else if (strcmp(key, "queue_size") == 0) {
-            int qs = atoi(value);
-            if (qs <= 0) {
-                fprintf(stderr, "Invalid queue_size: %s (must be > 0)\n", value);
+            char *end = NULL;
+            errno = 0;
+            long qs = strtol(value, &end, 10);
+            if (end == value || *end != '\0' || errno == ERANGE || qs <= 0) {
+                fprintf(stderr, "Invalid queue_size: %s (must be a positive integer)\n", value);
                 has_errors = 1;
             } else {
-                cfg->queue_size = qs;
+                cfg->queue_size = (int)qs;
             }
         } else if (strcmp(key, "color") == 0) {
             cfg->color = (strcmp(value, "true") == 0);
@@ -161,24 +164,28 @@ static int parse_config_file(const char *filepath, log_config_t *cfg) {
                 cfg->file_max_size = (uint64_t)n * mult;
             }
         } else if (strcmp(key, "backup") == 0 || strcmp(key, "backups") == 0) {
-            int bk = atoi(value);
-            if (bk < 0) {
-                fprintf(stderr, "Invalid backups: %s (must be >= 0)\n", value);
+            char *end = NULL;
+            errno = 0;
+            long bk = strtol(value, &end, 10);
+            if (end == value || *end != '\0' || errno == ERANGE || bk < 0) {
+                fprintf(stderr, "Invalid backups: %s (must be a non-negative integer)\n", value);
                 has_errors = 1;
             } else {
-                cfg->file_backups = bk;
+                cfg->file_backups = (int)bk;
             }
         } else if (strcmp(key, "host") == 0) {
             strncpy(cfg->socket_host, value, sizeof(cfg->socket_host) - 1);
             cfg->socket_host[sizeof(cfg->socket_host) - 1] = '\0';
             cfg->socket_enable = 1;
         } else if (strcmp(key, "port") == 0) {
-            int p = atoi(value);
-            if (p <= 0 || p > 65535) {
+            char *end = NULL;
+            errno = 0;
+            long p = strtol(value, &end, 10);
+            if (end == value || *end != '\0' || errno == ERANGE || p <= 0 || p > 65535) {
                 fprintf(stderr, "Invalid port: %s (must be 1..65535)\n", value);
                 has_errors = 1;
             } else {
-                cfg->socket_port = p;
+                cfg->socket_port = (int)p;
             }
         }
     }
