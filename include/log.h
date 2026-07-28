@@ -20,6 +20,13 @@
 #include "log_record.h"
 #include "log_sink.h"
 
+/* Compiler portability macros. */
+#if defined(__GNUC__) || defined(__clang__)
+#define CLOGX_PRINTF_FMT(n, m) __attribute__((format(printf, n, m)))
+#else
+#define CLOGX_PRINTF_FMT(n, m)
+#endif
+
 /**
  * @enum clogx_errno_t
  * @brief Structured error codes returned by clogx APIs.
@@ -145,7 +152,7 @@ int log_reload(void);
  * @param[in] ...   Format arguments.
  */
 void log_writevprintf(log_level_t level, const char *file, int line, const char *func,
-                      const char *fmt, ...);
+                      const char *fmt, ...) CLOGX_PRINTF_FMT(5, 6);
 
 /**
  * @brief Extract the basename of @c __FILE__.
