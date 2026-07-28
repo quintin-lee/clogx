@@ -2,9 +2,11 @@
  * @file async.c
  * @brief Async logger: deep-copy records into a queue consumed by one worker.
  */
+#define _POSIX_C_SOURCE 200809L
 #include <stdio.h>
 #include <stdlib.h>
 #include <string.h>
+#include <time.h>
 #include <pthread.h>
 #include "log_async.h"
 #include "queue.h"
@@ -16,9 +18,11 @@ typedef struct {
     mpsc_queue_t *queue;
     pthread_t worker_thread;
     volatile int running;
+    volatile int processing;
 } async_logger_t;
 
-static async_logger_t g_async_logger = {.queue = NULL, .worker_thread = 0, .running = 0};
+static async_logger_t g_async_logger = {
+    .queue = NULL, .worker_thread = 0, .running = 0, .processing = 0};
 
 static char *dup_field(const char *s) {
     if (!s)
@@ -85,8 +89,10 @@ static void *async_worker(void *arg) {
             break;
         }
 
+        logger->processing = 1;
         log_dispatcher_dispatch(&record);
         log_record_free_owned(&record);
+        logger->processing = 0;
     }
 
     return NULL;
@@ -130,6 +136,10 @@ void log_async_flush(void) {
         return;
 
     mpsc_queue_wait_empty(g_async_logger.queue);
+    while (g_async_logger.processing) {
+        struct timespec req = {.tv_sec = 0, .tv_nsec = 500000};
+        nanosleep(&req, NULL);
+    }
     log_dispatcher_flush();
 }
 
