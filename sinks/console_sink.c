@@ -5,6 +5,7 @@
 #include <stdio.h>
 #include <stdlib.h>
 #include <stdbool.h>
+#include "clog_port.h"
 #include "log_sink.h"
 #include "log_record.h"
 
@@ -12,6 +13,19 @@ typedef struct {
     FILE *stream;
     int use_color;
 } console_sink_data_t;
+
+#if defined(_WIN32) || defined(_WIN64)
+static void enable_windows_vt_mode(FILE *stream) {
+    HANDLE hOut = GetStdHandle(stream == stderr ? STD_ERROR_HANDLE : STD_OUTPUT_HANDLE);
+    if (hOut != INVALID_HANDLE_VALUE && hOut != NULL) {
+        DWORD dwMode = 0;
+        if (GetConsoleMode(hOut, &dwMode)) {
+            dwMode |= ENABLE_VIRTUAL_TERMINAL_PROCESSING;
+            SetConsoleMode(hOut, dwMode);
+        }
+    }
+}
+#endif
 
 static int console_write(log_sink_t *sink, const char *buf, size_t len) {
     console_sink_data_t *data = (console_sink_data_t *)sink->private_data;
@@ -61,6 +75,12 @@ log_sink_t *console_sink_create(bool use_color) {
     data->stream = stdout;
     data->use_color = use_color;
 
+#if defined(_WIN32) || defined(_WIN64)
+    if (use_color) {
+        enable_windows_vt_mode(data->stream);
+    }
+#endif
+
     sink->write = console_write;
     sink->flush = console_flush;
     sink->destroy = console_destroy;
@@ -84,6 +104,12 @@ log_sink_t *console_sink_create_stderr(bool use_color) {
 
     data->stream = stderr;
     data->use_color = use_color;
+
+#if defined(_WIN32) || defined(_WIN64)
+    if (use_color) {
+        enable_windows_vt_mode(data->stream);
+    }
+#endif
 
     sink->write = console_write;
     sink->flush = console_flush;
