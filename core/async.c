@@ -98,7 +98,7 @@ int log_async_init(int queue_size) {
     if (g_async_logger.running)
         return 0;
 
-    g_async_logger.queue = mpsc_queue_create(queue_size);
+    g_async_logger.queue = mpsc_queue_create((size_t)queue_size);
     if (!g_async_logger.queue)
         return -1;
 

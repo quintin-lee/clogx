@@ -32,7 +32,7 @@ static int socket_connect(log_sink_t *sink) {
     struct sockaddr_in serv_addr;
     memset(&serv_addr, 0, sizeof(serv_addr));
     serv_addr.sin_family = AF_INET;
-    serv_addr.sin_port = htons(data->port);
+    serv_addr.sin_port = htons((in_port_t)data->port);
     if (inet_pton(AF_INET, data->host, &serv_addr.sin_addr) <= 0) {
         fprintf(stderr, "Invalid socket host: %s\n", data->host);
         close(data->sockfd);
@@ -59,7 +59,7 @@ static int socket_write(log_sink_t *sink, const char *buf, size_t len) {
 
     size_t total_sent = 0;
     while (total_sent < len) {
-        int sent = send(data->sockfd, buf + total_sent, len - total_sent, 0);
+        ssize_t sent = send(data->sockfd, buf + total_sent, len - total_sent, 0);
         if (sent < 0) {
             perror("Failed to send socket log");
             data->connected = 0;

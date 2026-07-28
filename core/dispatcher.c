@@ -27,7 +27,7 @@ int log_dispatcher_add_sink(log_sink_t *sink) {
 
     pthread_mutex_lock(&g_dispatcher.mutex);
     log_sink_t **new_sinks =
-        realloc(g_dispatcher.sinks, (g_dispatcher.sink_count + 1) * sizeof(log_sink_t *));
+        realloc(g_dispatcher.sinks, ((size_t)g_dispatcher.sink_count + 1) * sizeof(log_sink_t *));
     if (!new_sinks) {
         pthread_mutex_unlock(&g_dispatcher.mutex);
         return -1;
@@ -53,7 +53,7 @@ int log_dispatcher_remove_sink(log_sink_t *sink) {
             g_dispatcher.sink_count--;
             if (g_dispatcher.sink_count > 0) {
                 g_dispatcher.sinks =
-                    realloc(g_dispatcher.sinks, g_dispatcher.sink_count * sizeof(log_sink_t *));
+                    realloc(g_dispatcher.sinks, (size_t)g_dispatcher.sink_count * sizeof(log_sink_t *));
             } else {
                 free(g_dispatcher.sinks);
                 g_dispatcher.sinks = NULL;
@@ -101,7 +101,8 @@ int log_dispatcher_dispatch(log_record_t *record) {
 
     if (color_enabled) {
         log_color_t color = get_log_color(record->level);
-        int color_idx = color < (int)(sizeof(ansi_codes) / sizeof(ansi_codes[0])) ? color : 0;
+        size_t ansi_count = sizeof(ansi_codes) / sizeof(ansi_codes[0]);
+        int color_idx = (size_t)color < ansi_count ? (int)color : 0;
         int ret = snprintf(colored_buf, sizeof(colored_buf), "%s%s%s", ansi_codes[color_idx],
                            formatted_buf, reset_code);
         if (ret > 0 && ret < (int)sizeof(colored_buf)) {

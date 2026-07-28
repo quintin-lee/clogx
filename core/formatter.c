@@ -79,7 +79,7 @@ int log_formatter_format(log_record_t *record, char *buf, size_t buf_size) {
                                (unsigned long long)(record->timestamp % 1000000));
             if (ret > 0 && (size_t)ret < remaining) {
                 out += ret;
-                remaining -= ret;
+                remaining -= (size_t)ret;
                 total += ret;
             }
         } else if (strncmp(fmt, "level", 5) == 0 && (fmt[5] == '\0' || !isalpha(fmt[5]))) {
