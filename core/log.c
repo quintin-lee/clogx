@@ -218,8 +218,7 @@ int log_init(const char *yaml_path) {
 
     log_config_t *cfg = log_config_get();
     log_formatter_init(cfg->format, cfg->time_format);
-    log_rate_limit_init(cfg->rate_limit_enable, cfg->rate_limit_max_per_sec,
-                        cfg->rate_limit_burst);
+    log_rate_limit_init(cfg->rate_limit_enable, cfg->rate_limit_max_per_sec, cfg->rate_limit_burst);
 
     if (log_dispatcher_init() != 0) {
         pthread_mutex_unlock(&g_init_mutex);
@@ -272,8 +271,7 @@ int log_reload(void) {
 
     log_config_t *cfg = log_config_get();
     log_formatter_init(cfg->format, cfg->time_format);
-    log_rate_limit_init(cfg->rate_limit_enable, cfg->rate_limit_max_per_sec,
-                        cfg->rate_limit_burst);
+    log_rate_limit_init(cfg->rate_limit_enable, cfg->rate_limit_max_per_sec, cfg->rate_limit_burst);
 
     log_dispatcher_snapshot_t snap = {0};
     ret = log_dispatcher_build_snapshot(cfg, &snap);

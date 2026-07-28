@@ -430,6 +430,13 @@ static int apply_config(const log_config_t *cfg) {
     snprintf(g_config.file_path, sizeof(g_config.file_path), "%s", cfg->file_path);
     snprintf(g_config.socket_host, sizeof(g_config.socket_host), "%s", cfg->socket_host);
     g_config.socket_port = cfg->socket_port;
+    g_config.socket_tls = cfg->socket_tls;
+    snprintf(g_config.socket_tls_ca_file, sizeof(g_config.socket_tls_ca_file), "%s",
+             cfg->socket_tls_ca_file);
+    g_config.socket_tls_skip_verify = cfg->socket_tls_skip_verify;
+    g_config.rate_limit_enable = cfg->rate_limit_enable;
+    g_config.rate_limit_max_per_sec = cfg->rate_limit_max_per_sec;
+    g_config.rate_limit_burst = cfg->rate_limit_burst;
 
     if (cfg->format) {
         snprintf(g_config_format, sizeof(g_config_format), "%s", cfg->format);
