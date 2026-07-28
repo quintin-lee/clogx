@@ -73,6 +73,9 @@ int log_dispatcher_dispatch(log_record_t *record) {
         return 0;
     }
 
+    /* Format and pre-compute colored output OUTSIDE the dispatcher lock.
+     * Formatter has its own mutex for the format string; config reads use
+     * an rwlock.  This keeps the dispatcher critical section short (I/O only). */
     char formatted_buf[2048];
     int len = log_formatter_format(record, formatted_buf, sizeof(formatted_buf));
     if (len <= 0) {
@@ -80,21 +83,33 @@ int log_dispatcher_dispatch(log_record_t *record) {
     }
 
     static const char *ansi_codes[] = {
-        "\x1b[30m", // COLOR_NONE / fallback
-        "\x1b[30m", // COLOR_BLACK
-        "\x1b[31m", // COLOR_RED
-        "\x1b[32m", // COLOR_GREEN
-        "\x1b[33m", // COLOR_YELLOW
-        "\x1b[34m", // COLOR_BLUE
-        "\x1b[35m", // COLOR_PURPLE
-        "\x1b[36m", // COLOR_CYAN
-        "\x1b[37m"  // COLOR_WHITE
+        "\x1b[30m", /* COLOR_NONE / fallback */
+        "\x1b[30m", /* COLOR_BLACK */
+        "\x1b[31m", /* COLOR_RED */
+        "\x1b[32m", /* COLOR_GREEN */
+        "\x1b[33m", /* COLOR_YELLOW */
+        "\x1b[34m", /* COLOR_BLUE */
+        "\x1b[35m", /* COLOR_PURPLE */
+        "\x1b[36m", /* COLOR_CYAN */
+        "\x1b[37m"  /* COLOR_WHITE */
     };
     const char *reset_code = "\x1b[0m";
     bool color_enabled = log_config_color_enabled();
 
     char colored_buf[4096];
+    int colored_len = -1;
 
+    if (color_enabled) {
+        log_color_t color = get_log_color(record->level);
+        int color_idx = color < (int)(sizeof(ansi_codes) / sizeof(ansi_codes[0])) ? color : 0;
+        int ret = snprintf(colored_buf, sizeof(colored_buf), "%s%s%s", ansi_codes[color_idx],
+                           formatted_buf, reset_code);
+        if (ret > 0 && ret < (int)sizeof(colored_buf)) {
+            colored_len = ret;
+        }
+    }
+
+    /* Short critical section: iterate sink array and write. */
     pthread_mutex_lock(&g_dispatcher.mutex);
     for (int i = 0; i < g_dispatcher.sink_count; i++) {
         if (!g_dispatcher.sinks[i])
@@ -103,15 +118,9 @@ int log_dispatcher_dispatch(log_record_t *record) {
         const char *write_buf = formatted_buf;
         size_t write_len = (size_t)len;
 
-        if (color_enabled && console_sink_is_color_enabled(g_dispatcher.sinks[i])) {
-            log_color_t color = get_log_color(record->level);
-            int color_idx = color < (int)(sizeof(ansi_codes) / sizeof(ansi_codes[0])) ? color : 0;
-            int ret = snprintf(colored_buf, sizeof(colored_buf), "%s%s%s", ansi_codes[color_idx],
-                               formatted_buf, reset_code);
-            if (ret > 0 && ret < (int)sizeof(colored_buf)) {
-                write_buf = colored_buf;
-                write_len = (size_t)ret;
-            }
+        if (colored_len > 0 && console_sink_is_color_enabled(g_dispatcher.sinks[i])) {
+            write_buf = colored_buf;
+            write_len = (size_t)colored_len;
         }
 
         g_dispatcher.sinks[i]->write(g_dispatcher.sinks[i], write_buf, write_len);
