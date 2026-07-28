@@ -85,7 +85,7 @@ static int file_write(log_sink_t *sink, const char *buf, size_t len) {
 
         file_rotate_file(data->path, data->backups);
 
-        data->file = fopen(data->path, "a");
+        data->file = fopen(data->path, "ab");
         if (!data->file)
             return -1;
         data->current_size = 0;
