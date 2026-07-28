@@ -20,7 +20,14 @@ TESTS = test_async_lifecycle test_async_reload test_dispatcher_lifecycle \
         test_multithread_sync test_socket_sink test_sink_level
 TEST_BINS = $(addprefix $(BUILD_DIR)/,$(TESTS))
 
-.PHONY: all clean example test docs format check-format
+VERSION = 0.1.0
+PREFIX ?= /usr/local
+LIBDIR ?= $(PREFIX)/lib
+INCLUDEDIR ?= $(PREFIX)/include
+
+PUBLIC_HEADERS := include/log.h include/log_config.h include/log_record.h include/log_sink.h
+
+.PHONY: all clean example test docs format check-format install uninstall
 
 FORMAT_FILES := $(shell find include core sinks example tests -name '*.c' -o -name '*.h')
 
@@ -70,6 +77,27 @@ format:
 check-format:
 	@clang-format --dry-run --Werror $(FORMAT_FILES) || \
 		(echo "Formatting check failed! Run 'make format' to fix." && exit 1)
+
+install: $(LIB_TARGET)
+	install -d $(DESTDIR)$(LIBDIR)
+	install -m 644 $(LIB_TARGET) $(DESTDIR)$(LIBDIR)/
+	install -d $(DESTDIR)$(INCLUDEDIR)/clogx
+	install -m 644 $(PUBLIC_HEADERS) $(DESTDIR)$(INCLUDEDIR)/clogx/
+	install -d $(DESTDIR)$(LIBDIR)/pkgconfig
+	sed -e 's|@prefix@|$(PREFIX)|g' \
+	    -e 's|@exec_prefix@|$(PREFIX)|g' \
+	    -e 's|@libdir@|$(LIBDIR)|g' \
+	    -e 's|@includedir@|$(INCLUDEDIR)|g' \
+	    -e 's|@CMAKE_INSTALL_PREFIX@|$(PREFIX)|g' \
+	    -e 's|@CMAKE_INSTALL_LIBDIR@|lib|g' \
+	    -e 's|@CMAKE_INSTALL_INCLUDEDIR@|include|g' \
+	    -e 's|@PROJECT_VERSION@|$(VERSION)|g' \
+	    cmake/clogx.pc.in > $(DESTDIR)$(LIBDIR)/pkgconfig/clogx.pc
+
+uninstall:
+	-rm -f $(DESTDIR)$(LIBDIR)/libclogx.a
+	-rm -rf $(DESTDIR)$(INCLUDEDIR)/clogx
+	-rm -f $(DESTDIR)$(LIBDIR)/pkgconfig/clogx.pc
 
 clean:
 	rm -rf $(BUILD_DIR)

@@ -7,4 +7,4 @@ Name: clogx
 Description: Lightweight C99 logging library with multi-sink and async support
 Version: @PROJECT_VERSION@
 Libs: -L${libdir} -lclogx -lpthread
-Cflags: -I${includedir}/clogx
+Cflags: -I${includedir}
