@@ -63,6 +63,18 @@ CLOGX_API log_config_t *log_config_get(void);
 CLOGX_API int log_config_init(const char *yaml_path);
 
 /**
+ * @brief Apply a caller-provided configuration directly (thread-safe).
+ *
+ * Copies @p cfg into the process-wide config, including @c format and
+ * @c time_format strings.  After this call, @ref log_config_get returns
+ * the new values and any previously remembered reload path is cleared.
+ *
+ * @param[in] cfg Configuration to apply.
+ * @return 0 on success.
+ */
+CLOGX_API int log_config_set(const log_config_t *cfg);
+
+/**
  * @brief Re-parse the config path remembered by @ref log_config_init.
  * @return 0 on success.
  */

@@ -276,6 +276,42 @@ log_config_t *log_config_get(void) {
     return &g_config;
 }
 
+static int apply_config(const log_config_t *cfg) {
+    g_config.level = cfg->level;
+    g_config.async = cfg->async;
+    g_config.queue_size = cfg->queue_size;
+    g_config.color = cfg->color;
+    g_config.console_enable = cfg->console_enable;
+    g_config.console_stderr = cfg->console_stderr;
+    g_config.file_enable = cfg->file_enable;
+    g_config.file_max_size = cfg->file_max_size;
+    g_config.file_backups = cfg->file_backups;
+    g_config.socket_enable = cfg->socket_enable;
+    snprintf(g_config.file_path, sizeof(g_config.file_path), "%s", cfg->file_path);
+    snprintf(g_config.socket_host, sizeof(g_config.socket_host), "%s", cfg->socket_host);
+    g_config.socket_port = cfg->socket_port;
+
+    if (cfg->format) {
+        snprintf(g_config_format, sizeof(g_config_format), "%s", cfg->format);
+        g_config.format = g_config_format;
+    }
+    if (cfg->time_format) {
+        snprintf(g_config_time_format, sizeof(g_config_time_format), "%s", cfg->time_format);
+        g_config.time_format = g_config_time_format;
+    }
+
+    return 0;
+}
+
+int log_config_set(const log_config_t *cfg) {
+    if (!cfg)
+        return -1;
+    pthread_rwlock_wrlock(&g_config_rwlock);
+    int ret = apply_config(cfg);
+    pthread_rwlock_unlock(&g_config_rwlock);
+    return ret;
+}
+
 int log_config_init(const char *yaml_path) {
     if (!yaml_path)
         yaml_path = "";
