@@ -33,6 +33,7 @@
 
 /* Sockets */
 typedef SOCKET clog_socket_t;
+typedef int clog_sock_size_t;
 #define CLOG_INVALID_SOCKET INVALID_SOCKET
 #define clog_is_invalid_socket(s) ((s) == INVALID_SOCKET)
 #define clog_close_socket(s) closesocket(s)
@@ -171,6 +172,7 @@ static inline struct tm *clog_gmtime_r(const time_t *timep, struct tm *result) {
 #define clog_mkdir(path) mkdir((path), 0755)
 
 typedef int clog_socket_t;
+typedef size_t clog_sock_size_t;
 #define CLOG_INVALID_SOCKET (-1)
 #define clog_is_invalid_socket(s) ((s) < 0)
 #define clog_close_socket(s) close(s)

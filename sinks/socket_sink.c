@@ -146,7 +146,7 @@ static int socket_write(log_sink_t *sink, const char *buf, size_t len) {
             continue;
         }
 #endif
-        long sent = send(data->sockfd, buf + total_sent, (int)(len - total_sent), 0);
+        long sent = send(data->sockfd, buf + total_sent, (clog_sock_size_t)(len - total_sent), 0);
         if (sent < 0) {
             perror("Failed to send socket log");
             data->connected = 0;

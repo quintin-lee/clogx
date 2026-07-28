@@ -72,7 +72,8 @@ static void *listener_thread(void *arg) {
     char buf[BUF_SIZE];
     int total = 0;
     int n;
-    while ((n = (int)recv(client_fd, buf + total, (int)(sizeof(buf) - 1 - (size_t)total), 0)) > 0) {
+    while ((n = (int)recv(client_fd, buf + total,
+                          (clog_sock_size_t)(sizeof(buf) - 1 - (size_t)total), 0)) > 0) {
         total += n;
         buf[total] = '\0';
     }
