@@ -1,6 +1,13 @@
 #include <stdio.h>
 #include <stdlib.h>
 #include <string.h>
+
+#if defined(_WIN32) || defined(_WIN64)
+int main(void) {
+    printf("signal handler test skipped on Windows\n");
+    return 0;
+}
+#else
 #include "clog_port.h"
 #include <signal.h>
 #include <sys/wait.h>
@@ -79,3 +86,4 @@ int main(void) {
     printf("signal handler test passed\n");
     return 0;
 }
+#endif
