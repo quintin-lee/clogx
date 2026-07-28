@@ -1,0 +1,63 @@
+name: Feature Request
+about: Suggest a new feature or enhancement for clogx
+title: "[FEAT] Short description of the feature"
+body:
+  - type: markdown
+    id: intro
+    attributes:
+      value: >
+        Please fill out this form to help us evaluate your feature request.
+
+  - type: input
+    id: clogx-version
+    attributes:
+      label: Current clogx Version
+      description: Version you are currently using
+      placeholder: e.g., 0.9.0
+    validations:
+      required: true
+
+  - type: textarea
+    id: use-case
+    attributes:
+      label: Use Case
+      description: Describe your specific scenario where this feature would be useful.
+      placeholder: >
+        I work on a high-throughput service that needs to...
+        My current limitation is...
+        This feature would allow me to...
+    validations:
+      required: true
+
+  - type: textarea
+    id: desired-behavior
+    attributes:
+      label: Desired Behavior
+      description: What should the feature do? How would it work?
+      placeholder: >
+        Add support for rotating log files by size AND time...
+        Allow configuring log format per-sink independently...
+    validations:
+      required: true
+
+  - type: textarea
+    id: alternatives-considered
+    attributes:
+      label: Alternatives Considered
+      description: Have you considered other approaches? Why did you choose this one?
+      placeholder: >
+        I could implement this as a post-processor on log files, but that would introduce latency...
+        A better approach would be native support in clogx...
+    validations:
+      required: false
+
+  - type: textarea
+    id: additional-information
+    attributes:
+      label: Additional Information
+      description: Any links to similar features in other logging libraries, RFCs, or research?
+      placeholder: >
+        Similar to logrotate's size/time hybrid rotation...
+        See also: Python's RotatingFileHandler with maxBytes and backupCount...
+    validations:
+      required: false

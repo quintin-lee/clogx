@@ -1,0 +1,89 @@
+name: Bug Report
+about: Report a bug or unexpected behavior in clogx
+title: "[BUG] Short description of the issue"
+body:
+  - type: markdown
+    id: intro
+    attributes:
+      value: >
+        Please fill out this form to help us reproduce the bug quickly.
+
+  - type: input
+    id: clogx-version
+    attributes:
+      label: clogx Version
+      description: Output of `git describe --tags` or the version from CHANGELOG
+      placeholder: e.g., 0.9.0 or main (commit hash)
+    validations:
+      required: true
+
+  - type: input
+    id: os-info
+    attributes:
+      label: Operating System
+      description: OS name, version, and architecture
+      placeholder: e.g., Linux 5.15.0-xx x86_64 or macOS 14.5 ARM64
+    validations:
+      required: true
+
+  - type: input
+    id: compiler-info
+    attributes:
+      label: Compiler
+      description: Compiler version used to build clogx
+      placeholder: e.g., gcc 11.4.0 or clang 14.0.0
+    validations:
+      required: true
+
+  - type: textarea
+    id: expected-behavior
+    attributes:
+      label: Expected Behavior
+      description: What should happen?
+      placeholder: Describe what you expected to see.
+    validations:
+      required: true
+
+  - type: textarea
+    id: actual-behavior
+    attributes:
+      label: Actual Behavior
+      description: What actually happened? Include error messages, logs, or stack traces.
+      placeholder: Describe what you saw instead.
+    validations:
+      required: true
+
+  - type: textarea
+    id: reproduction-steps
+    attributes:
+      label: Steps to Reproduce
+      description: Please provide minimal, complete steps to reproduce the bug.
+      placeholder: >
+        1. Configure clogx with config.yaml containing...
+        2. Call log_init() with path...
+        3. LOG_INFO("test")...
+        4. Observe crash/log corruption...
+    validations:
+      required: true
+
+  - type: textarea
+    id: config-snippet
+    attributes:
+      label: Relevant Configuration Snippet (optional)
+      description: Paste the relevant portions of your YAML config here.
+      placeholder: >
+        log:
+          level: DEBUG
+          async: true
+          ...
+    validations:
+      required: false
+
+  - type: textarea
+    id: additional-context
+    attributes:
+      label: Additional Context
+      description: Any other information about the problem?
+      placeholder: Attach stack traces, core dumps, or screenshots if available.
+    validations:
+      required: false
