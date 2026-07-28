@@ -125,9 +125,12 @@ jobs:
       - name: Checkout
         uses: actions/checkout@v7
 
+      - name: Install dependencies
+        run: sudo apt-get update && sudo apt-get install -y libyaml-dev lcov
+
       - name: Build with coverage
         run: |
-          CC=clang CFLAGS="--coverage -fprofile-arcs -ftest-coverage" \
+          CC=gcc CFLAGS="--coverage -fprofile-arcs -ftest-coverage" \
           make clean && make
 
       - name: Run tests with coverage
