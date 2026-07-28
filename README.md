@@ -14,10 +14,13 @@ Lightweight C99 logging library: config-driven, multi-sink output, optional asyn
 - Token formatting: `%time` `%level` `%msg` `%file` `%line` `%func` and more
 - Sync / async switchable; async path deep-copies records to avoid dangling stack pointers
 - Hot reload: `log_reload()` re-reads config and atomically rebuilds sinks / async worker
+- Per-sink level filtering: `log_sink_set_level()` / `log_sink_get_level()` on any sink
 - Config validation: rejects invalid `queue_size`, `port`, `backups`, and unknown log levels
 - Error handling: structured error codes via `clogx_errno_t` and `log_strerror()`
 - Observability: async fallback callback (`log_set_async_fallback_cb()`)
-- Build: Makefile and CMake (with CTest, `find_package(clogx)`)
+- Printf format safety: compile-time format string validation via `CLOGX_PRINTF_FMT`
+- Clean ABI: symbol visibility control exports only 24 public symbols
+- Build: Makefile and CMake (with CTest, `find_package(clogx)`); ASan/UBSan/Valgrind check targets
 
 ## Directory Layout
 
@@ -63,9 +66,15 @@ gcc -Iinclude app.c -Lbuild -lclogx -lpthread -o app
 ### Makefile
 
 ```bash
-make          # generates build/libclogx.a and build/example
-make example
-make test     # compiles and runs all regression tests
+make              # generates build/libclogx.a, build/libclogx.so, build/example
+make test         # compiles and runs all 21 regression tests
+make asan         # build + test with AddressSanitizer
+make ubsan        # build + test with UndefinedBehaviorSanitizer
+make check        # full quality gate: format check → build → test
+make test-valgrind  # all tests under Valgrind leak check (skipped if not installed)
+make format       # apply clang-format to all sources
+make docs         # generate Doxygen API docs
+make install      # install library + headers + pkg-config
 make clean
 ```
 
@@ -249,7 +258,7 @@ make test
 ctest --test-dir build --output-on-failure
 ```
 
-Covers async lifecycle, reload start/stop worker, dispatcher reuse, file rotation, nested directory creation, config hot reload, invalid config handling, double init protection, empty sink rejection, async fallback notification, non-blocking queue overflow, max_size unit parsing, stderr console routing, module/truncation behavior, and custom sink registration. Total: 20 tests.
+Covers async lifecycle, reload start/stop worker, dispatcher reuse, file rotation, nested directory creation, config hot reload, invalid config handling, double init protection, empty sink rejection, async fallback notification, non-blocking queue overflow, max_size unit parsing, stderr console routing, module/truncation behavior, custom sink registration, multi-threaded sync correctness, socket sink TCP output, per-sink level filtering, and runtime log level changes. Total: 21 tests.
 
 ## CI
 
@@ -257,7 +266,8 @@ GitHub Actions runs:
 
 - Makefile and CMake build/test matrix
 - AddressSanitizer (`clang` + `-fsanitize=address`)
-- Valgrind leak check on core tests
+- Valgrind leak check on all tests
+- clang-format compliance check
 - `cppcheck --enable=warning,performance,portability` on `include/`, `core/`, `sinks/`
 
 ## API Documentation (Doxygen)
