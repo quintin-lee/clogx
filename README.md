@@ -4,6 +4,7 @@
 [![License: MIT](https://img.shields.io/badge/License-MIT-yellow.svg)](LICENSE)
 [![CMake](https://img.shields.io/badge/CMake-3.14%2B-red.svg)](https://cmake.org/)
 [![CI](https://github.com/quintin-lee/clogx/actions/workflows/ci.yml/badge.svg)](https://github.com/quintin-lee/clogx/actions/workflows/ci.yml)
+[![Docs](https://img.shields.io/badge/docs-GitHub_Pages-blue.svg)](https://quintin-lee.github.io/clogx/)
 
 Lightweight C99 logging library: config-driven, multi-sink output, optional async queue, size-based log file rotation, native JSON structured logging, and optional TLS transport security.
 
