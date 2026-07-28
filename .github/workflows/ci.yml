@@ -91,22 +91,22 @@ jobs:
             valgrind --error-exitcode=1 --leak-check=full --track-origins=yes "./$t"; \
           done
 
-  cppcheck:
+  clang-tidy:
     runs-on: ubuntu-latest
     steps:
       - name: Checkout
         uses: actions/checkout@v7
 
-      - name: Install cppcheck
-        run: sudo apt-get update && sudo apt-get install -y cppcheck
+      - name: Install dependencies
+        run: sudo apt-get update && sudo apt-get install -y clang-tidy libyaml-dev
 
-      - name: Run cppcheck
-        # warning/performance/portability only: --enable=all flags public API as unusedFunction
+      - name: Configure CMake
+        run: cmake -S . -B build -DCMAKE_EXPORT_COMPILE_COMMANDS=ON
+
+      - name: Run clang-tidy
         run: >
-          cppcheck --enable=warning,performance,portability
-          --error-exitcode=1 --inline-suppr
-          --suppress=missingIncludeSystem
-          -I include include/ core/ sinks/
+          clang-tidy --checks='bugprone-*,clang-analyzer-*,performance-*,portability-*'
+          -p build core/*.c sinks/*.c
 
   format:
     runs-on: ubuntu-latest

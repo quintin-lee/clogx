@@ -120,7 +120,7 @@ static int socket_connect(log_sink_t *sink) {
 static int socket_write(log_sink_t *sink, const char *buf, size_t len) {
     socket_sink_data_t *data = (socket_sink_data_t *)sink->private_data;
     if (clog_is_invalid_socket(data->sockfd)) {
-        if (socket_connect(sink) != 0)
+        if (socket_connect(sink) != 0 || clog_is_invalid_socket(data->sockfd))
             return -1;
     }
 
