@@ -14,6 +14,7 @@
 static char g_default_format[512] = "%msg";
 static char g_format_buf[512];
 static char *g_format_ptr = g_default_format;
+static char g_time_format_buf[64] = "%Y-%m-%d %H:%M:%S";
 static pthread_mutex_t g_format_mutex = PTHREAD_MUTEX_INITIALIZER;
 
 #define TIME_BUF_SIZE 64
@@ -74,7 +75,11 @@ int log_formatter_format(log_record_t *restrict record, char *restrict buf, size
             time_t sec = (time_t)(record->timestamp / 1000000);
             localtime_r(&sec, &tm_buf);
             char time_buf[TIME_BUF_SIZE];
-            strftime(time_buf, sizeof(time_buf), "%Y-%m-%d %H:%M:%S", &tm_buf);
+            const char *tf;
+            pthread_mutex_lock(&g_format_mutex);
+            tf = g_time_format_buf;
+            pthread_mutex_unlock(&g_format_mutex);
+            strftime(time_buf, sizeof(time_buf), tf, &tm_buf);
             int ret = snprintf(out, remaining, "%s.%06llu", time_buf,
                                (unsigned long long)(record->timestamp % 1000000));
             if (ret > 0 && (size_t)ret < remaining) {
@@ -160,13 +165,18 @@ int log_formatter_format(log_record_t *restrict record, char *restrict buf, size
     return total;
 }
 
-int log_formatter_init(const char *format) {
+int log_formatter_init(const char *format, const char *time_format) {
     pthread_mutex_lock(&g_format_mutex);
     if (format && strlen(format) > 0) {
         snprintf(g_format_buf, sizeof(g_format_buf), "%s", format);
         g_format_ptr = g_format_buf;
     } else {
         g_format_ptr = g_default_format;
+    }
+    if (time_format && strlen(time_format) > 0) {
+        snprintf(g_time_format_buf, sizeof(g_time_format_buf), "%s", time_format);
+    } else {
+        snprintf(g_time_format_buf, sizeof(g_time_format_buf), "%s", "%Y-%m-%d %H:%M:%S");
     }
     pthread_mutex_unlock(&g_format_mutex);
     return 0;

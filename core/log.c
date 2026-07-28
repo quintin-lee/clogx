@@ -191,7 +191,7 @@ int log_init(const char *yaml_path) {
     }
 
     log_config_t *cfg = log_config_get();
-    log_formatter_init(cfg->format);
+    log_formatter_init(cfg->format, cfg->time_format);
 
     if (log_dispatcher_init() != 0) {
         pthread_mutex_unlock(&g_init_mutex);
@@ -242,7 +242,7 @@ int log_reload(void) {
     }
 
     log_config_t *cfg = log_config_get();
-    log_formatter_init(cfg->format);
+    log_formatter_init(cfg->format, cfg->time_format);
 
     log_dispatcher_snapshot_t snap = {0};
     ret = log_dispatcher_build_snapshot(cfg, &snap);

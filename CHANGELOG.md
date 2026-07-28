@@ -5,6 +5,8 @@ All notable changes to this project will be documented in this file.
 ## [Unreleased]
 
 ### Added
+- Configurable time format: `time_format` key sets the strftime template for
+  `%time` (default `%Y-%m-%d %H:%M:%S`); microseconds always appended after `.`
 - Per-sink log level filtering: `log_sink_set_level()` / `log_sink_get_level()`
 - Printf format attribute on `log_writevprintf` for compile-time format string
   validation (`CLOGX_PRINTF_FMT` portability macro)

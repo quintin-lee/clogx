@@ -137,6 +137,7 @@ port: 5140
 | `queue_size` | async queue capacity |
 | `color` | console ANSI coloring (does not affect file / socket) |
 | `format` | format string |
+| `time_format` | strftime template for `%time` (default: `%Y-%m-%d %H:%M:%S`); microseconds always appended after `.` |
 | `console_enable` | enable console sink |
 | `console_stderr` | when `true`, console sink writes to stderr instead of stdout |
 | `file_enable` / `file_path` | file sink; key `path` also accepted |

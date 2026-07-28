@@ -14,6 +14,7 @@
 static log_config_t g_config;
 static pthread_rwlock_t g_config_rwlock = PTHREAD_RWLOCK_INITIALIZER;
 static char g_config_format[512] = "";
+static char g_config_time_format[64] = "";
 static char g_config_path[512] = "./config.yaml";
 
 static void trim(char *s) {
@@ -100,6 +101,9 @@ static int parse_config_file(const char *filepath, log_config_t *cfg) {
         } else if (strcmp(key, "format") == 0) {
             snprintf(g_config_format, sizeof(g_config_format), "%s", value);
             cfg->format = g_config_format;
+        } else if (strcmp(key, "time_format") == 0) {
+            snprintf(g_config_time_format, sizeof(g_config_time_format), "%s", value);
+            cfg->time_format = g_config_time_format;
         } else if (strcmp(key, "console_enable") == 0) {
             cfg->console_enable = (strcmp(value, "true") == 0);
         } else if (strcmp(key, "console_stderr") == 0) {
@@ -210,6 +214,8 @@ static int load_default_and_apply(const char *yaml_path) {
     g_config.socket_host[0] = '\0';
     g_config.socket_port = 0;
     g_config.format = g_config_format;
+    snprintf(g_config_time_format, sizeof(g_config_time_format), "%s", "%Y-%m-%d %H:%M:%S");
+    g_config.time_format = g_config_time_format;
 
     /* Reload passes g_config_path itself; avoid overlapping copy (ASan). */
     if (yaml_path && yaml_path != g_config_path && strlen(yaml_path) > 0) {

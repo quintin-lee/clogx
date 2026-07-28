@@ -22,10 +22,11 @@
 int log_formatter_format(log_record_t *restrict record, char *restrict buf, size_t buf_size);
 
 /**
- * @brief Set the active format string (copied into internal storage).
+ * @brief Set the active format string and time template (both copied into
+ *        internal storage).
  *
  * Supported tokens:
- * - `%time` — local timestamp with microseconds
+ * - `%time` — local timestamp formatted with @p time_format + microseconds
  * - `%level` — severity name
  * - `%msg` — message body
  * - `%thread` / `%pid`
@@ -33,10 +34,12 @@ int log_formatter_format(log_record_t *restrict record, char *restrict buf, size
  * - `%module` / `%tag`
  * - `%newline`
  *
- * @param[in] format Format string; NULL or empty restores `"%msg"`.
+ * @param[in] format      Format string; NULL or empty restores `"%msg"`.
+ * @param[in] time_format strftime(3) template for the `%time` token; NULL
+ *                        or empty restores `"%Y-%m-%d %H:%M:%S"`.
  * @return 0 on success.
  */
-int log_formatter_init(const char *format);
+int log_formatter_init(const char *format, const char *time_format);
 
 /**
  * @brief Reset the formatter to the default format (`%msg`).
