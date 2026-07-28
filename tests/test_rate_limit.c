@@ -1,7 +1,7 @@
 #include <stdio.h>
 #include <stdlib.h>
 #include <string.h>
-#include <unistd.h>
+#include "clog_port.h"
 #include "log.h"
 
 #define CONFIG_PATH "build/config_rate_limit_test.yaml"
@@ -61,7 +61,7 @@ int main(void) {
     }
 
     /* Wait 200ms to allow ~20 tokens to refill (max burst is 5) */
-    usleep(200000);
+    clog_sleep_ms(200);
 
     /* Send another log -> should emit Suppressed warning + this log */
     LOG_INFO("after wait msg");

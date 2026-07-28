@@ -1,7 +1,7 @@
 #include <stdio.h>
 #include <stdlib.h>
 #include <string.h>
-#include <unistd.h>
+#include "clog_port.h"
 #include "log_sink.h"
 
 #define LOG_PATH "logs/rotate_unit.log"

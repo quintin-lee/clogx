@@ -272,8 +272,11 @@ int log_init(const char *yaml_path) {
 
     if (cfg->async) {
         if (log_async_init(cfg->queue_size) != 0) {
-            log_destroy();
+            // Async init failed after dispatcher was set up — clean up dispatcher to avoid leak
+            // Must unlock BEFORE calling any cleanup to prevent deadlock (log_destroy could
+            // reacquire mutex)
             clog_mutex_unlock(&g_init_mutex);
+            log_dispatcher_destroy(); // Direct cleanup: destroys sinks, frees g_dispatcher.sinks
             return CLOG_ERR_THREAD_CREATE;
         }
     }
@@ -288,14 +291,25 @@ int log_init(const char *yaml_path) {
 }
 
 void log_destroy(void) {
+    /* Save state before releasing lock to avoid re-entrant calls during cleanup. */
+    int was_initialized = 0;
+
     clog_mutex_lock(&g_init_mutex);
-    g_initialized = 0;
+    if (g_initialized) {
+        g_initialized = 0;
+        was_initialized = 1;
+    }
     clog_mutex_unlock(&g_init_mutex);
 
-    log_restore_signal_handlers();
-    log_rate_limit_reset();
-    log_async_shutdown();
-    log_dispatcher_destroy();
+    /* Clean up only if we were previously initialized. Do this outside the lock
+     * to avoid potential deadlocks if any of these functions indirectly try to
+     * acquire g_init_mutex or other locks held during a concurrent init call. */
+    if (was_initialized) {
+        log_restore_signal_handlers();
+        log_rate_limit_reset();
+        log_async_shutdown();
+        log_dispatcher_destroy();
+    }
 }
 
 void log_flush(void) {

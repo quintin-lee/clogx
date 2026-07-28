@@ -1,7 +1,7 @@
 #include <stdio.h>
 #include <stdlib.h>
 #include <string.h>
-#include <unistd.h>
+#include "clog_port.h"
 #include <signal.h>
 #include <sys/wait.h>
 #include "log.h"

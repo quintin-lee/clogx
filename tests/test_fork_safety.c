@@ -8,7 +8,7 @@ int main(void) {
     return 0;
 }
 #else
-#include <unistd.h>
+#include "clog_port.h"
 #include <sys/wait.h>
 #include "log.h"
 

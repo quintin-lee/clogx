@@ -1,6 +1,6 @@
 #include <stdio.h>
 #include <string.h>
-#include <unistd.h>
+#include "clog_port.h"
 #include "log.h"
 
 #define CONFIG_PATH "build/config_pipeline_test.yaml"

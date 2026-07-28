@@ -1,6 +1,6 @@
 #include <stdio.h>
 #include <string.h>
-#include <unistd.h>
+#include "clog_port.h"
 #include "log_config.h"
 
 #define CONFIG_PATH "build/config_verify_test.yaml"
