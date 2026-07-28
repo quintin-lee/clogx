@@ -272,6 +272,10 @@ int            log_set_level(log_level_t level);
 log_level_t    log_get_level(void);
 void           log_sink_set_level(log_sink_t *sink, log_level_t level);
 log_level_t    log_sink_get_level(const log_sink_t *sink);
+clogx_errno_t log_install_signal_handlers(void);
+void          log_signal_handler(int sig);
+int           log_get_pending_signal(void);
+void          log_process_pending_signals(void);
 log_config_t  *log_config_get(void);
 int            log_config_set(const log_config_t *cfg);
 log_sink_t    *socket_sink_create_tls(const char *host, int port, bool use_tls,
@@ -284,6 +288,8 @@ LOG_ERROR("...");
 LOG_FATAL("...");
 LOG_TRACE("...");
 ```
+
+*Note on Rate Limiter Performance*: When rate limiting is disabled (`rate_limit_enable: false`), a lock-free fast-path bypasses mutex overhead. When enabled, a mutex protects the token bucket calculations.
 
 Installed public headers: `log.h`, `log_config.h`, `log_limits.h`, `log_record.h`, `log_sink.h` under `include/clogx/`.
 
