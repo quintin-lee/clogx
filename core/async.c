@@ -180,9 +180,6 @@ void log_async_atfork_child(void) {
     pthread_cond_init(&q->not_full, NULL);
     pthread_cond_init(&q->not_empty, NULL);
     pthread_cond_init(&q->drained, NULL);
-    q->head = 0;
-    q->tail = 0;
-    q->count = 0;
     q->closed = 0;
 
     g_async_logger.running = 1;
