@@ -9,24 +9,32 @@ set(CMAKE_EXPORT_COMPILE_COMMANDS ON)
 option(CLOG_BUILD_EXAMPLES "Build example programs" ON)
 option(CLOG_BUILD_TESTS "Build and register tests" ON)
 option(CLOG_BUILD_SHARED "Build shared library instead of static" OFF)
+option(CLOG_USE_SYSTEM_YAML "Use system libyaml instead of auto-downloading" OFF)
 
 find_package(Threads REQUIRED)
 
-set(YAML_PREFER_CONFIG OFF)
-if(NOT TARGET yaml)
-    include(FetchContent)
-    FetchContent_Declare(
-        yaml
-        URL https://codeload.github.com/yaml/libyaml/tar.gz/refs/tags/0.2.5
-        URL_HASH SHA256=fa240dbf262be053f3898006d502d514936c818e422afdcf33921c63bed9bf2e
-    )
-    FetchContent_GetProperties(yaml)
-    if(NOT yaml_POPULATED)
-        set(CMAKE_POLICY_VERSION_MINIMUM 3.5 CACHE STRING "" FORCE)
-        set(BUILD_TESTING OFF CACHE BOOL "" FORCE)
-        FetchContent_Populate(yaml)
-        add_subdirectory(${yaml_SOURCE_DIR} ${yaml_BINARY_DIR} EXCLUDE_FROM_ALL)
+if(CLOG_USE_SYSTEM_YAML)
+    find_package(PkgConfig REQUIRED)
+    pkg_check_modules(YAML REQUIRED yaml-0.1)
+    set(CLOG_YAML_TARGET ${YAML_LIBRARIES})
+else()
+    set(YAML_PREFER_CONFIG OFF)
+    if(NOT TARGET yaml)
+        include(FetchContent)
+        FetchContent_Declare(
+            yaml
+            URL https://codeload.github.com/yaml/libyaml/tar.gz/refs/tags/0.2.5
+            URL_HASH SHA256=fa240dbf262be053f3898006d502d514936c818e422afdcf33921c63bed9bf2e
+        )
+        FetchContent_GetProperties(yaml)
+        if(NOT yaml_POPULATED)
+            set(CMAKE_POLICY_VERSION_MINIMUM 3.5 CACHE STRING "" FORCE)
+            set(BUILD_TESTING OFF CACHE BOOL "" FORCE)
+            FetchContent_Populate(yaml)
+            add_subdirectory(${yaml_SOURCE_DIR} ${yaml_BINARY_DIR} EXCLUDE_FROM_ALL)
+        endif()
     endif()
+    set(CLOG_YAML_TARGET yaml)
 endif()
 
 set(CLOG_SOURCES
@@ -54,7 +62,11 @@ target_compile_options(clogx_objects
     PRIVATE
         $<$<C_COMPILER_ID:GNU,Clang,AppleClang>:-Wall -Wextra -Wconversion -fvisibility=hidden>
 )
-target_link_libraries(clogx_objects PUBLIC Threads::Threads yaml)
+target_link_libraries(clogx_objects PUBLIC Threads::Threads ${CLOG_YAML_TARGET})
+if(CLOG_USE_SYSTEM_YAML)
+    target_include_directories(clogx_objects SYSTEM PUBLIC ${YAML_INCLUDE_DIRS})
+    target_compile_options(clogx_objects PUBLIC ${YAML_CFLAGS_OTHER})
+endif()
 set_target_properties(clogx_objects PROPERTIES POSITION_INDEPENDENT_CODE ON)
 
 # Main library (shared or static)
