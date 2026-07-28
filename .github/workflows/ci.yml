@@ -87,7 +87,7 @@ jobs:
         # warning/performance/portability only: --enable=all flags public API as unusedFunction
         run: >
           cppcheck --enable=warning,performance,portability
-          --error-exitcode=1 --inline-suppr
+          --error-exitcode=1 --inline-suppress
           --suppress=missingIncludeSystem
           -I include include/ core/ sinks/
 
@@ -102,3 +102,27 @@ jobs:
 
       - name: Check formatting
         run: make check-format
+
+  coverage:
+    needs: build-and-test
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v7
+
+      - name: Build with coverage
+        run: |
+          CC=clang CFLAGS="--coverage -fprofile-arcs -ftest-coverage" \
+          make clean && make
+
+      - name: Run tests with coverage
+        run: |
+          make test
+          lcov --capture --directory build --output-file coverage.info
+          lcov --remove coverage.info 'tests/*' --output-file coverage.info
+
+      - name: Upload to codecov
+        uses: codecov/codecov-action@v3
+        with:
+          files: ./coverage.info
+          flag: lcov
