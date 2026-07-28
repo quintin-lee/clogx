@@ -10,8 +10,13 @@ option(CLOG_BUILD_EXAMPLES "Build example programs" ON)
 option(CLOG_BUILD_TESTS "Build and register tests" ON)
 option(CLOG_BUILD_SHARED "Build shared library instead of static" OFF)
 option(CLOG_USE_SYSTEM_YAML "Use system libyaml instead of auto-downloading" OFF)
+option(CLOG_ENABLE_TLS "Enable OpenSSL TLS support for socket sink" OFF)
 
 find_package(Threads REQUIRED)
+
+if(CLOG_ENABLE_TLS)
+    find_package(OpenSSL REQUIRED)
+endif()
 
 if(CLOG_USE_SYSTEM_YAML)
     find_package(PkgConfig REQUIRED)
@@ -63,6 +68,10 @@ target_compile_options(clogx_objects
         $<$<C_COMPILER_ID:GNU,Clang,AppleClang>:-Wall -Wextra -Wconversion -fvisibility=hidden>
 )
 target_link_libraries(clogx_objects PUBLIC Threads::Threads ${CLOG_YAML_TARGET})
+if(CLOG_ENABLE_TLS)
+    target_compile_definitions(clogx_objects PRIVATE CLOG_USE_TLS)
+    target_link_libraries(clogx_objects PUBLIC OpenSSL::SSL OpenSSL::Crypto)
+endif()
 if(CLOG_USE_SYSTEM_YAML)
     target_include_directories(clogx_objects SYSTEM PUBLIC ${YAML_INCLUDE_DIRS})
     target_compile_options(clogx_objects PUBLIC ${YAML_CFLAGS_OTHER})
@@ -91,6 +100,9 @@ set_target_properties(clogx PROPERTIES
 )
 
 target_link_libraries(clogx PUBLIC Threads::Threads yaml)
+if(CLOG_ENABLE_TLS)
+    target_link_libraries(clogx PUBLIC OpenSSL::SSL OpenSSL::Crypto)
+endif()
 
 # --- Example ---
 if(CLOG_BUILD_EXAMPLES)
@@ -173,6 +185,7 @@ install(TARGETS clogx
 install(FILES
     include/log.h
     include/log_config.h
+    include/log_limits.h
     include/log_record.h
     include/log_sink.h
     DESTINATION ${CMAKE_INSTALL_INCLUDEDIR}/clogx

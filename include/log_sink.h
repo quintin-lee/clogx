@@ -94,6 +94,18 @@ CLOGX_API log_sink_t *file_sink_create(const char *path, uint64_t max_size, int 
 CLOGX_API log_sink_t *socket_sink_create(const char *host, int port);
 
 /**
+ * @brief Create a lazy-connect TCP socket sink with optional TLS encryption.
+ * @param[in] host        IPv4 address string (e.g. `"127.0.0.1"`).
+ * @param[in] port        Destination port in host byte order (1..65535).
+ * @param[in] use_tls     Whether to enable TLS encryption on connection.
+ * @param[in] ca_file     Optional path to CA certificate file (or NULL).
+ * @param[in] skip_verify Whether to skip server certificate verification.
+ * @return New sink, or NULL on invalid arguments / allocation failure.
+ */
+CLOGX_API log_sink_t *socket_sink_create_tls(const char *host, int port, bool use_tls,
+                                             const char *ca_file, bool skip_verify);
+
+/**
  * @brief Set the minimum severity level for a sink.
  *
  * Messages below this level are dropped by the dispatcher before reaching

@@ -163,7 +163,9 @@ int log_dispatcher_init(void) {
     }
 
     if (cfg->socket_enable && strlen(cfg->socket_host) > 0) {
-        log_sink_t *sink = socket_sink_create(cfg->socket_host, cfg->socket_port);
+        log_sink_t *sink =
+            socket_sink_create_tls(cfg->socket_host, cfg->socket_port, cfg->socket_tls,
+                                   cfg->socket_tls_ca_file, cfg->socket_tls_skip_verify);
         if (sink) {
             sinks[count++] = sink;
         }
@@ -215,7 +217,9 @@ int log_dispatcher_build_snapshot(log_config_t *restrict cfg,
     }
 
     if (cfg->socket_enable && strlen(cfg->socket_host) > 0) {
-        log_sink_t *sink = socket_sink_create(cfg->socket_host, cfg->socket_port);
+        log_sink_t *sink =
+            socket_sink_create_tls(cfg->socket_host, cfg->socket_port, cfg->socket_tls,
+                                   cfg->socket_tls_ca_file, cfg->socket_tls_skip_verify);
         if (sink) {
             sinks[count++] = sink;
         }

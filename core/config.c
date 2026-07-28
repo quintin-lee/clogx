@@ -27,6 +27,9 @@ typedef enum {
     HANDLER_PORT,
     HANDLER_QUEUE_SIZE,
     HANDLER_SOCKET_ENABLE,
+    HANDLER_SOCKET_TLS,
+    HANDLER_SOCKET_TLS_CA_FILE,
+    HANDLER_SOCKET_TLS_SKIP_VERIFY,
     HANDLER_TIME_FORMAT,
 } config_handler_t;
 
@@ -58,7 +61,13 @@ static const config_key_t g_config_keys[] = {
     {"port", HANDLER_PORT},
     {"queue_size", HANDLER_QUEUE_SIZE},
     {"socket_enable", HANDLER_SOCKET_ENABLE},
+    {"socket_tls", HANDLER_SOCKET_TLS},
+    {"socket_tls_ca_file", HANDLER_SOCKET_TLS_CA_FILE},
+    {"socket_tls_skip_verify", HANDLER_SOCKET_TLS_SKIP_VERIFY},
     {"time_format", HANDLER_TIME_FORMAT},
+    {"tls_ca_file", HANDLER_SOCKET_TLS_CA_FILE},
+    {"tls_enable", HANDLER_SOCKET_TLS},
+    {"tls_skip_verify", HANDLER_SOCKET_TLS_SKIP_VERIFY},
 };
 
 static log_config_t g_config;
@@ -270,6 +279,16 @@ static int parse_config_file(const char *filepath, log_config_t *cfg) {
                     }
                     case HANDLER_SOCKET_ENABLE:
                         cfg->socket_enable = (strcmp(val, "true") == 0);
+                        break;
+                    case HANDLER_SOCKET_TLS:
+                        cfg->socket_tls = (strcmp(val, "true") == 0);
+                        break;
+                    case HANDLER_SOCKET_TLS_CA_FILE:
+                        snprintf(cfg->socket_tls_ca_file, sizeof(cfg->socket_tls_ca_file), "%s",
+                                 val);
+                        break;
+                    case HANDLER_SOCKET_TLS_SKIP_VERIFY:
+                        cfg->socket_tls_skip_verify = (strcmp(val, "true") == 0);
                         break;
                     }
                 }

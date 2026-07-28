@@ -140,5 +140,19 @@ int main(void) {
 
     pthread_mutex_destroy(&ctx.mutex);
     pthread_cond_destroy(&ctx.cond);
+
+    /* Verify socket_sink_create_tls factory function */
+    log_sink_t *tls_sink = socket_sink_create_tls("127.0.0.1", 9000, true, NULL, true);
+    if (!tls_sink) {
+        fprintf(stderr, "socket_sink_create_tls failed\n");
+        return 1;
+    }
+    tls_sink->destroy(tls_sink);
+
+    if (socket_sink_create_tls(NULL, 9000, true, NULL, false) != NULL) {
+        fprintf(stderr, "socket_sink_create_tls with NULL host should fail\n");
+        return 1;
+    }
+
     return 0;
 }
