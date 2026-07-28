@@ -25,40 +25,40 @@ set(CLOG_SOURCES
     sinks/socket_sink.c
 )
 
+# Object library — all sources compiled once, shared across library and internal-symbol tests
+add_library(clogx_objects OBJECT ${CLOG_SOURCES})
+target_include_directories(clogx_objects
+    PUBLIC
+        $<BUILD_INTERFACE:${CMAKE_CURRENT_SOURCE_DIR}/include>
+        $<INSTALL_INTERFACE:include>
+)
+target_compile_definitions(clogx_objects PRIVATE _GNU_SOURCE)
+target_compile_options(clogx_objects
+    PRIVATE
+        $<$<C_COMPILER_ID:GNU,Clang,AppleClang>:-Wall -Wextra -Wconversion -fvisibility=hidden>
+)
+target_link_libraries(clogx_objects PUBLIC Threads::Threads)
+set_target_properties(clogx_objects PROPERTIES POSITION_INDEPENDENT_CODE ON)
+
+# Main library (shared or static)
 if(CLOG_BUILD_SHARED)
-    add_library(clogx SHARED ${CLOG_SOURCES})
+    add_library(clogx SHARED $<TARGET_OBJECTS:clogx_objects>)
 else()
-    add_library(clogx STATIC ${CLOG_SOURCES})
+    add_library(clogx STATIC $<TARGET_OBJECTS:clogx_objects>)
 endif()
 
 add_library(clogx::clogx ALIAS clogx)
 
 target_include_directories(clogx
-    PUBLIC
+    INTERFACE
         $<BUILD_INTERFACE:${CMAKE_CURRENT_SOURCE_DIR}/include>
         $<INSTALL_INTERFACE:include>
-)
-
-target_compile_definitions(clogx
-    PRIVATE
-        _GNU_SOURCE
-)
-
-target_compile_options(clogx
-    PRIVATE
-        $<$<C_COMPILER_ID:GNU,Clang,AppleClang>:-Wall -Wextra -Wconversion -fvisibility=hidden>
-)
-
-target_link_libraries(clogx
-    PUBLIC
-        Threads::Threads
 )
 
 set_target_properties(clogx PROPERTIES
     OUTPUT_NAME clogx
     VERSION ${PROJECT_VERSION}
     SOVERSION 0
-    POSITION_INDEPENDENT_CODE ON
 )
 
 # --- Example ---
@@ -99,9 +99,20 @@ if(CLOG_BUILD_TESTS)
         test_socket_sink
     )
 
+    # Tests that directly reference internal symbols (not exported from shared lib)
+    set(CLOG_INTERNAL_TESTS test_queue_try_put test_async_fallback test_async_reload)
+
     foreach(test_name IN LISTS CLOG_TEST_SOURCES)
-        add_executable(${test_name} tests/${test_name}.c)
-        target_link_libraries(${test_name} PRIVATE clogx)
+        if(CLOG_BUILD_SHARED AND test_name IN_LIST CLOG_INTERNAL_TESTS)
+            # Link objects directly so internal symbols are available
+            add_executable(${test_name} tests/${test_name}.c $<TARGET_OBJECTS:clogx_objects>)
+            target_include_directories(${test_name} PRIVATE
+                $<BUILD_INTERFACE:${CMAKE_CURRENT_SOURCE_DIR}/include>)
+            target_link_libraries(${test_name} PRIVATE Threads::Threads)
+        else()
+            add_executable(${test_name} tests/${test_name}.c)
+            target_link_libraries(${test_name} PRIVATE clogx)
+        endif()
         target_compile_definitions(${test_name} PRIVATE _GNU_SOURCE)
         set_target_properties(${test_name} PROPERTIES
             RUNTIME_OUTPUT_DIRECTORY ${CMAKE_BINARY_DIR}/tests
