@@ -17,6 +17,7 @@ Lightweight C99 logging library: config-driven, multi-sink output, optional asyn
 - Fuzz Testing: built-in AFL / libFuzzer test harnesses (`make fuzz-build`)
 - Sync / async switchable; async path deep-copies records to avoid dangling stack pointers
 - Fork Safety: POSIX `pthread_atfork` handlers prevent deadlocks and restart async worker in child processes
+- Graceful Shutdown: POSIX `sigaction` signal handlers for `SIGTERM`/`SIGINT` (`catch_signals: true` or `log_install_signal_handlers()`)
 - Hot reload: `log_reload()` re-reads config and atomically rebuilds sinks / async worker
 - Per-sink level filtering: `log_sink_set_level()` / `log_sink_get_level()` on any sink
 - Config validation: rejects invalid `queue_size`, `port`, `backups`, and unknown log levels

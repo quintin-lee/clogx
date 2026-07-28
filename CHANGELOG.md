@@ -5,6 +5,9 @@ All notable changes to this project will be documented in this file.
 ## [Unreleased]
 
 ### Added
+- Graceful Shutdown (`SIGTERM`/`SIGINT` handling): POSIX `sigaction` signal handlers
+  via `log_install_signal_handlers()`, `log_signal_handler(sig)`, and YAML
+  setting `catch_signals: true` to flush pending async/sync logs before process exit
 - POSIX `pthread_atfork` process safety: registers fork handlers to lock internal
   mutexes during `fork()`, release them in parent/child, and safely re-initialize
   `mpsc_queue` condition variables and restart the async worker thread in the child
