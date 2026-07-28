@@ -78,6 +78,9 @@ target_compile_options(clogx_objects
         $<$<C_COMPILER_ID:GNU,Clang,AppleClang>:-Wall -Wextra -Wconversion -fvisibility=hidden>
 )
 target_link_libraries(clogx_objects PUBLIC Threads::Threads ${CLOG_YAML_TARGET})
+if(WIN32)
+    target_link_libraries(clogx_objects PUBLIC ws2_32)
+endif()
 if(CLOG_ENABLE_TLS)
     target_compile_definitions(clogx_objects PRIVATE CLOG_USE_TLS)
     target_link_libraries(clogx_objects PUBLIC OpenSSL::SSL OpenSSL::Crypto)
@@ -110,6 +113,9 @@ set_target_properties(clogx PROPERTIES
 )
 
 target_link_libraries(clogx PUBLIC Threads::Threads yaml)
+if(WIN32)
+    target_link_libraries(clogx PUBLIC ws2_32)
+endif()
 if(CLOG_ENABLE_TLS)
     target_link_libraries(clogx PUBLIC OpenSSL::SSL OpenSSL::Crypto)
 endif()
@@ -206,6 +212,7 @@ install(FILES
     include/log_limits.h
     include/log_record.h
     include/log_sink.h
+    include/clog_port.h
     DESTINATION ${CMAKE_INSTALL_INCLUDEDIR}/clogx
 )
 

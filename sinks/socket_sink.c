@@ -2,14 +2,10 @@
  * @file socket_sink.c
  * @brief TCP / TLS socket sink with lazy connect and reconnect-on-send-failure.
  */
-#define _DEFAULT_SOURCE
 #include <stdio.h>
 #include <stdlib.h>
 #include <string.h>
-#include <unistd.h>
-#include <sys/socket.h>
-#include <netinet/in.h>
-#include <arpa/inet.h>
+#include "clog_port.h"
 #include "log_sink.h"
 #include "log_record.h"
 
@@ -19,7 +15,7 @@
 #endif
 
 typedef struct {
-    int sockfd;
+    clog_socket_t sockfd;
     const char *host;
     int port;
     int connected;
@@ -36,25 +32,28 @@ static int socket_connect(log_sink_t *sink) {
     socket_sink_data_t *data = (socket_sink_data_t *)sink->private_data;
     if (data->connected)
         return 0;
+
+    clog_net_init();
+
     data->sockfd = socket(AF_INET, SOCK_STREAM, 0);
-    if (data->sockfd < 0) {
+    if (clog_is_invalid_socket(data->sockfd)) {
         perror("Failed to create socket");
         return -1;
     }
     struct sockaddr_in serv_addr;
     memset(&serv_addr, 0, sizeof(serv_addr));
     serv_addr.sin_family = AF_INET;
-    serv_addr.sin_port = htons((in_port_t)data->port);
+    serv_addr.sin_port = htons((uint16_t)data->port);
     if (inet_pton(AF_INET, data->host, &serv_addr.sin_addr) <= 0) {
         fprintf(stderr, "Invalid socket host: %s\n", data->host);
-        close(data->sockfd);
-        data->sockfd = -1;
+        clog_close_socket(data->sockfd);
+        data->sockfd = CLOG_INVALID_SOCKET;
         return -1;
     }
     if (connect(data->sockfd, (struct sockaddr *)&serv_addr, sizeof(serv_addr)) < 0) {
         perror("Failed to connect to socket server");
-        close(data->sockfd);
-        data->sockfd = -1;
+        clog_close_socket(data->sockfd);
+        data->sockfd = CLOG_INVALID_SOCKET;
         data->connected = 0;
         return -1;
     }
@@ -65,8 +64,8 @@ static int socket_connect(log_sink_t *sink) {
         data->ssl_ctx = SSL_CTX_new(method);
         if (!data->ssl_ctx) {
             fprintf(stderr, "SSL_CTX_new failed\n");
-            close(data->sockfd);
-            data->sockfd = -1;
+            clog_close_socket(data->sockfd);
+            data->sockfd = CLOG_INVALID_SOCKET;
             return -1;
         }
 
@@ -87,8 +86,8 @@ static int socket_connect(log_sink_t *sink) {
             fprintf(stderr, "SSL_new failed\n");
             SSL_CTX_free(data->ssl_ctx);
             data->ssl_ctx = NULL;
-            close(data->sockfd);
-            data->sockfd = -1;
+            clog_close_socket(data->sockfd);
+            data->sockfd = CLOG_INVALID_SOCKET;
             return -1;
         }
 
@@ -96,15 +95,15 @@ static int socket_connect(log_sink_t *sink) {
             SSL_set1_host(data->ssl, data->host);
         }
 
-        SSL_set_fd(data->ssl, data->sockfd);
+        SSL_set_fd(data->ssl, (int)data->sockfd);
         if (SSL_connect(data->ssl) <= 0) {
             fprintf(stderr, "SSL_connect failed\n");
             SSL_free(data->ssl);
             data->ssl = NULL;
             SSL_CTX_free(data->ssl_ctx);
             data->ssl_ctx = NULL;
-            close(data->sockfd);
-            data->sockfd = -1;
+            clog_close_socket(data->sockfd);
+            data->sockfd = CLOG_INVALID_SOCKET;
             return -1;
         }
 #else
@@ -120,7 +119,7 @@ static int socket_connect(log_sink_t *sink) {
 
 static int socket_write(log_sink_t *sink, const char *buf, size_t len) {
     socket_sink_data_t *data = (socket_sink_data_t *)sink->private_data;
-    if (data->sockfd < 0) {
+    if (clog_is_invalid_socket(data->sockfd)) {
         if (socket_connect(sink) != 0)
             return -1;
     }
@@ -139,20 +138,20 @@ static int socket_write(log_sink_t *sink, const char *buf, size_t len) {
                     SSL_CTX_free(data->ssl_ctx);
                     data->ssl_ctx = NULL;
                 }
-                close(data->sockfd);
-                data->sockfd = -1;
+                clog_close_socket(data->sockfd);
+                data->sockfd = CLOG_INVALID_SOCKET;
                 return -1;
             }
             total_sent += (size_t)sent;
             continue;
         }
 #endif
-        ssize_t sent = send(data->sockfd, buf + total_sent, len - total_sent, 0);
+        long sent = send(data->sockfd, buf + total_sent, (int)(len - total_sent), 0);
         if (sent < 0) {
             perror("Failed to send socket log");
             data->connected = 0;
-            close(data->sockfd);
-            data->sockfd = -1;
+            clog_close_socket(data->sockfd);
+            data->sockfd = CLOG_INVALID_SOCKET;
             return -1;
         }
         total_sent += (size_t)sent;
@@ -177,8 +176,8 @@ static void socket_destroy(log_sink_t *sink) {
             SSL_CTX_free(data->ssl_ctx);
         }
 #endif
-        if (data->sockfd >= 0) {
-            close(data->sockfd);
+        if (!clog_is_invalid_socket(data->sockfd)) {
+            clog_close_socket(data->sockfd);
         }
         free((char *)data->host);
         free(data->ca_file);
@@ -201,9 +200,9 @@ static void socket_atfork_child(log_sink_t *sink) {
         data->ssl_ctx = NULL;
     }
 #endif
-    if (data->sockfd >= 0) {
-        close(data->sockfd);
-        data->sockfd = -1;
+    if (!clog_is_invalid_socket(data->sockfd)) {
+        clog_close_socket(data->sockfd);
+        data->sockfd = CLOG_INVALID_SOCKET;
     }
     data->connected = 0;
 }
@@ -227,7 +226,7 @@ log_sink_t *socket_sink_create_tls(const char *host, int port, bool use_tls, con
         return NULL;
     }
     data->port = port;
-    data->sockfd = -1;
+    data->sockfd = CLOG_INVALID_SOCKET;
     data->connected = 0;
     data->use_tls = use_tls;
     data->ca_file = ca_file ? strdup(ca_file) : NULL;

@@ -16,7 +16,7 @@
 #define QUEUE_H
 
 #include <stddef.h>
-#include <pthread.h>
+#include "clog_port.h"
 #include "log_record.h"
 
 /**
@@ -24,16 +24,16 @@
  * @brief Mutex-protected circular buffer of @ref log_record_t.
  */
 typedef struct mpsc_queue_t {
-    log_record_t *buffer;     /**< Backing storage. */
-    size_t capacity;          /**< Maximum number of records. */
-    size_t head;              /**< Next write index. */
-    size_t tail;              /**< Next read index. */
-    size_t count;             /**< Current number of records. */
-    int closed;               /**< After close, put fails; get drains then exits. */
-    pthread_mutex_t mutex;    /**< Protects all queue fields. */
-    pthread_cond_t not_full;  /**< Signaled when space is available. */
-    pthread_cond_t not_empty; /**< Signaled when data is available. */
-    pthread_cond_t drained;   /**< Signaled when count reaches 0. */
+    log_record_t *buffer;  /**< Backing storage. */
+    size_t capacity;       /**< Maximum number of records. */
+    size_t head;           /**< Next write index. */
+    size_t tail;           /**< Next read index. */
+    size_t count;          /**< Current number of records. */
+    int closed;            /**< After close, put fails; get drains then exits. */
+    clog_mutex_t mutex;    /**< Protects all queue fields. */
+    clog_cond_t not_full;  /**< Signaled when space is available. */
+    clog_cond_t not_empty; /**< Signaled when data is available. */
+    clog_cond_t drained;   /**< Signaled when count reaches 0. */
 } mpsc_queue_t;
 
 /**

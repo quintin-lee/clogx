@@ -104,7 +104,7 @@ jobs:
         # warning/performance/portability only: --enable=all flags public API as unusedFunction
         run: >
           cppcheck --enable=warning,performance,portability
-          --error-exitcode=1 --inline-suppress
+          --error-exitcode=1 --inline-suppr
           --suppress=missingIncludeSystem
           -I include include/ core/ sinks/
 

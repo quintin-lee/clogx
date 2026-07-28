@@ -1,8 +1,7 @@
 #include <stdio.h>
 #include <stdlib.h>
 #include <string.h>
-#include <unistd.h>
-#include <pthread.h>
+#include "clog_port.h"
 #include "log.h"
 
 #define NUM_THREADS 8
@@ -61,20 +60,20 @@ int main(void) {
         return 1;
     }
 
-    pthread_t threads[NUM_THREADS];
+    clog_thread_t threads[NUM_THREADS];
     thread_result_t results[NUM_THREADS];
 
     for (int i = 0; i < NUM_THREADS; i++) {
         results[i].id = i;
         results[i].errors = 0;
-        if (pthread_create(&threads[i], NULL, writer_thread, &results[i]) != 0) {
-            fprintf(stderr, "pthread_create failed\n");
+        if (clog_thread_create(&threads[i], writer_thread, &results[i]) != 0) {
+            fprintf(stderr, "clog_thread_create failed\n");
             return 1;
         }
     }
 
     for (int i = 0; i < NUM_THREADS; i++) {
-        pthread_join(threads[i], NULL);
+        clog_thread_join(threads[i]);
     }
 
     log_flush();

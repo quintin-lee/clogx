@@ -2,12 +2,11 @@
  * @file file_sink.c
  * @brief File sink with size-based rotation and parent-directory creation.
  */
-#define _DEFAULT_SOURCE
 #include <stdio.h>
 #include <stdlib.h>
 #include <string.h>
 #include <errno.h>
-#include <sys/stat.h>
+#include "clog_port.h"
 #include "log_sink.h"
 #include "log_record.h"
 #include "rotate.h"
@@ -33,22 +32,25 @@ static int ensure_parent_dirs(const char *path) {
         return -1;
     memcpy(dir, path, len + 1);
 
-    char *slash = strrchr(dir, '/');
+    char *slash1 = strrchr(dir, '/');
+    char *slash2 = strrchr(dir, '\\');
+    char *slash = (slash1 > slash2) ? slash1 : slash2;
     if (!slash || slash == dir)
         return 0;
     *slash = '\0';
 
     for (char *p = dir + 1; *p; p++) {
-        if (*p == '/') {
+        if (*p == '/' || *p == '\\') {
+            char orig = *p;
             *p = '\0';
-            if (mkdir(dir, 0755) != 0 && errno != EEXIST) {
+            if (clog_mkdir(dir) != 0 && errno != EEXIST) {
                 return -1;
             }
-            *p = '/';
+            *p = orig;
         }
     }
 
-    if (mkdir(dir, 0755) != 0 && errno != EEXIST) {
+    if (clog_mkdir(dir) != 0 && errno != EEXIST) {
         return -1;
     }
     return 0;

@@ -5,7 +5,7 @@
 #include <stdio.h>
 #include <stdlib.h>
 #include <string.h>
-#include <pthread.h>
+#include "clog_port.h"
 #include "dispatcher.h"
 #include "log_sink.h"
 #include "log_formatter.h"
@@ -16,27 +16,27 @@
 typedef struct {
     log_sink_t **sinks;
     int sink_count;
-    pthread_mutex_t mutex;
+    clog_mutex_t mutex;
 } log_dispatcher_t;
 
 static log_dispatcher_t g_dispatcher = {
-    .sinks = NULL, .sink_count = 0, .mutex = PTHREAD_MUTEX_INITIALIZER};
+    .sinks = NULL, .sink_count = 0, .mutex = CLOG_MUTEX_INITIALIZER};
 
 int log_dispatcher_add_sink(log_sink_t *restrict sink) {
     if (!sink)
         return -1;
 
-    pthread_mutex_lock(&g_dispatcher.mutex);
+    clog_mutex_lock(&g_dispatcher.mutex);
     log_sink_t **new_sinks =
         realloc(g_dispatcher.sinks, ((size_t)g_dispatcher.sink_count + 1) * sizeof(log_sink_t *));
     if (!new_sinks) {
-        pthread_mutex_unlock(&g_dispatcher.mutex);
+        clog_mutex_unlock(&g_dispatcher.mutex);
         return -1;
     }
     g_dispatcher.sinks = new_sinks;
     g_dispatcher.sinks[g_dispatcher.sink_count] = sink;
     g_dispatcher.sink_count++;
-    pthread_mutex_unlock(&g_dispatcher.mutex);
+    clog_mutex_unlock(&g_dispatcher.mutex);
     return 0;
 }
 
@@ -44,7 +44,7 @@ int log_dispatcher_remove_sink(log_sink_t *restrict sink) {
     if (!sink)
         return -1;
 
-    pthread_mutex_lock(&g_dispatcher.mutex);
+    clog_mutex_lock(&g_dispatcher.mutex);
     for (int i = 0; i < g_dispatcher.sink_count; i++) {
         if (g_dispatcher.sinks[i] == sink) {
             for (int j = i; j < g_dispatcher.sink_count - 1; j++) {
@@ -62,7 +62,7 @@ int log_dispatcher_remove_sink(log_sink_t *restrict sink) {
             break;
         }
     }
-    pthread_mutex_unlock(&g_dispatcher.mutex);
+    clog_mutex_unlock(&g_dispatcher.mutex);
     return 0;
 }
 
@@ -112,7 +112,7 @@ int log_dispatcher_dispatch(log_record_t *record) {
     }
 
     /* Short critical section: iterate sink array and write. */
-    pthread_mutex_lock(&g_dispatcher.mutex);
+    clog_mutex_lock(&g_dispatcher.mutex);
     for (int i = 0; i < g_dispatcher.sink_count; i++) {
         log_sink_t *sink = g_dispatcher.sinks[i];
         if (!sink)
@@ -136,7 +136,7 @@ int log_dispatcher_dispatch(log_record_t *record) {
             sink->write(sink, "\n", 1);
         }
     }
-    pthread_mutex_unlock(&g_dispatcher.mutex);
+    clog_mutex_unlock(&g_dispatcher.mutex);
 
     return 0;
 }
@@ -178,10 +178,10 @@ int log_dispatcher_init(void) {
 
     log_dispatcher_destroy();
 
-    pthread_mutex_lock(&g_dispatcher.mutex);
+    clog_mutex_lock(&g_dispatcher.mutex);
     g_dispatcher.sinks = malloc((size_t)count * sizeof(log_sink_t *));
     if (!g_dispatcher.sinks) {
-        pthread_mutex_unlock(&g_dispatcher.mutex);
+        clog_mutex_unlock(&g_dispatcher.mutex);
         for (int i = 0; i < count; i++) {
             sinks[i]->destroy(sinks[i]);
         }
@@ -191,7 +191,7 @@ int log_dispatcher_init(void) {
         g_dispatcher.sinks[i] = sinks[i];
     }
     g_dispatcher.sink_count = count;
-    pthread_mutex_unlock(&g_dispatcher.mutex);
+    clog_mutex_unlock(&g_dispatcher.mutex);
 
     return 0;
 }
@@ -262,12 +262,12 @@ void log_dispatcher_commit_snapshot(log_dispatcher_snapshot_t *restrict snap) {
     int old_count = 0;
     int i;
 
-    pthread_mutex_lock(&g_dispatcher.mutex);
+    clog_mutex_lock(&g_dispatcher.mutex);
     old_sinks = g_dispatcher.sinks;
     old_count = g_dispatcher.sink_count;
     g_dispatcher.sinks = snap->sinks;
     g_dispatcher.sink_count = snap->sink_count;
-    pthread_mutex_unlock(&g_dispatcher.mutex);
+    clog_mutex_unlock(&g_dispatcher.mutex);
 
     for (i = 0; i < old_count; i++) {
         if (old_sinks[i]) {
@@ -281,7 +281,7 @@ void log_dispatcher_commit_snapshot(log_dispatcher_snapshot_t *restrict snap) {
 }
 
 void log_dispatcher_destroy(void) {
-    pthread_mutex_lock(&g_dispatcher.mutex);
+    clog_mutex_lock(&g_dispatcher.mutex);
     for (int i = 0; i < g_dispatcher.sink_count; i++) {
         if (g_dispatcher.sinks[i]) {
             g_dispatcher.sinks[i]->destroy(g_dispatcher.sinks[i]);
@@ -291,25 +291,25 @@ void log_dispatcher_destroy(void) {
     g_dispatcher.sinks = NULL;
     g_dispatcher.sink_count = 0;
     /* Keep the static mutex alive: init/reload call destroy then reuse it. */
-    pthread_mutex_unlock(&g_dispatcher.mutex);
+    clog_mutex_unlock(&g_dispatcher.mutex);
 }
 
 void log_dispatcher_flush(void) {
-    pthread_mutex_lock(&g_dispatcher.mutex);
+    clog_mutex_lock(&g_dispatcher.mutex);
     for (int i = 0; i < g_dispatcher.sink_count; i++) {
         if (g_dispatcher.sinks[i]) {
             g_dispatcher.sinks[i]->flush(g_dispatcher.sinks[i]);
         }
     }
-    pthread_mutex_unlock(&g_dispatcher.mutex);
+    clog_mutex_unlock(&g_dispatcher.mutex);
 }
 
 void log_dispatcher_atfork_prepare(void) {
-    pthread_mutex_lock(&g_dispatcher.mutex);
+    clog_mutex_lock(&g_dispatcher.mutex);
 }
 
 void log_dispatcher_atfork_parent(void) {
-    pthread_mutex_unlock(&g_dispatcher.mutex);
+    clog_mutex_unlock(&g_dispatcher.mutex);
 }
 
 void log_dispatcher_atfork_child(void) {
@@ -318,5 +318,5 @@ void log_dispatcher_atfork_child(void) {
             g_dispatcher.sinks[i]->atfork_child(g_dispatcher.sinks[i]);
         }
     }
-    pthread_mutex_unlock(&g_dispatcher.mutex);
+    clog_mutex_unlock(&g_dispatcher.mutex);
 }

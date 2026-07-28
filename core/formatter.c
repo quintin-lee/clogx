@@ -3,11 +3,11 @@
  * @brief Token formatter and JSON renderer for log lines.
  */
 #include <ctype.h>
-#include <pthread.h>
 #include <stdio.h>
 #include <stdlib.h>
 #include <string.h>
 #include <time.h>
+#include "clog_port.h"
 #include "log_formatter.h"
 #include "log_limits.h"
 #include "log_record.h"
@@ -16,7 +16,7 @@ static char g_default_format[CLOG_MAX_FORMAT_SIZE] = "%msg";
 static char g_format_buf[CLOG_MAX_FORMAT_SIZE];
 static char *g_format_ptr = g_default_format;
 static char g_time_format_buf[64] = "%Y-%m-%d %H:%M:%S";
-static pthread_mutex_t g_format_mutex = PTHREAD_MUTEX_INITIALIZER;
+static clog_mutex_t g_format_mutex = CLOG_MUTEX_INITIALIZER;
 
 #define TIME_BUF_SIZE 64
 
@@ -119,13 +119,13 @@ static int format_json(log_record_t *restrict record, char *restrict buf, size_t
     struct tm tm_buf;
     time_t sec = (time_t)(record->timestamp / 1000000);
     uint32_t usec = (uint32_t)(record->timestamp % 1000000);
-    localtime_r(&sec, &tm_buf);
+    clog_localtime_r(&sec, &tm_buf);
 
     char time_buf[64];
     const char *tf;
-    pthread_mutex_lock(&g_format_mutex);
+    clog_mutex_lock(&g_format_mutex);
     tf = g_time_format_buf;
-    pthread_mutex_unlock(&g_format_mutex);
+    clog_mutex_unlock(&g_format_mutex);
     strftime(time_buf, sizeof(time_buf), tf, &tm_buf);
 
     char *out = buf;
@@ -184,9 +184,9 @@ static int format_json(log_record_t *restrict record, char *restrict buf, size_t
 
 int log_formatter_format(log_record_t *restrict record, char *restrict buf, size_t buf_size) {
     const char *fmt;
-    pthread_mutex_lock(&g_format_mutex);
+    clog_mutex_lock(&g_format_mutex);
     fmt = g_format_ptr;
-    pthread_mutex_unlock(&g_format_mutex);
+    clog_mutex_unlock(&g_format_mutex);
 
     if (strcmp(fmt, "json") == 0 || strcmp(fmt, "JSON") == 0) {
         return format_json(record, buf, buf_size);
@@ -210,12 +210,12 @@ int log_formatter_format(log_record_t *restrict record, char *restrict buf, size
             fmt += 4;
             struct tm tm_buf;
             time_t sec = (time_t)(record->timestamp / 1000000);
-            localtime_r(&sec, &tm_buf);
+            clog_localtime_r(&sec, &tm_buf);
             char time_buf[TIME_BUF_SIZE];
             const char *tf;
-            pthread_mutex_lock(&g_format_mutex);
+            clog_mutex_lock(&g_format_mutex);
             tf = g_time_format_buf;
-            pthread_mutex_unlock(&g_format_mutex);
+            clog_mutex_unlock(&g_format_mutex);
             strftime(time_buf, sizeof(time_buf), tf, &tm_buf);
             size_t tlen = strlen(time_buf);
             if (tlen >= sizeof(time_buf))
@@ -301,7 +301,7 @@ int log_formatter_format(log_record_t *restrict record, char *restrict buf, size
 }
 
 int log_formatter_init(const char *format, const char *time_format) {
-    pthread_mutex_lock(&g_format_mutex);
+    clog_mutex_lock(&g_format_mutex);
     if (format && strlen(format) > 0) {
         snprintf(g_format_buf, sizeof(g_format_buf), "%s", format);
         g_format_ptr = g_format_buf;
@@ -313,20 +313,20 @@ int log_formatter_init(const char *format, const char *time_format) {
     } else {
         snprintf(g_time_format_buf, sizeof(g_time_format_buf), "%s", "%Y-%m-%d %H:%M:%S");
     }
-    pthread_mutex_unlock(&g_format_mutex);
+    clog_mutex_unlock(&g_format_mutex);
     return 0;
 }
 
 void log_formatter_reset(void) {
-    pthread_mutex_lock(&g_format_mutex);
+    clog_mutex_lock(&g_format_mutex);
     g_format_ptr = g_default_format;
-    pthread_mutex_unlock(&g_format_mutex);
+    clog_mutex_unlock(&g_format_mutex);
 }
 
 const char *log_formatter_get_format(void) {
     const char *fmt;
-    pthread_mutex_lock(&g_format_mutex);
+    clog_mutex_lock(&g_format_mutex);
     fmt = g_format_ptr;
-    pthread_mutex_unlock(&g_format_mutex);
+    clog_mutex_unlock(&g_format_mutex);
     return fmt;
 }

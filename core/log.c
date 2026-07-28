@@ -1,4 +1,3 @@
-#define _POSIX_C_SOURCE 200809L
 /**
  * @file log.c
  * @brief Public logging entry points: init/destroy/reload/flush and write path.
@@ -8,8 +7,7 @@
 #include <string.h>
 #include <stdarg.h>
 #include <time.h>
-#include <unistd.h>
-#include <pthread.h>
+#include "clog_port.h"
 #include "log.h"
 #include "log_config.h"
 #include "log_formatter.h"
@@ -20,10 +18,10 @@
 #include "log_async.h"
 #include "log_record.h"
 
-static pthread_mutex_t g_init_mutex = PTHREAD_MUTEX_INITIALIZER;
+static clog_mutex_t g_init_mutex = CLOG_MUTEX_INITIALIZER;
 static int g_initialized = 0;
 static void (*g_async_fallback_cb)(void);
-static pthread_mutex_t g_module_mutex = PTHREAD_MUTEX_INITIALIZER;
+static clog_mutex_t g_module_mutex = CLOG_MUTEX_INITIALIZER;
 static char g_module[64] = "main";
 
 const char *log_strerror(int err) {
@@ -68,34 +66,34 @@ void (*log_get_async_fallback_cb(void))(void) {
 }
 
 void log_set_module(const char *module) {
-    pthread_mutex_lock(&g_module_mutex);
+    clog_mutex_lock(&g_module_mutex);
     if (!module || !*module) {
         snprintf(g_module, sizeof(g_module), "%s", "main");
     } else {
         snprintf(g_module, sizeof(g_module), "%s", module);
     }
-    pthread_mutex_unlock(&g_module_mutex);
+    clog_mutex_unlock(&g_module_mutex);
 }
 
 void log_get_module(char *buf, size_t n) {
     if (!buf || n == 0)
         return;
-    pthread_mutex_lock(&g_module_mutex);
+    clog_mutex_lock(&g_module_mutex);
     snprintf(buf, n, "%s", g_module);
-    pthread_mutex_unlock(&g_module_mutex);
+    clog_mutex_unlock(&g_module_mutex);
 }
 
 int log_add_sink(log_sink_t *sink) {
     if (!sink)
         return CLOG_ERR_INVALID_ARG;
 
-    pthread_mutex_lock(&g_init_mutex);
+    clog_mutex_lock(&g_init_mutex);
     if (!g_initialized) {
-        pthread_mutex_unlock(&g_init_mutex);
+        clog_mutex_unlock(&g_init_mutex);
         return CLOG_ERR_RELOAD;
     }
     int ret = log_dispatcher_add_sink(sink);
-    pthread_mutex_unlock(&g_init_mutex);
+    clog_mutex_unlock(&g_init_mutex);
     return ret == 0 ? CLOG_OK : CLOG_ERR_OOM;
 }
 
@@ -109,17 +107,29 @@ int log_remove_sink(log_sink_t *sink) {
 
 /** Wall-clock timestamp in microseconds since the Unix epoch. */
 static inline uint64_t get_timestamp(void) {
+#if defined(_WIN32) || defined(_WIN64)
+    FILETIME ft;
+    GetSystemTimeAsFileTime(&ft);
+    uint64_t t = ((uint64_t)ft.dwHighDateTime << 32) | ft.dwLowDateTime;
+    /* Convert 100ns intervals since Jan 1, 1601 to microseconds since Jan 1, 1970 */
+    return (t - 116444736000000000ULL) / 10;
+#else
     struct timespec ts;
     clock_gettime(CLOCK_REALTIME, &ts);
     return (uint64_t)ts.tv_sec * 1000000 + (uint64_t)ts.tv_nsec / 1000;
+#endif
 }
 
-/** Truncated pthread_t suitable for %thread formatting. */
+/** Truncated thread ID suitable for %thread formatting. */
 static inline uint32_t get_thread_id(void) {
+#if defined(_WIN32) || defined(_WIN64)
+    return (uint32_t)GetCurrentThreadId();
+#else
     pthread_t self = pthread_self();
     uint32_t h = (uint32_t)((uintptr_t)self >> 32);
     uint32_t l = (uint32_t)(uintptr_t)self;
     return (h ^ l ^ 0x9e3779b9u) + 1u;
+#endif
 }
 
 void log_writevprintf(log_level_t level, const char *file, int line, const char *func,
@@ -161,7 +171,7 @@ void log_writevprintf(log_level_t level, const char *file, int line, const char 
     record.level = level;
     record.timestamp = get_timestamp();
     record.tid = get_thread_id();
-    record.pid = (uint32_t)getpid();
+    record.pid = clog_getpid();
     record.file = file;
     record.func = func;
     record.line = line;
@@ -205,37 +215,41 @@ void log_writevprintf(log_level_t level, const char *file, int line, const char 
     }
 }
 
+#ifndef _WIN32
 static pthread_once_t g_atfork_once = PTHREAD_ONCE_INIT;
 
 static void log_atfork_prepare(void) {
-    pthread_mutex_lock(&g_init_mutex);
-    pthread_mutex_lock(&g_module_mutex);
+    clog_mutex_lock(&g_init_mutex);
+    clog_mutex_lock(&g_module_mutex);
     log_dispatcher_atfork_prepare();
 }
 
 static void log_atfork_parent(void) {
     log_dispatcher_atfork_parent();
-    pthread_mutex_unlock(&g_module_mutex);
-    pthread_mutex_unlock(&g_init_mutex);
+    clog_mutex_unlock(&g_module_mutex);
+    clog_mutex_unlock(&g_init_mutex);
 }
 
 static void log_atfork_child(void) {
     log_dispatcher_atfork_child();
-    pthread_mutex_unlock(&g_module_mutex);
-    pthread_mutex_unlock(&g_init_mutex);
+    clog_mutex_unlock(&g_module_mutex);
+    clog_mutex_unlock(&g_init_mutex);
     log_async_atfork_child();
 }
 
 static void register_atfork(void) {
     pthread_atfork(log_atfork_prepare, log_atfork_parent, log_atfork_child);
 }
+#endif
 
 int log_init(const char *yaml_path) {
+#ifndef _WIN32
     pthread_once(&g_atfork_once, register_atfork);
+#endif
 
-    pthread_mutex_lock(&g_init_mutex);
+    clog_mutex_lock(&g_init_mutex);
     if (g_initialized) {
-        pthread_mutex_unlock(&g_init_mutex);
+        clog_mutex_unlock(&g_init_mutex);
         return CLOG_ERR_INIT_REENTRANT;
     }
 
@@ -243,7 +257,7 @@ int log_init(const char *yaml_path) {
         yaml_path = "";
 
     if (log_config_init(yaml_path) != 0) {
-        pthread_mutex_unlock(&g_init_mutex);
+        clog_mutex_unlock(&g_init_mutex);
         return CLOG_ERR_CONFIG_OPEN;
     }
 
@@ -252,14 +266,14 @@ int log_init(const char *yaml_path) {
     log_rate_limit_init(cfg->rate_limit_enable, cfg->rate_limit_max_per_sec, cfg->rate_limit_burst);
 
     if (log_dispatcher_init() != 0) {
-        pthread_mutex_unlock(&g_init_mutex);
+        clog_mutex_unlock(&g_init_mutex);
         return CLOG_ERR_NO_SINKS;
     }
 
     if (cfg->async) {
         if (log_async_init(cfg->queue_size) != 0) {
             log_destroy();
-            pthread_mutex_unlock(&g_init_mutex);
+            clog_mutex_unlock(&g_init_mutex);
             return CLOG_ERR_THREAD_CREATE;
         }
     }
@@ -269,14 +283,14 @@ int log_init(const char *yaml_path) {
     }
 
     g_initialized = 1;
-    pthread_mutex_unlock(&g_init_mutex);
+    clog_mutex_unlock(&g_init_mutex);
     return CLOG_OK;
 }
 
 void log_destroy(void) {
-    pthread_mutex_lock(&g_init_mutex);
+    clog_mutex_lock(&g_init_mutex);
     g_initialized = 0;
-    pthread_mutex_unlock(&g_init_mutex);
+    clog_mutex_unlock(&g_init_mutex);
 
     log_restore_signal_handlers();
     log_rate_limit_reset();
@@ -293,12 +307,12 @@ void log_flush(void) {
 }
 
 int log_reload(void) {
-    pthread_mutex_lock(&g_init_mutex);
+    clog_mutex_lock(&g_init_mutex);
     if (!g_initialized) {
-        pthread_mutex_unlock(&g_init_mutex);
+        clog_mutex_unlock(&g_init_mutex);
         return CLOG_ERR_RELOAD;
     }
-    pthread_mutex_unlock(&g_init_mutex);
+    clog_mutex_unlock(&g_init_mutex);
 
     int ret = log_config_reload();
     if (ret != 0) {

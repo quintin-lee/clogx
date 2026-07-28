@@ -6,8 +6,7 @@
 #include <stdlib.h>
 #include <string.h>
 #include <errno.h>
-#include <pthread.h>
-#include <unistd.h>
+#include "clog_port.h"
 #include <yaml.h>
 #include "log_config.h"
 #include "log_formatter.h"
@@ -79,7 +78,7 @@ static const config_key_t g_config_keys[] = {
 };
 
 static log_config_t g_config;
-static pthread_rwlock_t g_config_rwlock = PTHREAD_RWLOCK_INITIALIZER;
+static clog_rwlock_t g_config_rwlock = CLOG_RWLOCK_INITIALIZER;
 static char g_config_format[512] = "";
 static char g_config_time_format[64] = "";
 static char g_config_path[512] = "./config.yaml";
@@ -459,52 +458,52 @@ static int apply_config(const log_config_t *cfg) {
 int log_config_set(const log_config_t *cfg) {
     if (!cfg)
         return -1;
-    pthread_rwlock_wrlock(&g_config_rwlock);
+    clog_rwlock_wrlock(&g_config_rwlock);
     int ret = apply_config(cfg);
-    pthread_rwlock_unlock(&g_config_rwlock);
+    clog_rwlock_wrunlock(&g_config_rwlock);
     return ret;
 }
 
 int log_config_init(const char *yaml_path) {
     if (!yaml_path)
         yaml_path = "";
-    pthread_rwlock_wrlock(&g_config_rwlock);
+    clog_rwlock_wrlock(&g_config_rwlock);
     int ret = load_default_and_apply(yaml_path);
-    pthread_rwlock_unlock(&g_config_rwlock);
+    clog_rwlock_wrunlock(&g_config_rwlock);
     return ret;
 }
 
 int log_config_reload(void) {
-    pthread_rwlock_wrlock(&g_config_rwlock);
+    clog_rwlock_wrlock(&g_config_rwlock);
     int ret = load_default_and_apply(g_config_path);
-    pthread_rwlock_unlock(&g_config_rwlock);
+    clog_rwlock_wrunlock(&g_config_rwlock);
     return ret;
 }
 
 int log_set_level(log_level_t level) {
-    pthread_rwlock_wrlock(&g_config_rwlock);
+    clog_rwlock_wrlock(&g_config_rwlock);
     g_config.level = level;
-    pthread_rwlock_unlock(&g_config_rwlock);
+    clog_rwlock_wrunlock(&g_config_rwlock);
     return 0;
 }
 
 log_level_t log_get_level(void) {
-    pthread_rwlock_rdlock(&g_config_rwlock);
+    clog_rwlock_rdlock(&g_config_rwlock);
     log_level_t lvl = g_config.level;
-    pthread_rwlock_unlock(&g_config_rwlock);
+    clog_rwlock_rdunlock(&g_config_rwlock);
     return lvl;
 }
 
 bool log_config_is_async(void) {
-    pthread_rwlock_rdlock(&g_config_rwlock);
+    clog_rwlock_rdlock(&g_config_rwlock);
     bool async = g_config.async;
-    pthread_rwlock_unlock(&g_config_rwlock);
+    clog_rwlock_rdunlock(&g_config_rwlock);
     return async;
 }
 
 bool log_config_color_enabled(void) {
-    pthread_rwlock_rdlock(&g_config_rwlock);
+    clog_rwlock_rdlock(&g_config_rwlock);
     bool color = g_config.color;
-    pthread_rwlock_unlock(&g_config_rwlock);
+    clog_rwlock_rdunlock(&g_config_rwlock);
     return color;
 }

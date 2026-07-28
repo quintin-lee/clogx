@@ -1,6 +1,13 @@
 #include <stdio.h>
 #include <stdlib.h>
 #include <string.h>
+
+#if defined(_WIN32) || defined(_WIN64)
+int main(void) {
+    printf("fork safety test skipped on Windows\n");
+    return 0;
+}
+#else
 #include <unistd.h>
 #include <sys/wait.h>
 #include "log.h"
@@ -91,3 +98,4 @@ int main(void) {
     printf("fork safety test passed\n");
     return 0;
 }
+#endif

@@ -1,10 +1,7 @@
 #include <stdio.h>
 #include <stdlib.h>
 #include <string.h>
-#include <unistd.h>
-#include <pthread.h>
-#include <sys/socket.h>
-#include <netinet/in.h>
+#include "clog_port.h"
 #include "log.h"
 #include "log_sink.h"
 
@@ -15,15 +12,17 @@ typedef struct {
     int port;
     int received_lines;
     int ready;
-    pthread_mutex_t mutex;
-    pthread_cond_t cond;
+    clog_mutex_t mutex;
+    clog_cond_t cond;
 } server_ctx_t;
 
 static void *listener_thread(void *arg) {
     server_ctx_t *ctx = (server_ctx_t *)arg;
 
-    int server_fd = socket(AF_INET, SOCK_STREAM, 0);
-    if (server_fd < 0) {
+    clog_net_init();
+
+    clog_socket_t server_fd = socket(AF_INET, SOCK_STREAM, 0);
+    if (clog_is_invalid_socket(server_fd)) {
         perror("server socket");
         return NULL;
     }
@@ -36,46 +35,50 @@ static void *listener_thread(void *arg) {
 
     if (bind(server_fd, (struct sockaddr *)&addr, sizeof(addr)) < 0) {
         perror("server bind");
-        close(server_fd);
+        clog_close_socket(server_fd);
         return NULL;
     }
 
+#if defined(_WIN32) || defined(_WIN64)
+    int len = sizeof(addr);
+#else
     socklen_t len = sizeof(addr);
+#endif
     if (getsockname(server_fd, (struct sockaddr *)&addr, &len) < 0) {
         perror("getsockname");
-        close(server_fd);
+        clog_close_socket(server_fd);
         return NULL;
     }
     ctx->port = ntohs(addr.sin_port);
 
     if (listen(server_fd, 1) < 0) {
         perror("server listen");
-        close(server_fd);
+        clog_close_socket(server_fd);
         return NULL;
     }
 
-    pthread_mutex_lock(&ctx->mutex);
+    clog_mutex_lock(&ctx->mutex);
     ctx->ready = 1;
-    pthread_cond_signal(&ctx->cond);
-    pthread_mutex_unlock(&ctx->mutex);
+    clog_cond_signal(&ctx->cond);
+    clog_mutex_unlock(&ctx->mutex);
 
-    int client_fd = accept(server_fd, NULL, NULL);
-    if (client_fd < 0) {
+    clog_socket_t client_fd = accept(server_fd, NULL, NULL);
+    if (clog_is_invalid_socket(client_fd)) {
         perror("server accept");
-        close(server_fd);
+        clog_close_socket(server_fd);
         return NULL;
     }
 
     char buf[BUF_SIZE];
     int total = 0;
     int n;
-    while ((n = (int)recv(client_fd, buf + total, sizeof(buf) - 1 - (size_t)total, 0)) > 0) {
+    while ((n = (int)recv(client_fd, buf + total, (int)(sizeof(buf) - 1 - (size_t)total), 0)) > 0) {
         total += n;
         buf[total] = '\0';
     }
 
-    close(client_fd);
-    close(server_fd);
+    clog_close_socket(client_fd);
+    clog_close_socket(server_fd);
 
     int lines = 0;
     for (int i = 0; i < total; i++) {
@@ -90,20 +93,20 @@ static void *listener_thread(void *arg) {
 int main(void) {
     server_ctx_t ctx;
     memset(&ctx, 0, sizeof(ctx));
-    pthread_mutex_init(&ctx.mutex, NULL);
-    pthread_cond_init(&ctx.cond, NULL);
+    clog_mutex_init(&ctx.mutex);
+    clog_cond_init(&ctx.cond);
 
-    pthread_t server_thread;
-    if (pthread_create(&server_thread, NULL, listener_thread, &ctx) != 0) {
-        fprintf(stderr, "pthread_create failed\n");
+    clog_thread_t server_thread;
+    if (clog_thread_create(&server_thread, listener_thread, &ctx) != 0) {
+        fprintf(stderr, "clog_thread_create failed\n");
         return 1;
     }
 
-    pthread_mutex_lock(&ctx.mutex);
+    clog_mutex_lock(&ctx.mutex);
     while (!ctx.ready) {
-        pthread_cond_wait(&ctx.cond, &ctx.mutex);
+        clog_cond_wait(&ctx.cond, &ctx.mutex);
     }
-    pthread_mutex_unlock(&ctx.mutex);
+    clog_mutex_unlock(&ctx.mutex);
 
     /* Logger with socket sink only — no console, no file */
     log_sink_t *sink = socket_sink_create("127.0.0.1", ctx.port);
@@ -130,7 +133,7 @@ int main(void) {
     log_flush();
     log_destroy();
 
-    pthread_join(server_thread, NULL);
+    clog_thread_join(server_thread);
 
     printf("socket sink test: %d/%d lines\n", ctx.received_lines, NUM_MSGS);
     if (ctx.received_lines != NUM_MSGS) {
@@ -138,8 +141,8 @@ int main(void) {
         return 1;
     }
 
-    pthread_mutex_destroy(&ctx.mutex);
-    pthread_cond_destroy(&ctx.cond);
+    clog_mutex_destroy(&ctx.mutex);
+    clog_cond_destroy(&ctx.cond);
 
     /* Verify socket_sink_create_tls factory function */
     log_sink_t *tls_sink = socket_sink_create_tls("127.0.0.1", 9000, true, NULL, true);

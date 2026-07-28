@@ -2,12 +2,11 @@
  * @file async.c
  * @brief Async logger: deep-copy records into a queue consumed by one worker.
  */
-#define _POSIX_C_SOURCE 200809L
 #include <stdio.h>
 #include <stdlib.h>
 #include <string.h>
 #include <time.h>
-#include <pthread.h>
+#include "clog_port.h"
 #include "log_async.h"
 #include "queue.h"
 #include "dispatcher.h"
@@ -16,13 +15,12 @@
 
 typedef struct {
     mpsc_queue_t *queue;
-    pthread_t worker_thread;
+    clog_thread_t worker_thread;
     volatile int running;
     volatile int processing;
 } async_logger_t;
 
-static async_logger_t g_async_logger = {
-    .queue = NULL, .worker_thread = 0, .running = 0, .processing = 0};
+static async_logger_t g_async_logger = {.queue = NULL, .running = 0, .processing = 0};
 
 static char *dup_field(const char *s) {
     if (!s)
@@ -110,7 +108,7 @@ int log_async_init(int queue_size) {
 
     g_async_logger.running = 1;
 
-    if (pthread_create(&g_async_logger.worker_thread, NULL, async_worker, &g_async_logger) != 0) {
+    if (clog_thread_create(&g_async_logger.worker_thread, async_worker, &g_async_logger) != 0) {
         mpsc_queue_destroy(g_async_logger.queue);
         g_async_logger.queue = NULL;
         g_async_logger.running = 0;
@@ -126,7 +124,7 @@ void log_async_shutdown(void) {
 
     mpsc_queue_close(g_async_logger.queue);
     g_async_logger.running = 0;
-    pthread_join(g_async_logger.worker_thread, NULL);
+    clog_thread_join(g_async_logger.worker_thread);
     mpsc_queue_destroy(g_async_logger.queue);
     g_async_logger.queue = NULL;
 }
@@ -137,8 +135,7 @@ void log_async_flush(void) {
 
     mpsc_queue_wait_empty(g_async_logger.queue);
     while (g_async_logger.processing) {
-        struct timespec req = {.tv_sec = 0, .tv_nsec = 500000};
-        nanosleep(&req, NULL);
+        clog_sleep_ms(1);
     }
     log_dispatcher_flush();
 }
@@ -176,14 +173,14 @@ void log_async_atfork_child(void) {
     }
 
     mpsc_queue_t *q = g_async_logger.queue;
-    pthread_mutex_init(&q->mutex, NULL);
-    pthread_cond_init(&q->not_full, NULL);
-    pthread_cond_init(&q->not_empty, NULL);
-    pthread_cond_init(&q->drained, NULL);
+    clog_mutex_init(&q->mutex);
+    clog_cond_init(&q->not_full);
+    clog_cond_init(&q->not_empty);
+    clog_cond_init(&q->drained);
     q->closed = 0;
 
     g_async_logger.running = 1;
-    if (pthread_create(&g_async_logger.worker_thread, NULL, async_worker, &g_async_logger) != 0) {
+    if (clog_thread_create(&g_async_logger.worker_thread, async_worker, &g_async_logger) != 0) {
         g_async_logger.running = 0;
     }
 }
