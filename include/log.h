@@ -143,6 +143,16 @@ CLOGX_API clogx_errno_t log_install_signal_handlers(void);
 CLOGX_API void log_signal_handler(int sig);
 
 /**
+ * @brief Get the currently pending signal number, or 0 if none.
+ */
+CLOGX_API int log_get_pending_signal(void);
+
+/**
+ * @brief Process any pending signal: flushes logs and re-raises signal.
+ */
+CLOGX_API void log_process_pending_signals(void);
+
+/**
  * @brief Reload configuration and rebuild sinks.
  *
  * Always shuts down the async worker before replacing sinks, then restarts

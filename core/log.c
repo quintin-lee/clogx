@@ -124,6 +124,9 @@ static inline uint32_t get_thread_id(void) {
 
 void log_writevprintf(log_level_t level, const char *file, int line, const char *func,
                       const char *fmt, ...) {
+    if (log_get_pending_signal() != 0) {
+        log_process_pending_signals();
+    }
 
     if (level < log_get_level()) {
         return;

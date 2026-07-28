@@ -11,18 +11,28 @@
 #include <stdio.h>
 #include <string.h>
 
-static sig_atomic_t g_signal_handled = 0;
+static volatile sig_atomic_t g_signal_pending = 0;
 static struct sigaction g_old_sigterm;
 static struct sigaction g_old_sigint;
 static bool g_installed = false;
 
 void log_signal_handler(int sig) {
-    if (g_signal_handled) {
+    /* Pure Async-Signal-Safe handler: only set flag */
+    g_signal_pending = sig;
+}
+
+int log_get_pending_signal(void) {
+    return (int)g_signal_pending;
+}
+
+void log_process_pending_signals(void) {
+    int sig = (int)g_signal_pending;
+    if (sig == 0) {
         return;
     }
-    g_signal_handled = 1;
+    g_signal_pending = 0;
 
-    /* Gracefully flush all pending log records */
+    /* Gracefully flush all pending log records in main execution context */
     log_flush();
 
     /* Restore previous/default signal handler and re-raise */
@@ -59,7 +69,7 @@ clogx_errno_t log_install_signal_handlers(void) {
     }
 
     g_installed = true;
-    g_signal_handled = 0;
+    g_signal_pending = 0;
     return CLOG_OK;
 }
 
@@ -70,5 +80,5 @@ void log_restore_signal_handlers(void) {
     sigaction(SIGTERM, &g_old_sigterm, NULL);
     sigaction(SIGINT, &g_old_sigint, NULL);
     g_installed = false;
-    g_signal_handled = 0;
+    g_signal_pending = 0;
 }
