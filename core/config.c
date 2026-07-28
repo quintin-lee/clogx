@@ -26,6 +26,9 @@ typedef enum {
     HANDLER_MAX_SIZE,
     HANDLER_PORT,
     HANDLER_QUEUE_SIZE,
+    HANDLER_RATE_LIMIT_BURST,
+    HANDLER_RATE_LIMIT_ENABLE,
+    HANDLER_RATE_LIMIT_MAX_PER_SEC,
     HANDLER_SOCKET_ENABLE,
     HANDLER_SOCKET_TLS,
     HANDLER_SOCKET_TLS_CA_FILE,
@@ -60,6 +63,9 @@ static const config_key_t g_config_keys[] = {
     {"path", HANDLER_FILE_PATH},
     {"port", HANDLER_PORT},
     {"queue_size", HANDLER_QUEUE_SIZE},
+    {"rate_limit_burst", HANDLER_RATE_LIMIT_BURST},
+    {"rate_limit_enable", HANDLER_RATE_LIMIT_ENABLE},
+    {"rate_limit_max_per_sec", HANDLER_RATE_LIMIT_MAX_PER_SEC},
     {"socket_enable", HANDLER_SOCKET_ENABLE},
     {"socket_tls", HANDLER_SOCKET_TLS},
     {"socket_tls_ca_file", HANDLER_SOCKET_TLS_CA_FILE},
@@ -295,6 +301,33 @@ static int parse_config_file(const char *filepath, log_config_t *cfg) {
                     case HANDLER_SOCKET_TLS_SKIP_VERIFY:
                         cfg->socket_tls_skip_verify = (strcmp(val, "true") == 0);
                         break;
+                    case HANDLER_RATE_LIMIT_ENABLE:
+                        cfg->rate_limit_enable = (strcmp(val, "true") == 0);
+                        break;
+                    case HANDLER_RATE_LIMIT_MAX_PER_SEC: {
+                        char *end = NULL;
+                        errno = 0;
+                        long v = strtol(val, &end, 10);
+                        if (end == val || *end != '\0' || errno == ERANGE || v <= 0) {
+                            fprintf(stderr, "Invalid rate_limit_max_per_sec: %s\n", val);
+                            has_errors = 1;
+                        } else {
+                            cfg->rate_limit_max_per_sec = (int)v;
+                        }
+                        break;
+                    }
+                    case HANDLER_RATE_LIMIT_BURST: {
+                        char *end = NULL;
+                        errno = 0;
+                        long v = strtol(val, &end, 10);
+                        if (end == val || *end != '\0' || errno == ERANGE || v <= 0) {
+                            fprintf(stderr, "Invalid rate_limit_burst: %s\n", val);
+                            has_errors = 1;
+                        } else {
+                            cfg->rate_limit_burst = (int)v;
+                        }
+                        break;
+                    }
                     }
                 }
                 /* unknown keys are silently skipped */

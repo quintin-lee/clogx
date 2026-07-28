@@ -51,6 +51,9 @@ typedef struct {
     bool socket_tls;                             /**< Enable TLS encryption for socket sink. */
     char socket_tls_ca_file[CLOG_MAX_PATH_SIZE]; /**< Path to CA certificate file (optional). */
     bool socket_tls_skip_verify;                 /**< Skip server cert verification. */
+    bool rate_limit_enable;                      /**< Enable global rate limiting. */
+    int rate_limit_max_per_sec;                  /**< Max allowed log events per second. */
+    int rate_limit_burst;                        /**< Maximum burst capacity. */
 } log_config_t;
 
 /**
