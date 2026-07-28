@@ -142,6 +142,7 @@ if(CLOG_BUILD_TESTS)
         test_socket_sink
         test_sink_level
         test_log_level
+        test_json_formatter
     )
 
     # Tests that directly reference internal symbols (not exported from shared lib)

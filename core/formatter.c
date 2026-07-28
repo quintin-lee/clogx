@@ -1,13 +1,13 @@
 /**
  * @file formatter.c
- * @brief Token formatter for log lines (@ref log_formatter_init for tokens).
+ * @brief Token formatter and JSON renderer for log lines.
  */
+#include <ctype.h>
+#include <pthread.h>
 #include <stdio.h>
 #include <stdlib.h>
 #include <string.h>
 #include <time.h>
-#include <ctype.h>
-#include <pthread.h>
 #include "log_formatter.h"
 #include "log_limits.h"
 #include "log_record.h"
@@ -50,11 +50,147 @@ static int append_token(char **out, size_t *remaining, const char *token, size_t
     return (int)token_len;
 }
 
+static void append_json_escaped_string(char **out, size_t *remaining, const char *str) {
+    if (!str)
+        str = "";
+    while (*str && *remaining > 1) {
+        unsigned char c = (unsigned char)*str++;
+        if (c == '"') {
+            if (*remaining <= 2)
+                break;
+            *(*out)++ = '\\';
+            *(*out)++ = '"';
+            *remaining -= 2;
+        } else if (c == '\\') {
+            if (*remaining <= 2)
+                break;
+            *(*out)++ = '\\';
+            *(*out)++ = '\\';
+            *remaining -= 2;
+        } else if (c == '\b') {
+            if (*remaining <= 2)
+                break;
+            *(*out)++ = '\\';
+            *(*out)++ = 'b';
+            *remaining -= 2;
+        } else if (c == '\f') {
+            if (*remaining <= 2)
+                break;
+            *(*out)++ = '\\';
+            *(*out)++ = 'f';
+            *remaining -= 2;
+        } else if (c == '\n') {
+            if (*remaining <= 2)
+                break;
+            *(*out)++ = '\\';
+            *(*out)++ = 'n';
+            *remaining -= 2;
+        } else if (c == '\r') {
+            if (*remaining <= 2)
+                break;
+            *(*out)++ = '\\';
+            *(*out)++ = 'r';
+            *remaining -= 2;
+        } else if (c == '\t') {
+            if (*remaining <= 2)
+                break;
+            *(*out)++ = '\\';
+            *(*out)++ = 't';
+            *remaining -= 2;
+        } else if (c < 0x20) {
+            if (*remaining <= 6)
+                break;
+            int n = snprintf(*out, *remaining, "\\u00%02x", c);
+            if (n > 0 && (size_t)n < *remaining) {
+                *out += n;
+                *remaining -= (size_t)n;
+            } else {
+                break;
+            }
+        } else {
+            *(*out)++ = (char)c;
+            (*remaining)--;
+        }
+    }
+    **out = '\0';
+}
+
+static int format_json(log_record_t *restrict record, char *restrict buf, size_t buf_size) {
+    struct tm tm_buf;
+    time_t sec = (time_t)(record->timestamp / 1000000);
+    uint32_t usec = (uint32_t)(record->timestamp % 1000000);
+    localtime_r(&sec, &tm_buf);
+
+    char time_buf[64];
+    const char *tf;
+    pthread_mutex_lock(&g_format_mutex);
+    tf = g_time_format_buf;
+    pthread_mutex_unlock(&g_format_mutex);
+    strftime(time_buf, sizeof(time_buf), tf, &tm_buf);
+
+    char *out = buf;
+    size_t remaining = buf_size;
+
+    int ret = snprintf(out, remaining, "{\"timestamp\":\"%s.%06u\",\"level\":\"%s\",\"module\":\"",
+                       time_buf, usec, level_to_string(record->level));
+    if (ret <= 0 || (size_t)ret >= remaining)
+        return -1;
+    out += ret;
+    remaining -= (size_t)ret;
+
+    append_json_escaped_string(&out, &remaining, record->module ? record->module : "");
+
+    ret = snprintf(out, remaining, "\",\"file\":\"");
+    if (ret <= 0 || (size_t)ret >= remaining)
+        return -1;
+    out += ret;
+    remaining -= (size_t)ret;
+
+    append_json_escaped_string(&out, &remaining, record->file ? record->file : "");
+
+    ret = snprintf(out, remaining, "\",\"line\":%d,\"func\":\"", record->line);
+    if (ret <= 0 || (size_t)ret >= remaining)
+        return -1;
+    out += ret;
+    remaining -= (size_t)ret;
+
+    append_json_escaped_string(&out, &remaining, record->func ? record->func : "");
+
+    ret = snprintf(out, remaining, "\",\"thread\":%u,\"pid\":%u,\"tag\":\"", record->tid,
+                   record->pid);
+    if (ret <= 0 || (size_t)ret >= remaining)
+        return -1;
+    out += ret;
+    remaining -= (size_t)ret;
+
+    append_json_escaped_string(&out, &remaining, record->tag ? record->tag : "");
+
+    ret = snprintf(out, remaining, "\",\"message\":\"");
+    if (ret <= 0 || (size_t)ret >= remaining)
+        return -1;
+    out += ret;
+    remaining -= (size_t)ret;
+
+    append_json_escaped_string(&out, &remaining, record->message ? record->message : "");
+
+    ret = snprintf(out, remaining, "\"}");
+    if (ret <= 0 || (size_t)ret >= remaining)
+        return -1;
+    out += ret;
+    remaining -= (size_t)ret;
+
+    return (int)(out - buf);
+}
+
 int log_formatter_format(log_record_t *restrict record, char *restrict buf, size_t buf_size) {
     const char *fmt;
     pthread_mutex_lock(&g_format_mutex);
     fmt = g_format_ptr;
     pthread_mutex_unlock(&g_format_mutex);
+
+    if (strcmp(fmt, "json") == 0 || strcmp(fmt, "JSON") == 0) {
+        return format_json(record, buf, buf_size);
+    }
 
     char *out = buf;
     size_t remaining = buf_size;
