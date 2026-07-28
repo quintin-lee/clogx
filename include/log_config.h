@@ -48,6 +48,11 @@ typedef struct {
 
 /**
  * @brief Access the process-wide configuration object.
+ *
+ * @note The returned pointer and its `format` / `time_format` strings point to
+ *       internal storage.  They remain valid until the next @ref log_config_set,
+ *       @ref log_config_init, or @ref log_config_reload call.
+ *
  * @return Pointer valid after @ref log_config_init.
  */
 CLOGX_API log_config_t *log_config_get(void);
@@ -65,9 +70,13 @@ CLOGX_API int log_config_init(const char *yaml_path);
 /**
  * @brief Apply a caller-provided configuration directly (thread-safe).
  *
- * Copies @p cfg into the process-wide config, including @c format and
- * @c time_format strings.  After this call, @ref log_config_get returns
- * the new values and any previously remembered reload path is cleared.
+ * All fields from @p cfg are copied into the process-wide config, including
+ * `format` and `time_format` strings (deep-copied into internal buffers).
+ * After this call @ref log_config_get returns the new values and any
+ * previously remembered reload path is cleared.
+ *
+ * @note The caller retains ownership of @p cfg and its string members; they
+ *       may be freed or reused immediately after this call returns.
  *
  * @param[in] cfg Configuration to apply.
  * @return 0 on success.
