@@ -98,8 +98,7 @@ static int parse_config_file(const char *filepath, log_config_t *cfg) {
         } else if (strcmp(key, "color") == 0) {
             cfg->color = (strcmp(value, "true") == 0);
         } else if (strcmp(key, "format") == 0) {
-            strncpy(g_config_format, value, sizeof(g_config_format) - 1);
-            g_config_format[sizeof(g_config_format) - 1] = '\0';
+            snprintf(g_config_format, sizeof(g_config_format), "%s", value);
             cfg->format = g_config_format;
         } else if (strcmp(key, "console_enable") == 0) {
             cfg->console_enable = (strcmp(value, "true") == 0);
@@ -110,8 +109,7 @@ static int parse_config_file(const char *filepath, log_config_t *cfg) {
         } else if (strcmp(key, "socket_enable") == 0) {
             cfg->socket_enable = (strcmp(value, "true") == 0);
         } else if (strcmp(key, "path") == 0 || strcmp(key, "file_path") == 0) {
-            strncpy(cfg->file_path, value, sizeof(cfg->file_path) - 1);
-            cfg->file_path[sizeof(cfg->file_path) - 1] = '\0';
+            snprintf(cfg->file_path, sizeof(cfg->file_path), "%s", value);
             cfg->file_enable = 1;
         } else if (strcmp(key, "max_size") == 0) {
             char size_buf[64];
@@ -178,8 +176,7 @@ static int parse_config_file(const char *filepath, log_config_t *cfg) {
                 cfg->file_backups = (int)bk;
             }
         } else if (strcmp(key, "host") == 0) {
-            strncpy(cfg->socket_host, value, sizeof(cfg->socket_host) - 1);
-            cfg->socket_host[sizeof(cfg->socket_host) - 1] = '\0';
+            snprintf(cfg->socket_host, sizeof(cfg->socket_host), "%s", value);
             cfg->socket_enable = 1;
         } else if (strcmp(key, "port") == 0) {
             char *end = NULL;
@@ -216,8 +213,7 @@ static int load_default_and_apply(const char *yaml_path) {
 
     /* Reload passes g_config_path itself; avoid overlapping copy (ASan). */
     if (yaml_path && yaml_path != g_config_path && strlen(yaml_path) > 0) {
-        strncpy(g_config_path, yaml_path, sizeof(g_config_path) - 1);
-        g_config_path[sizeof(g_config_path) - 1] = '\0';
+        snprintf(g_config_path, sizeof(g_config_path), "%s", yaml_path);
     }
 
     if (access(g_config_path, R_OK) == 0) {

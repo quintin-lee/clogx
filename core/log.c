@@ -67,11 +67,10 @@ void (*log_get_async_fallback_cb(void))(void) {
 void log_set_module(const char *module) {
     pthread_mutex_lock(&g_module_mutex);
     if (!module || !*module) {
-        strncpy(g_module, "main", sizeof(g_module) - 1);
+        snprintf(g_module, sizeof(g_module), "%s", "main");
     } else {
-        strncpy(g_module, module, sizeof(g_module) - 1);
+        snprintf(g_module, sizeof(g_module), "%s", module);
     }
-    g_module[sizeof(g_module) - 1] = '\0';
     pthread_mutex_unlock(&g_module_mutex);
 }
 

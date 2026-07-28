@@ -163,8 +163,7 @@ int log_formatter_format(log_record_t *record, char *buf, size_t buf_size) {
 int log_formatter_init(const char *format) {
     pthread_mutex_lock(&g_format_mutex);
     if (format && strlen(format) > 0) {
-        strncpy(g_format_buf, format, sizeof(g_format_buf) - 1);
-        g_format_buf[sizeof(g_format_buf) - 1] = '\0';
+        snprintf(g_format_buf, sizeof(g_format_buf), "%s", format);
         g_format_ptr = g_format_buf;
     } else {
         g_format_ptr = g_default_format;
