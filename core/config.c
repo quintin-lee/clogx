@@ -409,7 +409,7 @@ static int load_default_and_apply(const char *yaml_path) {
         g_config_path[0] = '\0';
     }
 
-    if (access(g_config_path, R_OK) == 0) {
+    if (clog_access(g_config_path, R_OK) == 0) {
         return parse_config_file(g_config_path, &g_config);
     }
 

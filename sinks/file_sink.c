@@ -125,8 +125,8 @@ static void file_atfork_child(log_sink_t *sink) {
 
     data->file = fopen(data->path, "a");
     if (data->file) {
-        struct stat st;
-        if (fstat(fileno(data->file), &st) == 0 && st.st_size > 0) {
+        clog_stat_t st;
+        if (clog_fstat(fileno(data->file), &st) == 0 && st.st_size > 0) {
             data->current_size = (uint64_t)st.st_size;
         }
     }
@@ -175,8 +175,8 @@ log_sink_t *file_sink_create(const char *path, uint64_t max_size, int backups) {
 
     /* Append mode ignores fseek; use fstat for initial size. */
     {
-        struct stat st;
-        if (fstat(fileno(data->file), &st) == 0 && st.st_size > 0) {
+        clog_stat_t st;
+        if (clog_fstat(fileno(data->file), &st) == 0 && st.st_size > 0) {
             data->current_size = (uint64_t)st.st_size;
         }
     }

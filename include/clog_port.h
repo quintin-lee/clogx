@@ -14,6 +14,12 @@
 #include <time.h>
 
 #if defined(_WIN32) || defined(_WIN64)
+#ifndef _CRT_SECURE_NO_WARNINGS
+#define _CRT_SECURE_NO_WARNINGS
+#endif
+#ifndef _CRT_NONSTDC_NO_DEPRECATE
+#define _CRT_NONSTDC_NO_DEPRECATE
+#endif
 #ifndef WIN32_LEAN_AND_MEAN
 #define WIN32_LEAN_AND_MEAN
 #endif
@@ -21,8 +27,20 @@
 #include <process.h>
 #include <io.h>
 #include <direct.h>
+#include <sys/stat.h>
 #include <winsock2.h>
 #include <ws2tcpip.h>
+
+#ifndef R_OK
+#define R_OK 4
+#endif
+#ifndef F_OK
+#define F_OK 0
+#endif
+
+typedef struct _stat64 clog_stat_t;
+#define clog_fstat(fd, st) _fstat64((fd), (st))
+#define clog_stat(path, st) _stat64((path), (st))
 
 /* Process & File utilities */
 #define clog_getpid() ((uint32_t)GetCurrentProcessId())
@@ -164,6 +182,10 @@ static inline struct tm *clog_gmtime_r(const time_t *timep, struct tm *result) {
 #include <netinet/in.h>
 #include <arpa/inet.h>
 #include <netdb.h>
+
+typedef struct stat clog_stat_t;
+#define clog_fstat(fd, st) fstat((fd), (st))
+#define clog_stat(path, st) stat((path), (st))
 
 #define clog_getpid() ((uint32_t)getpid())
 #define clog_sleep_ms(ms) usleep((useconds_t)(ms) * 1000)
