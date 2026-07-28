@@ -63,6 +63,7 @@ set(CLOG_SOURCES
     sinks/console_sink.c
     sinks/file_sink.c
     sinks/socket_sink.c
+    sinks/custom_sink.c
 )
 
 # Object library — all sources compiled once, shared across library and internal-symbol tests
@@ -162,6 +163,7 @@ if(CLOG_BUILD_TESTS)
         test_rate_limit
         test_fork_safety
         test_signal_handler
+        test_custom_sink
     )
 
     # Tests that directly reference internal symbols (not exported from shared lib)

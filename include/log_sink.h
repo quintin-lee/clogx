@@ -109,6 +109,26 @@ CLOGX_API log_sink_t *socket_sink_create_tls(const char *host, int port, bool us
                                              const char *ca_file, bool skip_verify);
 
 /**
+ * @brief Create a custom user-defined sink plugin.
+ * @param[in] write_fn    Write callback (must not be NULL).
+ * @param[in] flush_fn    Optional flush callback (or NULL).
+ * @param[in] destroy_fn  Optional destroy callback (or NULL).
+ * @param[in] private_data Implementation-private pointer passed to callbacks.
+ * @return New custom sink, or NULL on invalid arguments / allocation failure.
+ */
+CLOGX_API log_sink_t *custom_sink_create(int (*write_fn)(log_sink_t *sink, const char *buf, size_t len),
+                                         void (*flush_fn)(log_sink_t *sink),
+                                         void (*destroy_fn)(log_sink_t *sink),
+                                         void *private_data);
+
+/**
+ * @brief Retrieve the implementation-private pointer of a custom sink.
+ * @param[in] sink Target custom sink (may be NULL).
+ * @return Implementation-private pointer, or NULL if sink is NULL or not a custom sink.
+ */
+CLOGX_API void *custom_sink_get_private_data(log_sink_t *sink);
+
+/**
  * @brief Set the minimum severity level for a sink.
  *
  * Messages below this level are dropped by the dispatcher before reaching
