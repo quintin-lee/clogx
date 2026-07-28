@@ -1,11 +1,11 @@
 /**
  * @file rate_limit.c
- * @brief Token bucket rate limiter implementation.
+ * @brief Token bucket rate limiter implementation using CLOCK_MONOTONIC.
  */
 
+#define _POSIX_C_SOURCE 200809L
 #include "log_rate_limit.h"
 #include <pthread.h>
-#include <sys/time.h>
 #include <time.h>
 
 static bool g_enabled = false;
@@ -17,9 +17,9 @@ static uint64_t g_suppressed_count = 0;
 static pthread_mutex_t g_rate_mutex = PTHREAD_MUTEX_INITIALIZER;
 
 static uint64_t get_now_us(void) {
-    struct timeval tv;
-    gettimeofday(&tv, NULL);
-    return (uint64_t)tv.tv_sec * 1000000ULL + (uint64_t)tv.tv_usec;
+    struct timespec ts;
+    clock_gettime(CLOCK_MONOTONIC, &ts);
+    return (uint64_t)ts.tv_sec * 1000000ULL + (uint64_t)ts.tv_nsec / 1000ULL;
 }
 
 void log_rate_limit_init(bool enable, int max_per_sec, int burst) {
