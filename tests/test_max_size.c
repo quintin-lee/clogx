@@ -60,7 +60,15 @@ int main(void) {
     if (write_config("12XB") != 0)
         return 1;
     if (log_config_init(CONFIG_PATH) == 0) {
-        fprintf(stderr, "expected invalid max_size to fail\n");
+        fprintf(stderr, "expected invalid max_size (12XB) to fail\n");
+        return 1;
+    }
+
+    /* Overflow: 20000000000GB > UINT64_MAX */
+    if (write_config("20000000000GB") != 0)
+        return 1;
+    if (log_config_init(CONFIG_PATH) == 0) {
+        fprintf(stderr, "expected overflow max_size to fail\n");
         return 1;
     }
 

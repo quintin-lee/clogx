@@ -156,12 +156,16 @@ static int parse_config_file(const char *filepath, log_config_t *cfg) {
                 }
             }
 
+            errno = 0;
             n = strtoull(size_buf, &end, 10);
-            if (end == size_buf || *end != '\0') {
+            if (end == size_buf || *end != '\0' || errno == ERANGE) {
                 fprintf(stderr, "Invalid max_size: %s\n", value);
                 has_errors = 1;
+            } else if (mult > 1 && n > UINT64_MAX / mult) {
+                fprintf(stderr, "max_size overflow: %s (too large)\n", value);
+                has_errors = 1;
             } else {
-                cfg->file_max_size = (uint64_t)n * mult;
+                cfg->file_max_size = n * mult;
             }
         } else if (strcmp(key, "backup") == 0 || strcmp(key, "backups") == 0) {
             char *end = NULL;
