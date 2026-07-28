@@ -21,18 +21,16 @@ int main(int argc, char **argv) {
 
     log_formatter_init(buf, "%Y-%m-%d %H:%M:%S");
 
-    log_record_t rec = {
-        .level = LOG_LEVEL_INFO,
-        .timestamp = 1700000000000000ULL,
-        .tid = 1001,
-        .pid = 2002,
-        .file = "test.c",
-        .func = "fuzz_func",
-        .line = 42,
-        .module = "fuzz_mod",
-        .tag = "fuzz_tag",
-        .message = "fuzz test message"
-    };
+    log_record_t rec = {.level = LOG_LEVEL_INFO,
+                        .timestamp = 1700000000000000ULL,
+                        .tid = 1001,
+                        .pid = 2002,
+                        .file = "test.c",
+                        .func = "fuzz_func",
+                        .line = 42,
+                        .module = "fuzz_mod",
+                        .tag = "fuzz_tag",
+                        .message = "fuzz test message"};
 
     char out_buf[4096];
     log_formatter_format(&rec, out_buf, sizeof(out_buf));
