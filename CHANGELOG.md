@@ -5,6 +5,9 @@ All notable changes to this project will be documented in this file.
 ## [Unreleased]
 
 ### Added
+- Official package manager integration: `vcpkg.json` manifest with `tls` and
+  `system-yaml` feature flags; Conan 2.0+ recipe (`conanfile.py`) supporting
+  `shared`, `with_tls`, and `with_yaml` options
 - Native JSON structured logging: setting `format: "json"` (or `format: "JSON"`)
   emits single-line JSON log objects with RFC 8259 string escaping for quotes,
   backslashes, newlines, and control bytes

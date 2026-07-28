@@ -133,6 +133,31 @@ Or with pkg-config:
 pkg-config --cflags --libs clogx
 ```
 
+### Package Managers
+
+#### vcpkg
+
+Add `clogx` to your `vcpkg.json`:
+
+```json
+{
+  "dependencies": [
+    {
+      "name": "clogx",
+      "features": ["tls"]
+    }
+  ]
+}
+```
+
+#### Conan 2.0
+
+Install using `conanfile.py`:
+
+```bash
+conan install . --build=missing -o clogx/*:with_tls=True
+```
+
 ## Configuration
 
 The config file is YAML with all settings under a top-level `log:` mapping.
