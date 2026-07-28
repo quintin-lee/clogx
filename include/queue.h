@@ -68,6 +68,16 @@ int mpsc_queue_try_put(mpsc_queue_t *restrict q, log_record_t *restrict record);
 int mpsc_queue_get(mpsc_queue_t *restrict q, log_record_t *restrict record);
 
 /**
+ * @brief Dequeue up to max_records in a single lock step (blocks while empty).
+ * @param[in,out] q           Queue instance.
+ * @param[out]    records     Destination array for dequeued records.
+ * @param[in]     max_records Maximum number of records to dequeue.
+ * @return Number of records dequeued (1..max_records), or -1 when closed and empty.
+ */
+int mpsc_queue_get_batch(mpsc_queue_t *restrict q, log_record_t *restrict records,
+                         size_t max_records);
+
+/**
  * @brief Mark the queue closed and wake all waiters.
  *
  * Further puts fail. Gets continue until the buffer is empty, then return -1.

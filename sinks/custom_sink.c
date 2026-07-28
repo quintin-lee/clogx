@@ -46,8 +46,7 @@ static void custom_destroy(log_sink_t *sink) {
 
 log_sink_t *custom_sink_create(int (*write_fn)(log_sink_t *sink, const char *buf, size_t len),
                                void (*flush_fn)(log_sink_t *sink),
-                               void (*destroy_fn)(log_sink_t *sink),
-                               void *private_data) {
+                               void (*destroy_fn)(log_sink_t *sink), void *private_data) {
     if (!write_fn)
         return NULL;
 

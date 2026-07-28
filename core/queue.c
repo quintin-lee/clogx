@@ -79,7 +79,12 @@ int mpsc_queue_try_put(mpsc_queue_t *restrict q, log_record_t *restrict record) 
 }
 
 int mpsc_queue_get(mpsc_queue_t *restrict q, log_record_t *restrict record) {
-    if (!q || !record)
+    return mpsc_queue_get_batch(q, record, 1) == 1 ? 0 : -1;
+}
+
+int mpsc_queue_get_batch(mpsc_queue_t *restrict q, log_record_t *restrict records,
+                         size_t max_records) {
+    if (!q || !records || max_records == 0)
         return -1;
 
     clog_mutex_lock(&q->mutex);
@@ -92,18 +97,21 @@ int mpsc_queue_get(mpsc_queue_t *restrict q, log_record_t *restrict record) {
         clog_cond_wait(&q->not_empty, &q->mutex);
     }
 
-    *record = q->buffer[q->tail];
-    q->tail = (q->tail + 1) % q->capacity;
-    q->count--;
+    size_t count_to_get = q->count < max_records ? q->count : max_records;
+    for (size_t i = 0; i < count_to_get; i++) {
+        records[i] = q->buffer[q->tail];
+        q->tail = (q->tail + 1) % q->capacity;
+        q->count--;
+    }
 
     if (q->count == 0) {
         clog_cond_broadcast(&q->drained);
     }
 
-    clog_cond_signal(&q->not_full);
+    clog_cond_broadcast(&q->not_full);
     clog_mutex_unlock(&q->mutex);
 
-    return 0;
+    return (int)count_to_get;
 }
 
 void mpsc_queue_close(mpsc_queue_t *q) {

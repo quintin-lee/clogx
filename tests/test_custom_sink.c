@@ -16,7 +16,8 @@ static int my_custom_write(log_sink_t *sink, const char *buf, size_t len) {
     if (!data)
         return -1;
     data->write_count++;
-    snprintf(data->last_msg, sizeof(data->last_msg), "%.*s", (int)(len < sizeof(data->last_msg) ? len : sizeof(data->last_msg) - 1), buf);
+    snprintf(data->last_msg, sizeof(data->last_msg), "%.*s",
+             (int)(len < sizeof(data->last_msg) ? len : sizeof(data->last_msg) - 1), buf);
     return (int)len;
 }
 
@@ -37,7 +38,8 @@ static void my_custom_destroy(log_sink_t *sink) {
 int main(void) {
     test_custom_data_t user_data = {0};
 
-    log_sink_t *custom_sink = custom_sink_create(my_custom_write, my_custom_flush, my_custom_destroy, &user_data);
+    log_sink_t *custom_sink =
+        custom_sink_create(my_custom_write, my_custom_flush, my_custom_destroy, &user_data);
     if (!custom_sink) {
         fprintf(stderr, "custom_sink_create failed\n");
         return 1;

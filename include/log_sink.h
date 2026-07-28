@@ -116,10 +116,10 @@ CLOGX_API log_sink_t *socket_sink_create_tls(const char *host, int port, bool us
  * @param[in] private_data Implementation-private pointer passed to callbacks.
  * @return New custom sink, or NULL on invalid arguments / allocation failure.
  */
-CLOGX_API log_sink_t *custom_sink_create(int (*write_fn)(log_sink_t *sink, const char *buf, size_t len),
+CLOGX_API log_sink_t *custom_sink_create(int (*write_fn)(log_sink_t *sink, const char *buf,
+                                                         size_t len),
                                          void (*flush_fn)(log_sink_t *sink),
-                                         void (*destroy_fn)(log_sink_t *sink),
-                                         void *private_data);
+                                         void (*destroy_fn)(log_sink_t *sink), void *private_data);
 
 /**
  * @brief Retrieve the implementation-private pointer of a custom sink.

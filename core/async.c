@@ -20,16 +20,15 @@ typedef struct {
     volatile int processing;
 } async_logger_t;
 
-static async_logger_t g_async_logger = {
-    .queue = NULL, .running = 0, .processing = 0};
+static async_logger_t g_async_logger = {.queue = NULL, .running = 0, .processing = 0};
 
 /** @brief Free string fields allocated as a single block by @ref log_record_clone. */
 static void log_record_free_owned(log_record_t *record) {
     if (!record)
         return;
 
-    const char *block = record->message ? record->message :
-                        (record->module ? record->module : record->tag);
+    const char *block =
+        record->message ? record->message : (record->module ? record->module : record->tag);
     if (block) {
         free((void *)block);
     }
@@ -42,7 +41,8 @@ static void log_record_free_owned(log_record_t *record) {
 }
 
 /**
- * @brief Deep-copy dynamic string fields into a single block so the record outlives the producer stack frame.
+ * @brief Deep-copy dynamic string fields into a single block so the record outlives the producer
+ * stack frame.
  * @param[out] dst Destination record (owned strings in a contiguous block on success).
  * @param[in]  src Source record (may reference stack storage).
  * @return 0 on success, -1 on allocation failure.
@@ -60,8 +60,7 @@ static int log_record_clone(log_record_t *restrict dst, const log_record_t *rest
     size_t mod_len = src->module ? strlen(src->module) : 0;
     size_t tag_len = src->tag ? strlen(src->tag) : 0;
 
-    size_t total_bytes = (src->message ? msg_len + 1 : 0) +
-                         (src->module ? mod_len + 1 : 0) +
+    size_t total_bytes = (src->message ? msg_len + 1 : 0) + (src->module ? mod_len + 1 : 0) +
                          (src->tag ? tag_len + 1 : 0);
 
     if (total_bytes == 0) {
@@ -72,7 +71,8 @@ static int log_record_clone(log_record_t *restrict dst, const log_record_t *rest
     }
 
     char *block = malloc(total_bytes);
-    if (!block) return -1;
+    if (!block)
+        return -1;
 
     char *p = block;
     if (src->message) {
@@ -107,19 +107,23 @@ static int log_record_clone(log_record_t *restrict dst, const log_record_t *rest
  * @param[in] arg Pointer to async_logger_t.
  * @return Always NULL.
  */
+#define ASYNC_BATCH_SIZE 64
+
 static void *async_worker(void *arg) {
     async_logger_t *logger = (async_logger_t *)arg;
-    log_record_t record;
+    log_record_t batch[ASYNC_BATCH_SIZE];
 
     while (1) {
-        int ret = mpsc_queue_get(logger->queue, &record);
-        if (ret != 0) {
+        int count = mpsc_queue_get_batch(logger->queue, batch, ASYNC_BATCH_SIZE);
+        if (count <= 0) {
             break;
         }
 
         logger->processing = 1;
-        log_dispatcher_dispatch(&record);
-        log_record_free_owned(&record);
+        for (int i = 0; i < count; i++) {
+            log_dispatcher_dispatch(&batch[i]);
+            log_record_free_owned(&batch[i]);
+        }
         logger->processing = 0;
     }
 
