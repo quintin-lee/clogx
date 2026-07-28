@@ -115,12 +115,14 @@ The config file is a simple `key: value` text format (not full YAML). Pass the p
 Example:
 
 ```yaml
-level: INFO
+level: TRACE
 async: false
 queue_size: 8192
 color: true
-format: [%time] [%level] %msg
+format: "[%time] [%level] [%module] %msg (%file:%line)"
+time_format: "%Y-%m-%d %H:%M:%S"
 console_enable: true
+console_stderr: false
 file_enable: true
 file_path: logs/server.log
 max_size: 100MB

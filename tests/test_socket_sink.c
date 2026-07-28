@@ -9,7 +9,7 @@
 #include "log_sink.h"
 
 #define NUM_MSGS 50
-#define BUF_SIZE 4096
+#define BUF_SIZE 16384
 
 typedef struct {
     int port;
