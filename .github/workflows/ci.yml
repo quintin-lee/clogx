@@ -8,21 +8,39 @@ on:
 
 jobs:
   build-and-test:
-    runs-on: ubuntu-latest
+    runs-on: ${{ matrix.os }}
     strategy:
+      fail-fast: false
       matrix:
-        build_type: [makefile, cmake]
+        include:
+          - os: ubuntu-latest
+            build_type: makefile
+          - os: ubuntu-latest
+            build_type: cmake
+          - os: macos-latest
+            build_type: cmake
+          - os: windows-latest
+            build_type: cmake
 
     steps:
       - name: Checkout
         uses: actions/checkout@v7
 
+      - name: Install libyaml (macOS)
+        if: matrix.os == 'macos-latest'
+        run: brew install libyaml
+
+      - name: Install dependencies (Windows)
+        if: matrix.os == 'windows-latest'
+        run: |
+          vcpkg install yaml-cpp openssl
+
       - name: Build with Makefile
-        if: matrix.build_type == 'makefile'
+        if: matrix.build_type == 'makefile' && matrix.os != 'windows-latest'
         run: make
 
       - name: Run tests with Makefile
-        if: matrix.build_type == 'makefile'
+        if: matrix.build_type == 'makefile' && matrix.os != 'windows-latest'
         run: make test
 
       - name: Configure with CMake
