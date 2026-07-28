@@ -111,6 +111,25 @@ static void file_destroy(log_sink_t *sink) {
     free(sink);
 }
 
+static void file_atfork_child(log_sink_t *sink) {
+    if (!sink || !sink->private_data)
+        return;
+
+    file_sink_data_t *data = (file_sink_data_t *)sink->private_data;
+    if (data->file) {
+        fclose(data->file);
+        data->file = NULL;
+    }
+
+    data->file = fopen(data->path, "a");
+    if (data->file) {
+        struct stat st;
+        if (fstat(fileno(data->file), &st) == 0 && st.st_size > 0) {
+            data->current_size = (uint64_t)st.st_size;
+        }
+    }
+}
+
 log_sink_t *file_sink_create(const char *path, uint64_t max_size, int backups) {
     if (!path || strlen(path) == 0)
         return NULL;
@@ -163,6 +182,7 @@ log_sink_t *file_sink_create(const char *path, uint64_t max_size, int backups) {
     sink->write = file_write;
     sink->flush = file_flush;
     sink->destroy = file_destroy;
+    sink->atfork_child = file_atfork_child;
     sink->private_data = data;
     sink->min_level = LOG_LEVEL_TRACE;
     return sink;

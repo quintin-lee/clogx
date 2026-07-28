@@ -38,6 +38,9 @@ struct log_sink {
     /** @brief Release resources and free the sink object. */
     void (*destroy)(log_sink_t *sink);
 
+    /** @brief Handle fork in child process: re-open file/socket descriptor. */
+    void (*atfork_child)(log_sink_t *sink);
+
     /** @brief Implementation-private data. */
     void *private_data;
 

@@ -45,8 +45,8 @@ int main(void) {
         }
 
         LOG_INFO("signal-test-msg-before-sigterm");
-        /* Raise SIGINT which should trigger log_signal_handler, flush log, and terminate child */
         raise(SIGINT);
+        log_process_pending_signals();
         _exit(0);
     }
 

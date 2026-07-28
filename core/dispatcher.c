@@ -313,5 +313,10 @@ void log_dispatcher_atfork_parent(void) {
 }
 
 void log_dispatcher_atfork_child(void) {
+    for (int i = 0; i < g_dispatcher.sink_count; i++) {
+        if (g_dispatcher.sinks[i] && g_dispatcher.sinks[i]->atfork_child) {
+            g_dispatcher.sinks[i]->atfork_child(g_dispatcher.sinks[i]);
+        }
+    }
     pthread_mutex_unlock(&g_dispatcher.mutex);
 }

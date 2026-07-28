@@ -183,6 +183,27 @@ static void socket_destroy(log_sink_t *sink) {
     free(sink);
 }
 
+static void socket_atfork_child(log_sink_t *sink) {
+    if (!sink || !sink->private_data)
+        return;
+    socket_sink_data_t *data = (socket_sink_data_t *)sink->private_data;
+#ifdef CLOG_USE_TLS
+    if (data->ssl) {
+        SSL_free(data->ssl);
+        data->ssl = NULL;
+    }
+    if (data->ssl_ctx) {
+        SSL_CTX_free(data->ssl_ctx);
+        data->ssl_ctx = NULL;
+    }
+#endif
+    if (data->sockfd >= 0) {
+        close(data->sockfd);
+        data->sockfd = -1;
+    }
+    data->connected = 0;
+}
+
 log_sink_t *socket_sink_create_tls(const char *host, int port, bool use_tls, const char *ca_file,
                                    bool skip_verify) {
     if (!host || strlen(host) == 0 || port <= 0 || port > 65535)
@@ -215,6 +236,7 @@ log_sink_t *socket_sink_create_tls(const char *host, int port, bool use_tls, con
     sink->write = socket_write;
     sink->flush = socket_flush;
     sink->destroy = socket_destroy;
+    sink->atfork_child = socket_atfork_child;
     sink->private_data = data;
     sink->min_level = LOG_LEVEL_TRACE;
     return sink;
