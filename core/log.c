@@ -23,6 +23,8 @@ static int g_initialized = 0;
 static void (*g_async_fallback_cb)(void);
 static clog_mutex_t g_module_mutex = CLOG_MUTEX_INITIALIZER;
 static char g_module[64] = "main";
+static volatile uint64_t g_total_logged_count = 0;
+static volatile uint64_t g_dropped_queue_full_count = 0;
 
 const char *log_strerror(int err) {
     switch (err) {
@@ -142,6 +144,8 @@ void log_writevprintf(log_level_t level, const char *file, int line, const char 
         return;
     }
 
+    g_total_logged_count++;
+
     va_list args;
     va_start(args, fmt);
 
@@ -206,6 +210,7 @@ void log_writevprintf(log_level_t level, const char *file, int line, const char 
     if (log_config_is_async()) {
         int ar = log_async_write(&record);
         if (ar != 0) {
+            g_dropped_queue_full_count++;
             void (*cb)(void) = log_get_async_fallback_cb();
             if (cb)
                 cb();
@@ -213,6 +218,15 @@ void log_writevprintf(log_level_t level, const char *file, int line, const char 
     } else {
         log_dispatcher_dispatch(&record);
     }
+}
+
+void log_get_stats(log_stats_t *stats) {
+    if (!stats)
+        return;
+    stats->total_logged_count = g_total_logged_count;
+    stats->dropped_queue_full_count = g_dropped_queue_full_count;
+    stats->suppressed_rate_count = log_rate_limit_get_total_suppressed();
+    stats->current_queue_depth = log_async_get_queue_depth();
 }
 
 #ifndef _WIN32

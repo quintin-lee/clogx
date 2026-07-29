@@ -32,4 +32,9 @@ bool log_rate_limit_allow(uint64_t *out_suppressed_count);
  */
 void log_rate_limit_reset(void);
 
+/**
+ * @brief Get total cumulative suppressed log count.
+ */
+uint64_t log_rate_limit_get_total_suppressed(void);
+
 #endif /* LOG_RATE_LIMIT_H */

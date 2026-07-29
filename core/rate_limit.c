@@ -12,6 +12,7 @@ static double g_max_tokens = 0.0;
 static double g_fill_rate = 0.0; /* tokens per microsecond */
 static uint64_t g_last_update_us = 0;
 static uint64_t g_suppressed_count = 0;
+static uint64_t g_total_suppressed = 0;
 static clog_mutex_t g_rate_mutex = CLOG_MUTEX_INITIALIZER;
 
 static uint64_t get_now_us(void) {
@@ -79,6 +80,7 @@ bool log_rate_limit_allow(uint64_t *out_suppressed_count) {
         return true;
     } else {
         g_suppressed_count++;
+        g_total_suppressed++;
         clog_mutex_unlock(&g_rate_mutex);
         return false;
     }
@@ -92,5 +94,13 @@ void log_rate_limit_reset(void) {
     g_fill_rate = 0.0;
     g_last_update_us = 0;
     g_suppressed_count = 0;
+    g_total_suppressed = 0;
     clog_mutex_unlock(&g_rate_mutex);
+}
+
+uint64_t log_rate_limit_get_total_suppressed(void) {
+    clog_mutex_lock(&g_rate_mutex);
+    uint64_t count = g_total_suppressed;
+    clog_mutex_unlock(&g_rate_mutex);
+    return count;
 }

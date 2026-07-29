@@ -219,3 +219,14 @@ void log_async_atfork_child(void) {
         g_async_logger.running = 0;
     }
 }
+
+size_t log_async_get_queue_depth(void) {
+    if (!g_async_logger.queue) {
+        return 0;
+    }
+    mpsc_queue_t *q = g_async_logger.queue;
+    clog_mutex_lock(&q->mutex);
+    size_t depth = q->count;
+    clog_mutex_unlock(&q->mutex);
+    return depth;
+}

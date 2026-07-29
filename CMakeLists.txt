@@ -164,6 +164,7 @@ if(CLOG_BUILD_TESTS)
         test_fork_safety
         test_signal_handler
         test_custom_sink
+        test_observability_stats
     )
 
     # Tests that directly reference internal symbols (not exported from shared lib)

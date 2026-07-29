@@ -51,6 +51,11 @@ int log_async_is_running(void);
 int log_async_write(log_record_t *restrict record);
 
 /**
+ * @brief Get current depth (number of pending items) in the async queue.
+ */
+size_t log_async_get_queue_depth(void);
+
+/**
  * @brief Handle fork in child process: recreate queue and restart worker.
  */
 void log_async_atfork_child(void);

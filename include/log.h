@@ -153,6 +153,23 @@ CLOGX_API int log_get_pending_signal(void);
 CLOGX_API void log_process_pending_signals(void);
 
 /**
+ * @struct log_stats_t
+ * @brief Operational runtime statistics.
+ */
+typedef struct {
+    uint64_t total_logged_count;       /**< Total log records submitted. */
+    uint64_t dropped_queue_full_count; /**< Total records dropped due to async queue full. */
+    uint64_t suppressed_rate_count;    /**< Total records suppressed by rate limiter. */
+    size_t   current_queue_depth;      /**< Current pending records in async queue. */
+} log_stats_t;
+
+/**
+ * @brief Retrieve current operational statistics.
+ * @param[out] stats Pointer to log_stats_t struct to populate.
+ */
+CLOGX_API void log_get_stats(log_stats_t *stats);
+
+/**
  * @brief Reload configuration and rebuild sinks.
  *
  * Always shuts down the async worker before replacing sinks, then restarts
