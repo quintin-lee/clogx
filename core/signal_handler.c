@@ -101,6 +101,10 @@ void log_process_pending_signals(void) {
     log_flush();
 
     /* Restore previous/default signal handler and re-raise */
+#if defined(__GNUC__)
+    extern void __gcov_dump(void) __attribute__((weak));
+#endif
+
     if (g_installed) {
         if (sig == SIGTERM) {
             sigaction(SIGTERM, &g_old_sigterm, NULL);
@@ -110,6 +114,12 @@ void log_process_pending_signals(void) {
     } else {
         signal(sig, SIG_DFL);
     }
+
+#if defined(__GNUC__)
+    if (__gcov_dump) {
+        __gcov_dump();
+    }
+#endif
 
     raise(sig);
 }

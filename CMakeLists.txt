@@ -168,6 +168,7 @@ if(CLOG_BUILD_TESTS)
         test_observability_stats
         test_syslog_sink
         test_thread_context
+        test_coverage_boost
     )
 
     # Tests that directly reference internal symbols (not exported from shared lib)
