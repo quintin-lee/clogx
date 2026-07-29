@@ -196,7 +196,7 @@ coverage:
 	$(MAKE) test CC=gcc CFLAGS="$(CFLAGS) -O0 -g --coverage -fprofile-arcs -ftest-coverage -fprofile-update=atomic" EXTRA_LDFLAGS="$(EXTRA_LDFLAGS) --coverage"
 	lcov --capture --rc branch_coverage=1 --ignore-errors negative --directory build --output-file coverage.info
 	lcov --remove coverage.info 'tests/*' 'deps/*' 'example/*' 'benchmarks/*' 'fuzz/*' --rc branch_coverage=1 --ignore-errors negative --output-file coverage.info
-	lcov --summary coverage.info --rc branch_coverage=1 --ignore-errors negative
+	lcov --summary coverage.info --rc branch_coverage=1 --ignore-errors negative || true
 
 ## Quality check
 

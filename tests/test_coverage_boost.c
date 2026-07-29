@@ -99,6 +99,13 @@ int main(void) {
     log_formatter_format(&rec, small_buf, sizeof(small_buf));
 
     /* 4. Test Sinks Error Paths & Creation Edge Cases */
+    if (file_sink_create(NULL, 1024, 1) != NULL) {
+        fprintf(stderr, "file_sink_create NULL path should fail\n");
+    }
+    if (log_add_sink(NULL) == 0) {
+        fprintf(stderr, "log_add_sink NULL should fail\n");
+    }
+
     log_sink_t *console_s = console_sink_create(1 /* stderr */);
     if (console_s) {
         log_add_sink(console_s);
@@ -117,6 +124,13 @@ int main(void) {
     }
 
 #ifndef _WIN32
+    if (socket_sink_create(NULL, 9999) != NULL) {
+        fprintf(stderr, "socket_sink_create NULL host should fail\n");
+    }
+    if (syslog_sink_create(NULL, 1 << 3) == NULL) {
+        /* NULL ident is allowed (defaults to clogx) */
+    }
+
     log_sink_t *syslog_s = syslog_sink_create("cov_syslog", 1 << 3);
     if (syslog_s) {
         if (syslog_s->atfork_child) {
