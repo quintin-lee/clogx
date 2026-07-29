@@ -129,6 +129,14 @@ CLOGX_API log_sink_t *custom_sink_create(int (*write_fn)(log_sink_t *sink, const
 CLOGX_API void *custom_sink_get_private_data(log_sink_t *sink);
 
 /**
+ * @brief Create a POSIX syslog sink.
+ * @param[in] ident    Program identifier tag string (e.g. "my_app").
+ * @param[in] facility Syslog facility (e.g. LOG_USER, LOG_DAEMON, LOG_LOCAL0).
+ * @return New sink, or NULL on platforms without syslog / allocation failure.
+ */
+CLOGX_API log_sink_t *syslog_sink_create(const char *ident, int facility);
+
+/**
  * @brief Set the minimum severity level for a sink.
  *
  * Messages below this level are dropped by the dispatcher before reaching

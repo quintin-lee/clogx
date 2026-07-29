@@ -64,6 +64,7 @@ set(CLOG_SOURCES
     sinks/file_sink.c
     sinks/socket_sink.c
     sinks/custom_sink.c
+    sinks/syslog_sink.c
 )
 
 # Object library — all sources compiled once, shared across library and internal-symbol tests
@@ -165,6 +166,7 @@ if(CLOG_BUILD_TESTS)
         test_signal_handler
         test_custom_sink
         test_observability_stats
+        test_syslog_sink
     )
 
     # Tests that directly reference internal symbols (not exported from shared lib)
