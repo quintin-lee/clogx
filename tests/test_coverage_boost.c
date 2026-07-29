@@ -127,8 +127,10 @@ int main(void) {
     if (socket_sink_create(NULL, 9999) != NULL) {
         fprintf(stderr, "socket_sink_create NULL host should fail\n");
     }
-    if (syslog_sink_create(NULL, 1 << 3) == NULL) {
-        /* NULL ident is allowed (defaults to clogx) */
+    log_sink_t *syslog_null = syslog_sink_create(NULL, 1 << 3);
+    if (syslog_null) {
+        if (syslog_null->destroy)
+            syslog_null->destroy(syslog_null);
     }
 
     log_sink_t *syslog_s = syslog_sink_create("cov_syslog", 1 << 3);
