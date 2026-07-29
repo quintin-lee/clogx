@@ -169,10 +169,21 @@ ubsan:
 	$(MAKE) clean
 	$(MAKE) test CC=$(CC) CFLAGS="$(UBSAN_CFLAGS)" EXTRA_LDFLAGS="$(UBSAN_CFLAGS)"
 
+ASAN_SO := $(shell $(CC) -print-file-name=libasan.so 2>/dev/null)
+
 test-asan:
 	$(MAKE) clean
-	$(MAKE) all CC=$(CC) CFLAGS="$(ASAN_CFLAGS)" EXTRA_LDFLAGS="$(ASAN_CFLAGS)"
-	LD_PRELOAD=/usr/lib/libasan.so ASAN_OPTIONS=detect_leaks=0 $(MAKE) test CC=$(CC) CFLAGS="$(ASAN_CFLAGS)" EXTRA_LDFLAGS="$(ASAN_CFLAGS)"
+	$(MAKE) $(TEST_BINS) CC=$(CC) CFLAGS="$(ASAN_CFLAGS)" EXTRA_LDFLAGS="$(ASAN_CFLAGS)"
+	@status=0; \
+	for t in $(TEST_BINS); do \
+		echo "=== $$t ==="; \
+		if [ -f "$(ASAN_SO)" ]; then \
+			LD_PRELOAD="$(ASAN_SO)" ASAN_OPTIONS=detect_leaks=0 ./$$t || status=1; \
+		else \
+			ASAN_OPTIONS=detect_leaks=0 ./$$t || status=1; \
+		fi; \
+	done; \
+	exit $$status
 
 test-ubsan:
 	$(MAKE) clean
