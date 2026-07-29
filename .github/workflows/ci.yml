@@ -151,3 +151,19 @@ jobs:
         with:
           files: ./coverage.info
           flag: lcov
+
+  fuzz:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v7
+
+      - name: Install dependencies
+        run: sudo apt-get update && sudo apt-get install -y libyaml-dev
+
+      - name: Build and test fuzz targets
+        run: |
+          make fuzz-build
+          echo test | ./build/fuzz_config /dev/stdin
+          echo test | ./build/fuzz_formatter /dev/stdin
+          echo test | ./build/fuzz_pipeline /dev/stdin
