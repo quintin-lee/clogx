@@ -124,6 +124,7 @@ static void *async_worker(void *arg) {
             log_dispatcher_dispatch(&batch[i]);
             log_record_free_owned(&batch[i]);
         }
+        log_dispatcher_flush();
         logger->processing = 0;
     }
 
