@@ -2,7 +2,7 @@
 
 All notable changes to this project will be documented in this file.
 
-## [Unreleased]
+## [0.1.0] - 2026-07-29
 
 ### Added
 - Focused Fuzzing Harness (`fuzz/fuzz_pipeline.c`): AFL/libFuzzer test harness targeting formatting, string truncation, and boundary conditions
