@@ -5,6 +5,7 @@ All notable changes to this project will be documented in this file.
 ## [Unreleased]
 
 ### Added
+- POSIX Self-Pipe Signal Handler (`core/signal_handler.c` & `log_get_signal_fd()`): zero-lock signal safety implementation writing signal bytes to a non-blocking pipe (`O_NONBLOCK` | `FD_CLOEXEC`), eliminating all mutex/lock operations inside signal handlers and providing `log_get_signal_fd()` for event loop integration
 - POSIX Shell & AWK C-Source Branch Coverage Tool (`scripts/gcov_branch_summary.sh`): zero-dependency bash/awk script parsing `gcov -b` output, calculating true C-source AST branch execution rate (**96.80%** overall across core C files with 8 files at 100%), integrated into Makefile (`make coverage-gcov`), CMake (`coverage-gcov` target), and GitHub Actions CI workflow with threshold enforcement (75%)
 - Deep Edge-Case & Error-Path Test Suite (`tests/test_coverage_deep.c`): comprehensive test suite covering socket connection failures, TLS error paths, rate limiter token exhaustion and replenishment, invalid YAML syntax errors, formatter truncation loops (1..80 bytes), active signal processing (`SIGTERM`/`SIGINT` `SIG_IGN` trick bringing `signal_handler.c` to 100% branch coverage), and snapshot lifecycle
 - Automated Performance Benchmark CI Workflow (`.github/workflows/benchmark.yml`): weekly schedule and manual trigger running throughput and async vs sync benchmarks, rendering throughput summary to GitHub Step Summary

@@ -106,6 +106,10 @@ int main(void) {
     log_install_signal_handlers();
     log_install_signal_handlers(); /* Re-entrant call -> CLOG_OK */
 
+    if (log_get_signal_fd() < 0) {
+        fprintf(stderr, "log_get_signal_fd should return valid fd when installed\n");
+    }
+
     log_signal_handler(SIGTERM);
     if (log_get_pending_signal() != SIGTERM) {
         fprintf(stderr, "signal mismatch SIGTERM\n");
@@ -121,6 +125,10 @@ int main(void) {
 
     log_restore_signal_handlers();
     log_restore_signal_handlers(); /* Re-entrant call -> no-op */
+
+    if (log_get_signal_fd() != -1) {
+        fprintf(stderr, "log_get_signal_fd should return -1 when uninstalled\n");
+    }
 
     if (old_term != SIG_ERR)
         signal(SIGTERM, old_term);

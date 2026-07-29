@@ -148,6 +148,13 @@ CLOGX_API void log_signal_handler(int sig);
 CLOGX_API int log_get_pending_signal(void);
 
 /**
+ * @brief Get the read-end file descriptor of the self-pipe signal handler.
+ * @return Non-blocking read file descriptor, or -1 if signal handlers are not installed or on
+ * unsupported platform.
+ */
+CLOGX_API int log_get_signal_fd(void);
+
+/**
  * @brief Process any pending signal: flushes logs and re-raises signal.
  */
 CLOGX_API void log_process_pending_signals(void);

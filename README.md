@@ -286,6 +286,7 @@ log_level_t    log_sink_get_level(const log_sink_t *sink);
 clogx_errno_t log_install_signal_handlers(void);
 void          log_signal_handler(int sig);
 int           log_get_pending_signal(void);
+int           log_get_signal_fd(void);
 void          log_process_pending_signals(void);
 log_config_t  *log_config_get(void);
 int            log_config_set(const log_config_t *cfg);
