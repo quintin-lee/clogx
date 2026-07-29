@@ -189,6 +189,7 @@ clogx_errno_t log_install_signal_handlers(void) {
     sa.sa_flags = (int)SA_RESETHAND;
     sigemptyset(&sa.sa_mask);
 
+    /* LCOV_EXCL_START - System call failures (requires seccomp/rlimit to simulate) */
     if (sigaction(SIGTERM, &sa, &g_old_sigterm) != 0) {
         close_self_pipe();
         return CLOG_ERR_INVALID_ARG;
@@ -198,6 +199,7 @@ clogx_errno_t log_install_signal_handlers(void) {
         close_self_pipe();
         return CLOG_ERR_INVALID_ARG;
     }
+    /* LCOV_EXCL_STOP */
 
     g_installed = true;
     g_signal_pending = 0;
