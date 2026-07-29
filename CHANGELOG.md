@@ -5,6 +5,10 @@ All notable changes to this project will be documented in this file.
 ## [Unreleased]
 
 ### Added
+- Focused Fuzzing Harness (`fuzz/fuzz_pipeline.c`): AFL/libFuzzer test harness targeting formatting, string truncation, and boundary conditions
+- `clang-tidy` Static Analysis Integration: Makefile targets `make tidy` and `make check-tidy` (integrated into `make check`), CMake option `CLOG_ENABLE_CLANG_TIDY=ON`, and CMake custom target `tidy` with a zero-warning policy
+- MSVC RAII Mutex Guard: `CLOG_MUTEXGUARDED` macro updated with `__try / __finally` for MSVC (`_MSC_VER`), ensuring safe mutex release across Windows builds
+- Branch Coverage Boost: expanded edge-case branch tests in `test_coverage_boost.c` reaching >80.08% overall branch coverage (>91% across core library files)
 - Native POSIX Syslog Sink: `syslog_sink_create(ident, facility)` mapping log levels to syslog priorities (`LOG_DEBUG`, `LOG_INFO`, `LOG_WARNING`, `LOG_ERR`, `LOG_CRIT`) with automatic syslog re-connection in child processes after `fork()`
 - Thread-Local Mapped Diagnostic Context (MDC): `log_set_thread_context(key, val)`, `log_get_thread_context(key)`, and `log_clear_thread_context()` supporting `%context` format tokens and auto-injecting top-level JSON fields
 - Operational Observability Metrics API: `log_get_stats(&stats)` retrieving runtime counters (`total_logged_count`, `dropped_queue_full_count`, `suppressed_rate_count`, `current_queue_depth`)

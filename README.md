@@ -29,15 +29,17 @@ Lightweight C99 logging library: config-driven, multi-sink output, optional asyn
 - Observability: async fallback callback (`log_set_async_fallback_cb()`)
 - Printf format safety: compile-time format string validation via `CLOGX_PRINTF_FMT`
 - Clean ABI: symbol visibility control exports public symbols cleanly
-- Build: Makefile and CMake (with CTest, `find_package(clogx)`); ASan/UBSan/Valgrind check targets
+- Build: Makefile and CMake (with CTest, `find_package(clogx)`); ASan/UBSan/Valgrind/clang-tidy check targets
+- Static Analysis: zero-warning `clang-tidy` policy (`make check-tidy` / `CLOG_ENABLE_CLANG_TIDY=ON`)
+- Fuzz Testing: focused AFL / libFuzzer test harnesses for config, formatter, and pipeline (`fuzz/fuzz_pipeline.c`)
 
 ## Directory Layout
 
 ```
-include/     public headers (log.h, log_config.h, log_limits.h, log_record.h, log_sink.h)
+include/     public headers (log.h, log_config.h, log_limits.h, log_record.h, log_sink.h, clog_port.h)
 core/        config, formatting, dispatch, queue, async, rotation, rate limiter, signal handler
 sinks/       console / file / socket (with TLS support) / syslog
-fuzz/        AFL fuzzing harnesses (fuzz_config.c, fuzz_formatter.c)
+fuzz/        AFL fuzzing harnesses (fuzz_config.c, fuzz_formatter.c, fuzz_pipeline.c)
 example/     example programs
 tests/       regression tests (31 test suites)
 cmake/       CMake package config templates
@@ -95,12 +97,15 @@ gcc -Iinclude app.c -Lbuild -lclogx -lpthread -lssl -lcrypto -o app
 ```bash
 make              # generates build/libclogx.a, build/libclogx.so, build/example
 make TLS=1        # builds with OpenSSL TLS socket sink support
-make test         # compiles and runs all 24 regression tests
+make test         # compiles and runs all regression tests
 make asan         # build + test with AddressSanitizer
 make ubsan        # build + test with UndefinedBehaviorSanitizer
-make check        # full quality gate: format check → build → test
+make coverage     # generate lcov coverage report with branch coverage
+make tidy         # run clang-tidy static analysis
+make check-tidy   # enforce clang-tidy warnings-as-errors
+make check        # full quality gate: format check → clang-tidy → clean → build → test
 make test-valgrind  # all tests under Valgrind leak check (skipped if not installed)
-make fuzz-build   # builds AFL fuzzing binaries (build/fuzz_config, build/fuzz_formatter)
+make fuzz-build   # builds AFL fuzzing binaries (fuzz_config, fuzz_formatter, fuzz_pipeline)
 make format       # apply clang-format to all sources
 make docs         # generate Doxygen API docs
 make install      # install library + headers + pkg-config
@@ -125,6 +130,7 @@ Common CMake options:
 | `CLOG_BUILD_SHARED` | OFF | build shared library when ON |
 | `CLOG_USE_SYSTEM_YAML` | OFF | use system libyaml instead of auto-downloading |
 | `CLOG_ENABLE_TLS` | OFF | enable OpenSSL TLS support for socket sink |
+| `CLOG_ENABLE_CLANG_TIDY` | OFF | enable clang-tidy static analysis during compilation |
 
 Downstream projects:
 
