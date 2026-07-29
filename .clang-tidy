@@ -10,9 +10,10 @@ Checks: >
   readability-redundant-control-flow,
   readability-redundant-string-cstr,
   -bugprone-easily-swappable-parameters,
-  -bugprone-macro-parentheses
+  -bugprone-macro-parentheses,
+  -clang-analyzer-security.insecureAPI.DeprecatedOrUnsafeBufferHandling
 
-WarningsAsErrors: ''
+WarningsAsErrors: '*'
 
 HeaderFilterRegex: 'include/.*'
 

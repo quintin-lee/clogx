@@ -354,20 +354,14 @@ static int parse_config_file(const char *filepath, log_config_t *cfg) {
             expect_key = 1;
             break;
         case YAML_MAPPING_END_EVENT:
-            if (depth == 1) {
-                in_log_section = 0;
-            } else if (depth == 2 && in_log_section) {
+            if (depth <= 2) {
                 in_log_section = 0;
             }
             depth--;
             expect_key = 1;
             break;
-        case YAML_SEQUENCE_START_EVENT:
-        case YAML_SEQUENCE_END_EVENT:
-            /* sequences not supported — silently skip */
-            break;
         default:
-            /* STREAM_START, DOCUMENT_START, DOCUMENT_END, STREAM_END — no action */
+            /* STREAM_START, DOCUMENT_START, DOCUMENT_END, STREAM_END, sequences — no action */
             break;
         }
 
@@ -393,7 +387,7 @@ static int load_default_and_apply(const char *yaml_path) {
     g_config.console_stderr = 0;
     g_config.file_enable = 0;
     g_config.file_path[0] = '\0';
-    g_config.file_max_size = 100 * 1024 * 1024;
+    g_config.file_max_size = (uint64_t)100 * 1024 * 1024;
     g_config.file_backups = 10;
     g_config.socket_enable = 0;
     g_config.socket_host[0] = '\0';

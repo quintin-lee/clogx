@@ -109,11 +109,8 @@ jobs:
       - name: Install dependencies
         run: sudo apt-get update && sudo apt-get install -y clang-tidy libyaml-dev
 
-      - name: Configure CMake
-        run: cmake -S . -B build -DCMAKE_EXPORT_COMPILE_COMMANDS=ON
-
-      - name: Run clang-tidy
-        run: clang-tidy -p build core/*.c sinks/*.c
+      - name: Run clang-tidy static analysis
+        run: make check-tidy
 
   format:
     runs-on: ubuntu-latest

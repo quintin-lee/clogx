@@ -61,6 +61,7 @@ endif
 
 CORE_SRCS = config.c formatter.c dispatcher.c queue.c async.c log.c rotate.c rate_limit.c signal_handler.c
 SINK_SRCS = console_sink.c file_sink.c socket_sink.c custom_sink.c syslog_sink.c
+CLOG_SRCS = $(addprefix core/,$(CORE_SRCS)) $(addprefix sinks/,$(SINK_SRCS))
 CORE_OBJS = $(addprefix $(BUILD_DIR)/,$(CORE_SRCS:.c=.o))
 SINK_OBJS = $(addprefix $(BUILD_DIR)/,$(SINK_SRCS:.c=.o))
 ALL_OBJS = $(CORE_OBJS) $(SINK_OBJS)
@@ -209,6 +210,7 @@ coverage:
 
 check:
 	$(MAKE) check-format
+	@if command -v clang-tidy >/dev/null 2>&1; then $(MAKE) check-tidy; fi
 	$(MAKE) clean
 	$(MAKE) all
 	$(MAKE) test
@@ -239,6 +241,14 @@ format:
 check-format:
 	@clang-format --dry-run --Werror $(FORMAT_FILES) || \
 		(echo "Formatting check failed! Run 'make format' to fix." && exit 1)
+
+tidy:
+	@command -v clang-tidy >/dev/null || { echo "clang-tidy not found"; exit 1; }
+	clang-tidy $(CLOG_SRCS) -- -Iinclude -D_GNU_SOURCE
+
+check-tidy:
+	@command -v clang-tidy >/dev/null || { echo "clang-tidy not found; check-tidy skipped"; exit 0; }
+	clang-tidy $(CLOG_SRCS) -- -Iinclude -D_GNU_SOURCE
 
 install: $(LIB_TARGET) $(SO_TARGET)
 	install -d $(DESTDIR)$(LIBDIR)

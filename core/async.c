@@ -94,7 +94,6 @@ static int log_record_clone(log_record_t *restrict dst, const log_record_t *rest
     if (src->tag) {
         memcpy(p, src->tag, tag_len + 1);
         dst->tag = p;
-        p += tag_len + 1;
     } else {
         dst->tag = NULL;
     }

@@ -28,8 +28,9 @@ int log_dispatcher_add_sink(log_sink_t *restrict sink) {
 
     int ret = 0;
     CLOG_MUTEXGUARDED(&g_dispatcher.mutex, {
-        log_sink_t **new_sinks = realloc(g_dispatcher.sinks, ((size_t)g_dispatcher.sink_count + 1) *
-                                                                 sizeof(log_sink_t *));
+        log_sink_t **new_sinks =
+            (log_sink_t **)realloc((void *)g_dispatcher.sinks,
+                                   ((size_t)g_dispatcher.sink_count + 1) * sizeof(log_sink_t *));
         if (!new_sinks) {
             ret = -1;
         } else {
@@ -54,10 +55,14 @@ int log_dispatcher_remove_sink(log_sink_t *restrict sink) {
                 g_dispatcher.sinks[g_dispatcher.sink_count - 1] = NULL;
                 g_dispatcher.sink_count--;
                 if (g_dispatcher.sink_count > 0) {
-                    g_dispatcher.sinks = realloc(
-                        g_dispatcher.sinks, (size_t)g_dispatcher.sink_count * sizeof(log_sink_t *));
+                    log_sink_t **resized = (log_sink_t **)realloc((void *)g_dispatcher.sinks,
+                                                                  (size_t)g_dispatcher.sink_count *
+                                                                      sizeof(log_sink_t *));
+                    if (resized) {
+                        g_dispatcher.sinks = resized;
+                    }
                 } else {
-                    free(g_dispatcher.sinks);
+                    free((void *)g_dispatcher.sinks);
                     g_dispatcher.sinks = NULL;
                 }
                 break;
@@ -181,7 +186,7 @@ int log_dispatcher_init(void) {
 
     int ret = 0;
     CLOG_MUTEXGUARDED(&g_dispatcher.mutex, {
-        g_dispatcher.sinks = malloc((size_t)count * sizeof(log_sink_t *));
+        g_dispatcher.sinks = (log_sink_t **)malloc((size_t)count * sizeof(log_sink_t *));
         if (!g_dispatcher.sinks) {
             for (int i = 0; i < count; i++) {
                 sinks[i]->destroy(sinks[i]);
@@ -232,7 +237,7 @@ int log_dispatcher_build_snapshot(log_config_t *restrict cfg,
         return -1;
     }
 
-    snap->sinks = malloc((size_t)count * sizeof(log_sink_t *));
+    snap->sinks = (log_sink_t **)malloc((size_t)count * sizeof(log_sink_t *));
     if (!snap->sinks) {
         for (int i = 0; i < count; i++) {
             sinks[i]->destroy(sinks[i]);
@@ -254,7 +259,7 @@ void log_dispatcher_destroy_snapshot(log_dispatcher_snapshot_t *restrict snap) {
             snap->sinks[i]->destroy(snap->sinks[i]);
         }
     }
-    free(snap->sinks);
+    free((void *)snap->sinks);
     snap->sinks = NULL;
     snap->sink_count = 0;
 }
@@ -276,7 +281,7 @@ void log_dispatcher_commit_snapshot(log_dispatcher_snapshot_t *restrict snap) {
             old_sinks[i]->destroy(old_sinks[i]);
         }
     }
-    free(old_sinks);
+    free((void *)old_sinks);
 
     snap->sinks = NULL;
     snap->sink_count = 0;
@@ -289,7 +294,7 @@ void log_dispatcher_destroy(void) {
                 g_dispatcher.sinks[i]->destroy(g_dispatcher.sinks[i]);
             }
         }
-        free(g_dispatcher.sinks);
+        free((void *)g_dispatcher.sinks);
         g_dispatcher.sinks = NULL;
         g_dispatcher.sink_count = 0;
         /* Keep the static mutex alive: init/reload call destroy then reuse it. */
