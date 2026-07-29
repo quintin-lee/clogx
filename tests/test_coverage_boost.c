@@ -9,6 +9,7 @@
 #include "log_rate_limit.h"
 #include "log_signal.h"
 #include "log_sink.h"
+#include "queue.h"
 
 int main(void) {
     if (log_init(NULL) != 0) {
@@ -41,11 +42,17 @@ int main(void) {
 
     /* 2. Test Signal Handler Functions Directly */
 #ifndef _WIN32
+    log_process_pending_signals(); /* No signal pending branch */
     log_install_signal_handlers();
     log_install_signal_handlers(); /* Re-entrant call test */
     log_signal_handler(SIGTERM);
     if (log_get_pending_signal() != SIGTERM) {
         fprintf(stderr, "expected SIGTERM pending\n");
+        return 1;
+    }
+    log_signal_handler(SIGINT);
+    if (log_get_pending_signal() != SIGINT) {
+        fprintf(stderr, "expected SIGINT pending\n");
         return 1;
     }
     log_restore_signal_handlers();
@@ -152,13 +159,38 @@ int main(void) {
     }
 #endif
 
-    /* 5. Test Rate Limiter Suppressed Total */
+    /* 5. Queue API Error & Null Branch Coverage */
+    mpsc_queue_t *q_test = mpsc_queue_create(4);
+    if (q_test) {
+        log_record_t dummy = {0};
+        mpsc_queue_put(NULL, &dummy);
+        mpsc_queue_put(q_test, NULL);
+        mpsc_queue_try_put(NULL, &dummy);
+        mpsc_queue_try_put(q_test, NULL);
+        mpsc_queue_get(NULL, &dummy);
+        mpsc_queue_get(q_test, NULL);
+        mpsc_queue_get_batch(NULL, &dummy, 1);
+        mpsc_queue_get_batch(q_test, NULL, 1);
+        mpsc_queue_get_batch(q_test, &dummy, 0);
+
+        mpsc_queue_close(q_test);
+        mpsc_queue_put(q_test, &dummy);
+        mpsc_queue_try_put(q_test, &dummy);
+        mpsc_queue_get(q_test, &dummy);
+
+        mpsc_queue_close(NULL);
+        mpsc_queue_wait_empty(NULL);
+        mpsc_queue_destroy(NULL);
+        mpsc_queue_destroy(q_test);
+    }
+
+    /* 6. Test Rate Limiter Suppressed Total */
     uint64_t suppressed = 0;
     log_rate_limit_init(1, 1, 1);
     log_rate_limit_allow(&suppressed);
     log_rate_limit_get_total_suppressed();
 
-    /* 6. Test Observability Stats & Depth */
+    /* 7. Test Observability Stats & Depth */
     log_stats_t stats;
     log_get_stats(&stats);
     log_get_stats(NULL);

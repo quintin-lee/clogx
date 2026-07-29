@@ -128,10 +128,13 @@ $(BUILD_DIR)/fuzz_config: fuzz/fuzz_config.c $(LIB_TARGET) | $(BUILD_DIR)
 $(BUILD_DIR)/fuzz_formatter: fuzz/fuzz_formatter.c $(LIB_TARGET) | $(BUILD_DIR)
 	$(CC) $(EXTRA_LDFLAGS) $(CFLAGS) -o $@ $< $(LIB_TARGET) $(LDFLAGS)
 
+$(BUILD_DIR)/fuzz_pipeline: fuzz/fuzz_pipeline.c $(LIB_TARGET) | $(BUILD_DIR)
+	$(CC) $(EXTRA_LDFLAGS) $(CFLAGS) -o $@ $< $(LIB_TARGET) $(LDFLAGS)
+
 $(BUILD_DIR)/benchmark_%: benchmarks/%.c $(LIB_TARGET) | $(BUILD_DIR)
 	$(CC) $(EXTRA_LDFLAGS) $(CFLAGS) -o $@ $< $(LIB_TARGET) $(LDFLAGS) -lm
 
-fuzz-build: $(BUILD_DIR)/fuzz_config $(BUILD_DIR)/fuzz_formatter
+fuzz-build: $(BUILD_DIR)/fuzz_config $(BUILD_DIR)/fuzz_formatter $(BUILD_DIR)/fuzz_pipeline
 
 fuzz-config: $(BUILD_DIR)/fuzz_config
 	@mkdir -p fuzz/out_config
@@ -140,6 +143,10 @@ fuzz-config: $(BUILD_DIR)/fuzz_config
 fuzz-formatter: $(BUILD_DIR)/fuzz_formatter
 	@mkdir -p fuzz/out_formatter
 	afl-fuzz -i fuzz/seeds -o fuzz/out_formatter -- $(BUILD_DIR)/fuzz_formatter @@
+
+fuzz-pipeline: $(BUILD_DIR)/fuzz_pipeline
+	@mkdir -p fuzz/out_pipeline
+	afl-fuzz -i fuzz/seeds -o fuzz/out_pipeline -- $(BUILD_DIR)/fuzz_pipeline @@
 
 example: $(EXAMPLE_BIN)
 
