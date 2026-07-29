@@ -74,3 +74,14 @@ All non-trivial changes must update `CHANGELOG.md` using conventional commit sem
 7. PR description should reference any related issues and summarize changes
 
 The CI suite will run automatically on your PR. All checks must pass before merge.
+
+## Public API Contract
+
+Only the following headers in `include/` define the stable public API: `log.h`, `log_config.h`, `log_limits.h`, `log_record.h`, `log_sink.h`.
+
+All other headers (`dispatcher.h`, `log_async.h`, `log_dispatcher.h`, `log_formatter.h`, `log_signal.h`, `log_rate_limit.h`, `queue.h`, `rotate.h`) are internal implementation details and subject to change between releases.
+
+Semantic versioning is followed: `MAJOR.MINOR.PATCH`.
+- `MAJOR` bump: breaking public API changes
+- `MINOR` bump: backward-compatible new features
+- `PATCH` bump: backward-compatible bug fixes
