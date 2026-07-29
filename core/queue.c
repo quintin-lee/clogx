@@ -36,24 +36,20 @@ int mpsc_queue_put(mpsc_queue_t *restrict q, log_record_t *restrict record) {
     if (!q || !record)
         return -1;
 
-    clog_mutex_lock(&q->mutex);
+    CLOG_MUTEXGUARDED(&q->mutex, {
+        while (q->count == q->capacity && !q->closed) {
+            clog_cond_wait(&q->not_full, &q->mutex);
+        }
 
-    while (q->count == q->capacity && !q->closed) {
-        clog_cond_wait(&q->not_full, &q->mutex);
-    }
+        if (q->closed)
+            return -1;
 
-    if (q->closed) {
-        clog_mutex_unlock(&q->mutex);
-        return -1;
-    }
+        q->buffer[q->head] = *record;
+        q->head = (q->head + 1) % q->capacity;
+        q->count++;
 
-    q->buffer[q->head] = *record;
-    q->head = (q->head + 1) % q->capacity;
-    q->count++;
-
-    clog_cond_signal(&q->not_empty);
-    clog_mutex_unlock(&q->mutex);
-
+        clog_cond_signal(&q->not_empty);
+    });
     return 0;
 }
 
@@ -61,20 +57,16 @@ int mpsc_queue_try_put(mpsc_queue_t *restrict q, log_record_t *restrict record) 
     if (!q || !record)
         return -1;
 
-    clog_mutex_lock(&q->mutex);
+    CLOG_MUTEXGUARDED(&q->mutex, {
+        if (q->closed || q->count == q->capacity)
+            return -1;
 
-    if (q->closed || q->count == q->capacity) {
-        clog_mutex_unlock(&q->mutex);
-        return -1;
-    }
+        q->buffer[q->head] = *record;
+        q->head = (q->head + 1) % q->capacity;
+        q->count++;
 
-    q->buffer[q->head] = *record;
-    q->head = (q->head + 1) % q->capacity;
-    q->count++;
-
-    clog_cond_signal(&q->not_empty);
-    clog_mutex_unlock(&q->mutex);
-
+        clog_cond_signal(&q->not_empty);
+    });
     return 0;
 }
 
@@ -87,66 +79,61 @@ int mpsc_queue_get_batch(mpsc_queue_t *restrict q, log_record_t *restrict record
     if (!q || !records || max_records == 0)
         return -1;
 
-    clog_mutex_lock(&q->mutex);
-
-    while (q->count == 0) {
-        if (q->closed) {
-            clog_mutex_unlock(&q->mutex);
-            return -1;
+    int count_to_get = -1;
+    CLOG_MUTEXGUARDED(&q->mutex, {
+        while (q->count == 0) {
+            if (q->closed)
+                return -1;
+            clog_cond_wait(&q->not_empty, &q->mutex);
         }
-        clog_cond_wait(&q->not_empty, &q->mutex);
-    }
 
-    size_t count_to_get = q->count < max_records ? q->count : max_records;
-    for (size_t i = 0; i < count_to_get; i++) {
-        records[i] = q->buffer[q->tail];
-        q->tail = (q->tail + 1) % q->capacity;
-        q->count--;
-    }
+        count_to_get = (int)(q->count < max_records ? q->count : max_records);
+        for (int i = 0; i < count_to_get; i++) {
+            records[i] = q->buffer[q->tail];
+            q->tail = (q->tail + 1) % q->capacity;
+            q->count--;
+        }
 
-    if (q->count == 0) {
-        clog_cond_broadcast(&q->drained);
-    }
+        if (q->count == 0)
+            clog_cond_broadcast(&q->drained);
 
-    clog_cond_broadcast(&q->not_full);
-    clog_mutex_unlock(&q->mutex);
-
-    return (int)count_to_get;
+        clog_cond_broadcast(&q->not_full);
+    });
+    return count_to_get;
 }
 
 void mpsc_queue_close(mpsc_queue_t *q) {
     if (!q)
         return;
 
-    clog_mutex_lock(&q->mutex);
-    q->closed = 1;
-    clog_cond_broadcast(&q->not_empty);
-    clog_cond_broadcast(&q->not_full);
-    clog_cond_broadcast(&q->drained);
-    clog_mutex_unlock(&q->mutex);
+    CLOG_MUTEXGUARDED(&q->mutex, {
+        q->closed = 1;
+        clog_cond_broadcast(&q->not_empty);
+        clog_cond_broadcast(&q->not_full);
+        clog_cond_broadcast(&q->drained);
+    });
 }
 
 void mpsc_queue_wait_empty(mpsc_queue_t *q) {
     if (!q)
         return;
 
-    clog_mutex_lock(&q->mutex);
-    while (q->count > 0) {
-        clog_cond_wait(&q->drained, &q->mutex);
-    }
-    clog_mutex_unlock(&q->mutex);
+    CLOG_MUTEXGUARDED(&q->mutex, {
+        while (q->count > 0) {
+            clog_cond_wait(&q->drained, &q->mutex);
+        }
+    });
 }
 
 void mpsc_queue_destroy(mpsc_queue_t *q) {
     if (!q)
         return;
 
-    clog_mutex_lock(&q->mutex);
-    clog_cond_broadcast(&q->not_full);
-    clog_cond_broadcast(&q->not_empty);
-    clog_cond_broadcast(&q->drained);
-    clog_mutex_unlock(&q->mutex);
-
+    CLOG_MUTEXGUARDED(&q->mutex, {
+        clog_cond_broadcast(&q->not_full);
+        clog_cond_broadcast(&q->not_empty);
+        clog_cond_broadcast(&q->drained);
+    });
     clog_mutex_destroy(&q->mutex);
     clog_cond_destroy(&q->not_full);
     clog_cond_destroy(&q->not_empty);

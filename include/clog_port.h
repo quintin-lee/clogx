@@ -282,6 +282,30 @@ static inline struct tm *clog_gmtime_r(const time_t *timep, struct tm *result) {
 #define F_OK 0
 #endif
 
+#if defined(__GNUC__) || defined(__clang__)
+
+static inline void clog_mutex_unlock_ptr(clog_mutex_t **m) {
+    if (*m) {
+        clog_mutex_unlock(*m);
+    }
+}
+#define CLOG_MUTEXGUARDED(m, code)                                                                 \
+    do {                                                                                           \
+        clog_mutex_lock(m);                                                                        \
+        __attribute__((cleanup(clog_mutex_unlock_ptr))) clog_mutex_t *__clog_g = (m);              \
+        code;                                                                                      \
+    } while (0)
+
+#else
+
+#define CLOG_MUTEXGUARDED(m, code)                                                                 \
+    do {                                                                                           \
+        clog_mutex_lock(m);                                                                        \
+        code;                                                                                      \
+    } while (0)
+
+#endif
+
 #if defined(_MSC_VER)
 #define clog_thread_local __declspec(thread)
 #elif defined(__GNUC__) || defined(__clang__)

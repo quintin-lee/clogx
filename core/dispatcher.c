@@ -26,17 +26,15 @@ int log_dispatcher_add_sink(log_sink_t *restrict sink) {
     if (!sink)
         return -1;
 
-    clog_mutex_lock(&g_dispatcher.mutex);
-    log_sink_t **new_sinks =
-        realloc(g_dispatcher.sinks, ((size_t)g_dispatcher.sink_count + 1) * sizeof(log_sink_t *));
-    if (!new_sinks) {
-        clog_mutex_unlock(&g_dispatcher.mutex);
-        return -1;
-    }
-    g_dispatcher.sinks = new_sinks;
-    g_dispatcher.sinks[g_dispatcher.sink_count] = sink;
-    g_dispatcher.sink_count++;
-    clog_mutex_unlock(&g_dispatcher.mutex);
+    CLOG_MUTEXGUARDED(&g_dispatcher.mutex, {
+        log_sink_t **new_sinks = realloc(g_dispatcher.sinks, ((size_t)g_dispatcher.sink_count + 1) *
+                                                                 sizeof(log_sink_t *));
+        if (!new_sinks)
+            return -1;
+        g_dispatcher.sinks = new_sinks;
+        g_dispatcher.sinks[g_dispatcher.sink_count] = sink;
+        g_dispatcher.sink_count++;
+    });
     return 0;
 }
 
@@ -44,25 +42,25 @@ int log_dispatcher_remove_sink(log_sink_t *restrict sink) {
     if (!sink)
         return -1;
 
-    clog_mutex_lock(&g_dispatcher.mutex);
-    for (int i = 0; i < g_dispatcher.sink_count; i++) {
-        if (g_dispatcher.sinks[i] == sink) {
-            for (int j = i; j < g_dispatcher.sink_count - 1; j++) {
-                g_dispatcher.sinks[j] = g_dispatcher.sinks[j + 1];
+    CLOG_MUTEXGUARDED(&g_dispatcher.mutex, {
+        for (int i = 0; i < g_dispatcher.sink_count; i++) {
+            if (g_dispatcher.sinks[i] == sink) {
+                for (int j = i; j < g_dispatcher.sink_count - 1; j++) {
+                    g_dispatcher.sinks[j] = g_dispatcher.sinks[j + 1];
+                }
+                g_dispatcher.sinks[g_dispatcher.sink_count - 1] = NULL;
+                g_dispatcher.sink_count--;
+                if (g_dispatcher.sink_count > 0) {
+                    g_dispatcher.sinks = realloc(
+                        g_dispatcher.sinks, (size_t)g_dispatcher.sink_count * sizeof(log_sink_t *));
+                } else {
+                    free(g_dispatcher.sinks);
+                    g_dispatcher.sinks = NULL;
+                }
+                break;
             }
-            g_dispatcher.sinks[g_dispatcher.sink_count - 1] = NULL;
-            g_dispatcher.sink_count--;
-            if (g_dispatcher.sink_count > 0) {
-                g_dispatcher.sinks = realloc(g_dispatcher.sinks, (size_t)g_dispatcher.sink_count *
-                                                                     sizeof(log_sink_t *));
-            } else {
-                free(g_dispatcher.sinks);
-                g_dispatcher.sinks = NULL;
-            }
-            break;
         }
-    }
-    clog_mutex_unlock(&g_dispatcher.mutex);
+    });
     return 0;
 }
 
@@ -112,31 +110,31 @@ int log_dispatcher_dispatch(log_record_t *record) {
     }
 
     /* Short critical section: iterate sink array and write. */
-    clog_mutex_lock(&g_dispatcher.mutex);
-    for (int i = 0; i < g_dispatcher.sink_count; i++) {
-        log_sink_t *sink = g_dispatcher.sinks[i];
-        if (!sink)
-            continue;
+    CLOG_MUTEXGUARDED(&g_dispatcher.mutex, {
+        for (int i = 0; i < g_dispatcher.sink_count; i++) {
+            log_sink_t *sink = g_dispatcher.sinks[i];
+            if (!sink)
+                continue;
 
-        /* Per-sink level gate: skip if the record is below this sink's
-         * minimum level.  The global level has already been checked above. */
-        if ((int)record->level < (int)sink->min_level)
-            continue;
+            /* Per-sink level gate: skip if the record is below this sink's
+             * minimum level.  The global level has already been checked above. */
+            if ((int)record->level < (int)sink->min_level)
+                continue;
 
-        const char *write_buf = formatted_buf;
-        size_t write_len = (size_t)len;
+            const char *write_buf = formatted_buf;
+            size_t write_len = (size_t)len;
 
-        if (colored_len > 0 && console_sink_is_color_enabled(sink)) {
-            write_buf = colored_buf;
-            write_len = (size_t)colored_len;
+            if (colored_len > 0 && console_sink_is_color_enabled(sink)) {
+                write_buf = colored_buf;
+                write_len = (size_t)colored_len;
+            }
+
+            sink->write(sink, write_buf, write_len);
+            if (write_len > 0 && write_buf[write_len - 1] != '\n') {
+                sink->write(sink, "\n", 1);
+            }
         }
-
-        sink->write(sink, write_buf, write_len);
-        if (write_len > 0 && write_buf[write_len - 1] != '\n') {
-            sink->write(sink, "\n", 1);
-        }
-    }
-    clog_mutex_unlock(&g_dispatcher.mutex);
+    });
 
     return 0;
 }
@@ -178,20 +176,19 @@ int log_dispatcher_init(void) {
 
     log_dispatcher_destroy();
 
-    clog_mutex_lock(&g_dispatcher.mutex);
-    g_dispatcher.sinks = malloc((size_t)count * sizeof(log_sink_t *));
-    if (!g_dispatcher.sinks) {
-        clog_mutex_unlock(&g_dispatcher.mutex);
-        for (int i = 0; i < count; i++) {
-            sinks[i]->destroy(sinks[i]);
+    CLOG_MUTEXGUARDED(&g_dispatcher.mutex, {
+        g_dispatcher.sinks = malloc((size_t)count * sizeof(log_sink_t *));
+        if (!g_dispatcher.sinks) {
+            for (int i = 0; i < count; i++) {
+                sinks[i]->destroy(sinks[i]);
+            }
+            return -1;
         }
-        return -1;
-    }
-    for (int i = 0; i < count; i++) {
-        g_dispatcher.sinks[i] = sinks[i];
-    }
-    g_dispatcher.sink_count = count;
-    clog_mutex_unlock(&g_dispatcher.mutex);
+        for (int i = 0; i < count; i++) {
+            g_dispatcher.sinks[i] = sinks[i];
+        }
+        g_dispatcher.sink_count = count;
+    });
 
     return 0;
 }
@@ -262,12 +259,12 @@ void log_dispatcher_commit_snapshot(log_dispatcher_snapshot_t *restrict snap) {
     int old_count = 0;
     int i;
 
-    clog_mutex_lock(&g_dispatcher.mutex);
-    old_sinks = g_dispatcher.sinks;
-    old_count = g_dispatcher.sink_count;
-    g_dispatcher.sinks = snap->sinks;
-    g_dispatcher.sink_count = snap->sink_count;
-    clog_mutex_unlock(&g_dispatcher.mutex);
+    CLOG_MUTEXGUARDED(&g_dispatcher.mutex, {
+        old_sinks = g_dispatcher.sinks;
+        old_count = g_dispatcher.sink_count;
+        g_dispatcher.sinks = snap->sinks;
+        g_dispatcher.sink_count = snap->sink_count;
+    });
 
     for (i = 0; i < old_count; i++) {
         if (old_sinks[i]) {
@@ -281,27 +278,27 @@ void log_dispatcher_commit_snapshot(log_dispatcher_snapshot_t *restrict snap) {
 }
 
 void log_dispatcher_destroy(void) {
-    clog_mutex_lock(&g_dispatcher.mutex);
-    for (int i = 0; i < g_dispatcher.sink_count; i++) {
-        if (g_dispatcher.sinks[i]) {
-            g_dispatcher.sinks[i]->destroy(g_dispatcher.sinks[i]);
+    CLOG_MUTEXGUARDED(&g_dispatcher.mutex, {
+        for (int i = 0; i < g_dispatcher.sink_count; i++) {
+            if (g_dispatcher.sinks[i]) {
+                g_dispatcher.sinks[i]->destroy(g_dispatcher.sinks[i]);
+            }
         }
-    }
-    free(g_dispatcher.sinks);
-    g_dispatcher.sinks = NULL;
-    g_dispatcher.sink_count = 0;
-    /* Keep the static mutex alive: init/reload call destroy then reuse it. */
-    clog_mutex_unlock(&g_dispatcher.mutex);
+        free(g_dispatcher.sinks);
+        g_dispatcher.sinks = NULL;
+        g_dispatcher.sink_count = 0;
+        /* Keep the static mutex alive: init/reload call destroy then reuse it. */
+    });
 }
 
 void log_dispatcher_flush(void) {
-    clog_mutex_lock(&g_dispatcher.mutex);
-    for (int i = 0; i < g_dispatcher.sink_count; i++) {
-        if (g_dispatcher.sinks[i]) {
-            g_dispatcher.sinks[i]->flush(g_dispatcher.sinks[i]);
+    CLOG_MUTEXGUARDED(&g_dispatcher.mutex, {
+        for (int i = 0; i < g_dispatcher.sink_count; i++) {
+            if (g_dispatcher.sinks[i]) {
+                g_dispatcher.sinks[i]->flush(g_dispatcher.sinks[i]);
+            }
         }
-    }
-    clog_mutex_unlock(&g_dispatcher.mutex);
+    });
 }
 
 void log_dispatcher_atfork_prepare(void) {

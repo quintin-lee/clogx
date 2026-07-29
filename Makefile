@@ -74,7 +74,7 @@ TESTS = test_async_lifecycle test_async_reload test_dispatcher_lifecycle \
         test_multithread_sync test_config_set test_boundary_config \
         test_socket_sink test_sink_level test_log_level test_json_formatter \
         test_rate_limit test_fork_safety test_signal_handler test_custom_sink \
-        test_observability_stats test_syslog_sink test_thread_context test_coverage_boost
+        test_observability_stats test_syslog_sink test_thread_context test_coverage_boost test_mutex_guard_raii
 TEST_BINS = $(addprefix $(BUILD_DIR)/,$(TESTS))
 
 BENCHMARK_SOURCES = $(wildcard benchmarks/*.c)
