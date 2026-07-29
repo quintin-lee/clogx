@@ -293,7 +293,20 @@ static inline void clog_mutex_unlock_ptr(clog_mutex_t **m) {
     do {                                                                                           \
         clog_mutex_lock(m);                                                                        \
         __attribute__((cleanup(clog_mutex_unlock_ptr))) clog_mutex_t *__clog_g = (m);              \
+        (void)__clog_g;                                                                            \
         code;                                                                                      \
+    } while (0)
+
+#elif defined(_MSC_VER)
+
+#define CLOG_MUTEXGUARDED(m, code)                                                                 \
+    do {                                                                                           \
+        clog_mutex_lock(m);                                                                        \
+        __try {                                                                                    \
+            code;                                                                                  \
+        } __finally {                                                                              \
+            clog_mutex_unlock(m);                                                                  \
+        }                                                                                          \
     } while (0)
 
 #else
@@ -302,6 +315,7 @@ static inline void clog_mutex_unlock_ptr(clog_mutex_t **m) {
     do {                                                                                           \
         clog_mutex_lock(m);                                                                        \
         code;                                                                                      \
+        clog_mutex_unlock(m);                                                                      \
     } while (0)
 
 #endif

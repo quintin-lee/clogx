@@ -26,16 +26,19 @@ int log_dispatcher_add_sink(log_sink_t *restrict sink) {
     if (!sink)
         return -1;
 
+    int ret = 0;
     CLOG_MUTEXGUARDED(&g_dispatcher.mutex, {
         log_sink_t **new_sinks = realloc(g_dispatcher.sinks, ((size_t)g_dispatcher.sink_count + 1) *
                                                                  sizeof(log_sink_t *));
-        if (!new_sinks)
-            return -1;
-        g_dispatcher.sinks = new_sinks;
-        g_dispatcher.sinks[g_dispatcher.sink_count] = sink;
-        g_dispatcher.sink_count++;
+        if (!new_sinks) {
+            ret = -1;
+        } else {
+            g_dispatcher.sinks = new_sinks;
+            g_dispatcher.sinks[g_dispatcher.sink_count] = sink;
+            g_dispatcher.sink_count++;
+        }
     });
-    return 0;
+    return ret;
 }
 
 int log_dispatcher_remove_sink(log_sink_t *restrict sink) {
@@ -176,21 +179,23 @@ int log_dispatcher_init(void) {
 
     log_dispatcher_destroy();
 
+    int ret = 0;
     CLOG_MUTEXGUARDED(&g_dispatcher.mutex, {
         g_dispatcher.sinks = malloc((size_t)count * sizeof(log_sink_t *));
         if (!g_dispatcher.sinks) {
             for (int i = 0; i < count; i++) {
                 sinks[i]->destroy(sinks[i]);
             }
-            return -1;
+            ret = -1;
+        } else {
+            for (int i = 0; i < count; i++) {
+                g_dispatcher.sinks[i] = sinks[i];
+            }
+            g_dispatcher.sink_count = count;
         }
-        for (int i = 0; i < count; i++) {
-            g_dispatcher.sinks[i] = sinks[i];
-        }
-        g_dispatcher.sink_count = count;
     });
 
-    return 0;
+    return ret;
 }
 
 int log_dispatcher_build_snapshot(log_config_t *restrict cfg,

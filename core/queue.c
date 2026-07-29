@@ -36,38 +36,38 @@ int mpsc_queue_put(mpsc_queue_t *restrict q, log_record_t *restrict record) {
     if (!q || !record)
         return -1;
 
+    int ret = -1;
     CLOG_MUTEXGUARDED(&q->mutex, {
         while (q->count == q->capacity && !q->closed) {
             clog_cond_wait(&q->not_full, &q->mutex);
         }
 
-        if (q->closed)
-            return -1;
-
-        q->buffer[q->head] = *record;
-        q->head = (q->head + 1) % q->capacity;
-        q->count++;
-
-        clog_cond_signal(&q->not_empty);
+        if (!q->closed) {
+            q->buffer[q->head] = *record;
+            q->head = (q->head + 1) % q->capacity;
+            q->count++;
+            clog_cond_signal(&q->not_empty);
+            ret = 0;
+        }
     });
-    return 0;
+    return ret;
 }
 
 int mpsc_queue_try_put(mpsc_queue_t *restrict q, log_record_t *restrict record) {
     if (!q || !record)
         return -1;
 
+    int ret = -1;
     CLOG_MUTEXGUARDED(&q->mutex, {
-        if (q->closed || q->count == q->capacity)
-            return -1;
-
-        q->buffer[q->head] = *record;
-        q->head = (q->head + 1) % q->capacity;
-        q->count++;
-
-        clog_cond_signal(&q->not_empty);
+        if (!q->closed && q->count < q->capacity) {
+            q->buffer[q->head] = *record;
+            q->head = (q->head + 1) % q->capacity;
+            q->count++;
+            clog_cond_signal(&q->not_empty);
+            ret = 0;
+        }
     });
-    return 0;
+    return ret;
 }
 
 int mpsc_queue_get(mpsc_queue_t *restrict q, log_record_t *restrict record) {
@@ -82,22 +82,25 @@ int mpsc_queue_get_batch(mpsc_queue_t *restrict q, log_record_t *restrict record
     int count_to_get = -1;
     CLOG_MUTEXGUARDED(&q->mutex, {
         while (q->count == 0) {
-            if (q->closed)
-                return -1;
+            if (q->closed) {
+                break;
+            }
             clog_cond_wait(&q->not_empty, &q->mutex);
         }
 
-        count_to_get = (int)(q->count < max_records ? q->count : max_records);
-        for (int i = 0; i < count_to_get; i++) {
-            records[i] = q->buffer[q->tail];
-            q->tail = (q->tail + 1) % q->capacity;
-            q->count--;
+        if (!q->closed || q->count > 0) {
+            count_to_get = (int)(q->count < max_records ? q->count : max_records);
+            for (int i = 0; i < count_to_get; i++) {
+                records[i] = q->buffer[q->tail];
+                q->tail = (q->tail + 1) % q->capacity;
+                q->count--;
+            }
+
+            if (q->count == 0)
+                clog_cond_broadcast(&q->drained);
+
+            clog_cond_broadcast(&q->not_full);
         }
-
-        if (q->count == 0)
-            clog_cond_broadcast(&q->drained);
-
-        clog_cond_broadcast(&q->not_full);
     });
     return count_to_get;
 }
