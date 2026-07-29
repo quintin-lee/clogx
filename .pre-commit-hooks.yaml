@@ -1,0 +1,11 @@
+- id: clang-format
+  name: clang-format
+  entry: clang-format -i
+  language: system
+  types: [c, h]
+
+- id: cmake-format
+  name: cmake-format
+  entry: cmake-format -i
+  language: system
+  types: [cmake]
