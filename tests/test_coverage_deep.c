@@ -32,6 +32,12 @@ static int dummy_write(log_sink_t *sink, const char *buf, size_t len) {
     (void)len;
     return 0;
 }
+static int failing_write_fn(log_sink_t *sink, const char *buf, size_t len) {
+    (void)sink;
+    (void)buf;
+    (void)len;
+    return -1;
+}
 static void dummy_flush(log_sink_t *sink) {
     (void)sink;
 }
@@ -82,6 +88,35 @@ int main(void) {
     log_add_sink(NULL);
     log_remove_sink(NULL);
     log_remove_sink(&valid_dummy);
+
+    /* Test sink write failure path */
+    log_sink_t failing_dummy = {
+        .write = failing_write_fn,
+        .flush = dummy_flush,
+        .destroy = dummy_destroy,
+        .min_level = LOG_LEVEL_TRACE,
+    };
+    log_add_sink(&failing_dummy);
+    LOG_INFO("test failing sink write");
+    log_remove_sink(&failing_dummy);
+
+    /* Test small async queue overflow & fallback */
+    log_config_t async_overflow_cfg = {0};
+    async_overflow_cfg.async = true;
+    async_overflow_cfg.queue_size = 2;
+    async_overflow_cfg.console_enable = false;
+    async_overflow_cfg.file_enable = false;
+    log_config_set(&async_overflow_cfg);
+    for (int i = 0; i < 50; i++) {
+        LOG_INFO("overflow msg %d", i);
+    }
+    log_flush();
+
+    /* Test ultra-long format string & long parameters */
+    char long_fmt_buf[1024];
+    memset(long_fmt_buf, 'X', sizeof(long_fmt_buf) - 1);
+    long_fmt_buf[sizeof(long_fmt_buf) - 1] = '\0';
+    LOG_INFO("%s", long_fmt_buf);
 
     /* Test multiple sink removal resizing branch */
     log_sink_t *dummy1 = console_sink_create(false);

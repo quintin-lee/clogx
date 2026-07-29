@@ -142,12 +142,14 @@ int log_async_init(int queue_size) {
 
     g_async_logger.running = 1;
 
+    /* LCOV_EXCL_START - OS thread allocation failure */
     if (clog_thread_create(&g_async_logger.worker_thread, async_worker, &g_async_logger) != 0) {
         mpsc_queue_destroy(g_async_logger.queue);
         g_async_logger.queue = NULL;
         g_async_logger.running = 0;
         return -1;
     }
+    /* LCOV_EXCL_STOP */
 
     return 0;
 }

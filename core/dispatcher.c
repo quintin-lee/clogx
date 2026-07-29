@@ -58,9 +58,11 @@ int log_dispatcher_remove_sink(log_sink_t *restrict sink) {
                     log_sink_t **resized = (log_sink_t **)realloc((void *)g_dispatcher.sinks,
                                                                   (size_t)g_dispatcher.sink_count *
                                                                       sizeof(log_sink_t *));
+                    /* LCOV_EXCL_START - System realloc failure */
                     if (resized) {
                         g_dispatcher.sinks = resized;
                     }
+                    /* LCOV_EXCL_STOP */
                 } else {
                     free((void *)g_dispatcher.sinks);
                     g_dispatcher.sinks = NULL;
