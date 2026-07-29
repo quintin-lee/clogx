@@ -99,14 +99,33 @@ int main(void) {
      * 2. SIGNAL HANDLER & FORK CORNER CASES (POSIX ONLY)
      * ------------------------------------------------------------- */
 #ifndef _WIN32
+    typedef void (*sig_func_t)(int);
+    sig_func_t old_term = signal(SIGTERM, SIG_IGN);
+    sig_func_t old_int = signal(SIGINT, SIG_IGN);
+
     log_install_signal_handlers();
     log_install_signal_handlers(); /* Re-entrant call -> CLOG_OK */
+
+    log_signal_handler(SIGTERM);
+    if (log_get_pending_signal() != SIGTERM) {
+        fprintf(stderr, "signal mismatch SIGTERM\n");
+    }
+    log_process_pending_signals(); /* Triggers active SIGTERM processing */
+
+    log_install_signal_handlers();
     log_signal_handler(SIGINT);
     if (log_get_pending_signal() != SIGINT) {
-        fprintf(stderr, "signal mismatch\n");
+        fprintf(stderr, "signal mismatch SIGINT\n");
     }
+    log_process_pending_signals(); /* Triggers active SIGINT processing */
+
     log_restore_signal_handlers();
     log_restore_signal_handlers(); /* Re-entrant call -> no-op */
+
+    if (old_term != SIG_ERR)
+        signal(SIGTERM, old_term);
+    if (old_int != SIG_ERR)
+        signal(SIGINT, old_int);
 
     log_dispatcher_atfork_prepare();
     log_dispatcher_atfork_parent();
