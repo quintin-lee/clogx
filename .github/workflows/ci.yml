@@ -34,8 +34,10 @@ jobs:
         if: matrix.os == 'windows-latest'
         uses: actions/cache@v4
         with:
-          path: ${{ env.LOCALAPPDATA }}\vcpkg\archives
-          key: vcpkg-${{ runner.os }}
+          path: C:\Users\runneradmin\AppData\Local\vcpkg\archives
+          key: vcpkg-${{ runner.os }}-${{ hashFiles('vcpkg.json') }}
+          restore-keys: |
+            vcpkg-${{ runner.os }}-
 
       - name: Install dependencies (Windows)
         if: matrix.os == 'windows-latest'
