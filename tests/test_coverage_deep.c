@@ -1,6 +1,6 @@
 /**
  * @file test_coverage_deep.c
- * @brief Comprehensive edge-case & error-path tests targeting >=75% branch coverage.
+ * @brief Comprehensive edge-case & error-path tests targeting >=80% branch coverage.
  */
 
 #include "clog_port.h"
@@ -83,8 +83,20 @@ int main(void) {
     log_remove_sink(NULL);
     log_remove_sink(&valid_dummy);
 
+    /* Test multiple sink removal resizing branch */
+    log_sink_t *dummy1 = console_sink_create(false);
+    log_sink_t *dummy2 = console_sink_create(false);
+    if (dummy1 && dummy2) {
+        log_add_sink(dummy1);
+        log_add_sink(dummy2);
+        log_remove_sink(dummy1);
+        log_remove_sink(dummy2);
+        dummy1->destroy(dummy1);
+        dummy2->destroy(dummy2);
+    }
+
     /* -------------------------------------------------------------
-     * 2. SIGNAL HANDLER & FORK CORNER CASES
+     * 2. SIGNAL HANDLER & FORK CORNER CASES (POSIX ONLY)
      * ------------------------------------------------------------- */
 #ifndef _WIN32
     log_install_signal_handlers();
@@ -122,7 +134,7 @@ int main(void) {
         .module = NULL,
         .tag = NULL,
     };
-    log_async_write(&null_str_rec); /* Dispatches synchronously when queue is NULL */
+    log_async_write(&null_str_rec);
 
     log_record_t tag_only_rec = {
         .level = LOG_LEVEL_INFO,
@@ -145,8 +157,56 @@ int main(void) {
     log_async_atfork_child();
 
     /* -------------------------------------------------------------
-     * 4. SINK FACTORY EDGE CASES (SOCKET & SYSLOG)
+     * 4. RATE LIMITER TOKEN EXHAUSTION & REPLENISHMENT
      * ------------------------------------------------------------- */
+    log_rate_limit_init(true, 10, 2); /* Max 2 burst tokens */
+    uint64_t supp = 0;
+    log_rate_limit_allow(NULL);  /* Token 1 used */
+    log_rate_limit_allow(&supp); /* Token 2 used */
+    if (log_rate_limit_allow(&supp)) {
+        fprintf(stderr, "expected rate limit rejection\n");
+    }
+    log_rate_limit_allow(&supp); /* 2nd rejection */
+    clog_sleep_ms(150);          /* Replenish tokens */
+    log_rate_limit_allow(&supp); /* Allowed, supp should be 2 */
+    if (log_rate_limit_get_total_suppressed() != 2) {
+        fprintf(stderr, "expected 2 total suppressed\n");
+    }
+    log_rate_limit_reset();
+
+    /* -------------------------------------------------------------
+     * 5. SINK FACTORY & NULL ERROR PATHS (FILE, CONSOLE, CUSTOM, SOCKET, SYSLOG)
+     * ------------------------------------------------------------- */
+    if (file_sink_create(NULL, 100, 2) != NULL) {
+        fprintf(stderr, "expected NULL file sink\n");
+    }
+    if (file_sink_create("", 100, 2) != NULL) {
+        fprintf(stderr, "expected NULL file sink\n");
+    }
+    char huge_path[1200];
+    memset(huge_path, 'a', sizeof(huge_path) - 1);
+    huge_path[sizeof(huge_path) - 1] = '\0';
+    if (file_sink_create(huge_path, 100, 2) != NULL) {
+        fprintf(stderr, "expected NULL file sink for huge path\n");
+    }
+
+    console_sink_is_color_enabled(NULL);
+    console_sink_is_color_enabled(&valid_dummy);
+    log_sink_t *c_out_s = console_sink_create(true);
+    if (c_out_s) {
+        console_sink_is_color_enabled(c_out_s);
+        c_out_s->write(c_out_s, "console test\n", 13);
+        c_out_s->flush(c_out_s);
+        if (c_out_s->destroy)
+            c_out_s->destroy(c_out_s);
+    }
+
+    if (custom_sink_create(NULL, NULL, NULL, NULL) != NULL) {
+        fprintf(stderr, "expected NULL custom sink\n");
+    }
+    custom_sink_get_private_data(NULL);
+    custom_sink_get_private_data(&valid_dummy);
+
     if (socket_sink_create_tls(NULL, 80, false, NULL, false) != NULL) {
         fprintf(stderr, "expected NULL socket sink\n");
     }
@@ -161,6 +221,30 @@ int main(void) {
     }
 
 #ifndef _WIN32
+    log_sink_t *sock_invalid_host = socket_sink_create("invalid_ip_999.999.999.999", 8080);
+    if (sock_invalid_host) {
+        sock_invalid_host->write(sock_invalid_host, "test", 4);
+        sock_invalid_host->destroy(sock_invalid_host);
+    }
+    log_sink_t *sock_closed = socket_sink_create("127.0.0.1", 59997);
+    if (sock_closed) {
+        sock_closed->write(sock_closed, "test", 4);
+        sock_closed->destroy(sock_closed);
+    }
+#ifdef CLOG_USE_TLS
+    log_sink_t *tls_closed = socket_sink_create_tls("127.0.0.1", 59996, true, "no_ca.crt", true);
+    if (tls_closed) {
+        tls_closed->write(tls_closed, "test", 4);
+        tls_closed->destroy(tls_closed);
+    }
+#else
+    log_sink_t *no_tls_s = socket_sink_create_tls("127.0.0.1", 59995, true, NULL, false);
+    if (no_tls_s) {
+        no_tls_s->write(no_tls_s, "test", 4);
+        no_tls_s->destroy(no_tls_s);
+    }
+#endif
+
     log_sink_t *syslog_null = syslog_sink_create(NULL, 0);
     if (syslog_null) {
         syslog_null->write(syslog_null, "[TRACE] syslog trace", 19);
@@ -177,12 +261,52 @@ int main(void) {
 #endif
 
     /* -------------------------------------------------------------
-     * 5. DISPATCHER & SNAPSHOT EDGE CASES
+     * 6. DISPATCHER & SNAPSHOT EDGE CASES & COLOR DISPATCH
      * ------------------------------------------------------------- */
     log_dispatcher_add_sink(NULL);
     log_dispatcher_remove_sink(NULL);
     log_dispatcher_dispatch(NULL);
     log_dispatcher_destroy_snapshot(NULL);
+
+    log_config_t color_cfg = {0};
+    color_cfg.level = LOG_LEVEL_TRACE;
+    color_cfg.color = true;
+    color_cfg.console_enable = true;
+    color_cfg.console_stderr = false;
+    color_cfg.format = "[%time] [%level] %msg";
+    log_config_set(&color_cfg);
+
+    log_level_t levels[] = {LOG_LEVEL_TRACE, LOG_LEVEL_DEBUG, LOG_LEVEL_INFO,
+                            LOG_LEVEL_WARN,  LOG_LEVEL_ERROR, LOG_LEVEL_FATAL};
+    for (size_t i = 0; i < sizeof(levels) / sizeof(levels[0]); i++) {
+        log_record_t color_rec = {
+            .level = levels[i],
+            .timestamp = 1600000000000000ULL,
+            .message = "color test message without newline",
+            .line = 123,
+            .tid = 1,
+            .pid = 2,
+        };
+        log_dispatcher_dispatch(&color_rec);
+    }
+    log_destroy();
+
+    /* Snapshot build, commit, destroy tests */
+    log_config_t snap_full_cfg = {0};
+    snap_full_cfg.console_enable = true;
+    snap_full_cfg.console_stderr = true;
+    snap_full_cfg.file_enable = true;
+    snprintf(snap_full_cfg.file_path, sizeof(snap_full_cfg.file_path), "build/snap_deep.log");
+    snap_full_cfg.file_max_size = 1024 * 1024;
+    snap_full_cfg.file_backups = 2;
+
+    log_dispatcher_snapshot_t real_snap = {0};
+    if (log_dispatcher_build_snapshot(&snap_full_cfg, &real_snap) == 0) {
+        log_dispatcher_commit_snapshot(&real_snap);
+    }
+    if (log_dispatcher_build_snapshot(&snap_full_cfg, &real_snap) == 0) {
+        log_dispatcher_destroy_snapshot(&real_snap);
+    }
 
     log_config_t empty_sink_cfg = {0};
     empty_sink_cfg.console_enable = false;
@@ -194,7 +318,7 @@ int main(void) {
     }
 
     /* -------------------------------------------------------------
-     * 6. CONFIG PARSING BOUNDARY & INVALID YAML TESTS
+     * 7. CONFIG PARSING BOUNDARY & INVALID YAML TESTS
      * ------------------------------------------------------------- */
     write_temp_file("build/cfg_valid_full.yaml", "log:\n"
                                                  "  level: TRACE\n"
@@ -219,6 +343,24 @@ int main(void) {
         log_add_sink(&valid_dummy);
         log_destroy();
     }
+
+    write_temp_file("build/cfg_aliases.yaml", "log:\n"
+                                              "  path: build/alias_file.log\n"
+                                              "  backup: 3\n"
+                                              "  host: \"127.0.0.1\"\n"
+                                              "  port: 8080\n"
+                                              "  tls_enable: false\n"
+                                              "  tls_ca_file: \"ca.crt\"\n"
+                                              "  tls_skip_verify: true\n");
+    log_init("build/cfg_aliases.yaml");
+    log_destroy();
+
+    write_temp_file("build/cfg_syntax_err.yaml", "log: {\n  bad_syntax: [unclosed_list\n");
+    log_init("build/cfg_syntax_err.yaml");
+    log_destroy();
+
+    log_init("build/non_existent_file_999.yaml");
+    log_destroy();
 
     write_temp_file("build/cfg_max_size_units.yaml", "log:\n"
                                                      "  max_size: 5KB\n"
