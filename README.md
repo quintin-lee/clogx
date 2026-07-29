@@ -100,7 +100,8 @@ make TLS=1        # builds with OpenSSL TLS socket sink support
 make test         # compiles and runs all regression tests
 make asan         # build + test with AddressSanitizer
 make ubsan        # build + test with UndefinedBehaviorSanitizer
-make coverage     # generate lcov coverage report with branch coverage
+make coverage     # generate gcov C-source branch summary (>96%) + lcov report
+make coverage-gcov# run POSIX bash/awk gcov -b branch coverage gate (scripts/gcov_branch_summary.sh)
 make tidy         # run clang-tidy static analysis
 make check-tidy   # enforce clang-tidy warnings-as-errors
 make check        # full quality gate: format check → clang-tidy → clean → build → test
