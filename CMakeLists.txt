@@ -12,6 +12,17 @@ option(CLOG_BUILD_BENCHMARKS "Build benchmark programs" OFF)
 option(CLOG_BUILD_SHARED "Build shared library instead of static" OFF)
 option(CLOG_USE_SYSTEM_YAML "Use system libyaml instead of auto-downloading" OFF)
 option(CLOG_ENABLE_TLS "Enable OpenSSL TLS support for socket sink" OFF)
+option(CLOG_ENABLE_CLANG_TIDY "Enable clang-tidy static analysis during compilation" OFF)
+
+if(CLOG_ENABLE_CLANG_TIDY)
+    find_program(CLANG_TIDY_EXE NAMES "clang-tidy")
+    if(CLANG_TIDY_EXE)
+        set(CMAKE_C_CLANG_TIDY "${CLANG_TIDY_EXE}")
+        message(STATUS "clang-tidy enabled: ${CLANG_TIDY_EXE}")
+    else()
+        message(WARNING "CLOG_ENABLE_CLANG_TIDY is ON but clang-tidy executable was not found")
+    endif()
+endif()
 
 find_package(Threads REQUIRED)
 
@@ -285,6 +296,17 @@ if(DOXYGEN_EXECUTABLE)
         COMMAND ${DOXYGEN_EXECUTABLE} ${CMAKE_CURRENT_SOURCE_DIR}/Doxyfile
         WORKING_DIRECTORY ${CMAKE_CURRENT_SOURCE_DIR}
         COMMENT "Generating API documentation with Doxygen"
+        VERBATIM
+    )
+endif()
+
+# --- Clang-Tidy Target ---
+find_program(CLANG_TIDY_EXECUTABLE NAMES "clang-tidy")
+if(CLANG_TIDY_EXECUTABLE)
+    add_custom_target(tidy
+        COMMAND ${CLANG_TIDY_EXECUTABLE} -p ${CMAKE_BINARY_DIR} ${CLOG_SOURCES}
+        WORKING_DIRECTORY ${CMAKE_CURRENT_SOURCE_DIR}
+        COMMENT "Running clang-tidy static analysis on clogx sources"
         VERBATIM
     )
 endif()
