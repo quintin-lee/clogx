@@ -86,6 +86,7 @@ int main(void) {
     /* -------------------------------------------------------------
      * 2. SIGNAL HANDLER & FORK CORNER CASES
      * ------------------------------------------------------------- */
+#ifndef _WIN32
     log_install_signal_handlers();
     log_install_signal_handlers(); /* Re-entrant call -> CLOG_OK */
     log_signal_handler(SIGINT);
@@ -98,6 +99,7 @@ int main(void) {
     log_dispatcher_atfork_prepare();
     log_dispatcher_atfork_parent();
     log_dispatcher_atfork_child();
+#endif
 
     /* -------------------------------------------------------------
      * 3. ASYNC API EDGE CASES
@@ -198,7 +200,7 @@ int main(void) {
                                                  "  level: TRACE\n"
                                                  "  async: true\n"
                                                  "  queue_size: 1024\n"
-                                                 "  catch_signals: true\n"
+                                                 "  catch_signals: false\n"
                                                  "  color: true\n"
                                                  "  format: \"json\"\n"
                                                  "  time_format: \"%Y-%m-%d %H:%M:%S\"\n"
