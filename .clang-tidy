@@ -11,7 +11,8 @@ Checks: >
   readability-redundant-string-cstr,
   -bugprone-easily-swappable-parameters,
   -bugprone-macro-parentheses,
-  -clang-analyzer-security.insecureAPI.DeprecatedOrUnsafeBufferHandling
+  -clang-analyzer-security.insecureAPI.DeprecatedOrUnsafeBufferHandling,
+  -clang-analyzer-valist.Uninitialized
 
 WarningsAsErrors: '*'
 

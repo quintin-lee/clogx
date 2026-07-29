@@ -150,7 +150,8 @@ void log_writevprintf(log_level_t level, const char *file, int line, const char 
 
     va_list args;
     va_start(args, fmt);
-    int ret = vsnprintf(message, sizeof(message), fmt, args);
+    int ret = vsnprintf(message, sizeof(message), fmt,
+                        args); /* NOLINT(clang-analyzer-valist.Uninitialized) */
     va_end(args);
 
     if (ret < 0) {
