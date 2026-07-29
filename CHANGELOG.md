@@ -5,6 +5,10 @@ All notable changes to this project will be documented in this file.
 ## [Unreleased]
 
 ### Added
+- Native POSIX Syslog Sink: `syslog_sink_create(ident, facility)` mapping log levels to syslog priorities (`LOG_DEBUG`, `LOG_INFO`, `LOG_WARNING`, `LOG_ERR`, `LOG_CRIT`) with automatic syslog re-connection in child processes after `fork()`
+- Thread-Local Mapped Diagnostic Context (MDC): `log_set_thread_context(key, val)`, `log_get_thread_context(key)`, and `log_clear_thread_context()` supporting `%context` format tokens and auto-injecting top-level JSON fields
+- Operational Observability Metrics API: `log_get_stats(&stats)` retrieving runtime counters (`total_logged_count`, `dropped_queue_full_count`, `suppressed_rate_count`, `current_queue_depth`)
+- High Performance Async Queue Batching: worker thread dequeues up to 64 records per batch (`mpsc_queue_get_batch`) and flushes sinks once per batch to minimize mutex contention and I/O syscalls
 - Graceful Shutdown (`SIGTERM`/`SIGINT` handling): POSIX `sigaction` signal handlers
   via `log_install_signal_handlers()`, `log_signal_handler(sig)`, and YAML
   setting `catch_signals: true` to flush pending async/sync logs before process exit

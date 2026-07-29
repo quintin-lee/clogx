@@ -11,9 +11,12 @@ Lightweight C99 logging library: config-driven, multi-sink output, optional asyn
 ## Features
 
 - Macro API: `LOG_INFO` / `LOG_DEBUG` / `LOG_WARN` / `LOG_ERROR` / `LOG_FATAL` / `LOG_TRACE` (`TRACE` kept as alias)
-- Multi-sink: console (optional ANSI color), file (auto-create directories + rotation), TCP socket (optional OpenSSL TLS encryption)
-- Structured Logging: native single-line JSON format (`format: "json"`) with RFC 8259 string escaping
-- Token formatting: `%time` `%level` `%msg` `%file` `%line` `%func` `%module` `%tag` `%thread` `%pid`
+- Multi-sink: console (optional ANSI color), file (auto-create directories + rotation), TCP socket (optional OpenSSL TLS encryption), native POSIX syslog sink (`syslog_sink_create`)
+- Mapped Diagnostic Context (MDC): thread-local context key-values (`log_set_thread_context`, `log_get_thread_context`, `log_clear_thread_context`), `%context` token formatting, and top-level JSON injection
+- Structured Logging: native single-line JSON format (`format: "json"`) with RFC 8259 string escaping & thread-local context injection
+- Operational Observability: `log_get_stats(&stats)` API tracking total logs, async queue drops, rate limiter suppressions, and active queue depth
+- High Performance Async Batching: worker thread batch dequeue (`mpsc_queue_get_batch` up to 64 records per batch) with once-per-batch sink flushing
+- Token formatting: `%time` `%level` `%msg` `%file` `%line` `%func` `%module` `%tag` `%thread` `%pid` `%context`
 - Buffer Limit Safety: macro-configurable buffer sizes (`include/log_limits.h`) with strict boundary checks
 - Fuzz Testing: built-in AFL / libFuzzer test harnesses (`make fuzz-build`)
 - Sync / async switchable; async path deep-copies records to avoid dangling stack pointers
@@ -32,11 +35,11 @@ Lightweight C99 logging library: config-driven, multi-sink output, optional asyn
 
 ```
 include/     public headers (log.h, log_config.h, log_limits.h, log_record.h, log_sink.h)
-core/        config, formatting, dispatch, queue, async, rotation
-sinks/       console / file / socket (with TLS support)
+core/        config, formatting, dispatch, queue, async, rotation, rate limiter, signal handler
+sinks/       console / file / socket (with TLS support) / syslog
 fuzz/        AFL fuzzing harnesses (fuzz_config.c, fuzz_formatter.c)
 example/     example programs
-tests/       regression tests (24 test suites)
+tests/       regression tests (31 test suites)
 cmake/       CMake package config templates
 ```
 
