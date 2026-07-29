@@ -160,7 +160,7 @@ typedef struct {
     uint64_t total_logged_count;       /**< Total log records submitted. */
     uint64_t dropped_queue_full_count; /**< Total records dropped due to async queue full. */
     uint64_t suppressed_rate_count;    /**< Total records suppressed by rate limiter. */
-    size_t   current_queue_depth;      /**< Current pending records in async queue. */
+    size_t current_queue_depth;        /**< Current pending records in async queue. */
 } log_stats_t;
 
 /**
@@ -168,6 +168,26 @@ typedef struct {
  * @param[out] stats Pointer to log_stats_t struct to populate.
  */
 CLOGX_API void log_get_stats(log_stats_t *stats);
+
+/**
+ * @brief Set a thread-local context key-value pair for structured/formatted logs.
+ * @param[in] key   Context key name. Pass NULL/empty to clear key.
+ * @param[in] value Context value string. Pass NULL to clear key.
+ * @return CLOG_OK on success, CLOG_ERR_INVALID_ARG on failure.
+ */
+CLOGX_API clogx_errno_t log_set_thread_context(const char *key, const char *value);
+
+/**
+ * @brief Get a thread-local context value for the given key.
+ * @param[in] key Context key name.
+ * @return Value string if set, or NULL if not found.
+ */
+CLOGX_API const char *log_get_thread_context(const char *key);
+
+/**
+ * @brief Clear all thread-local context key-value pairs for the calling thread.
+ */
+CLOGX_API void log_clear_thread_context(void);
 
 /**
  * @brief Reload configuration and rebuild sinks.

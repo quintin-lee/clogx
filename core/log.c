@@ -229,6 +229,64 @@ void log_get_stats(log_stats_t *stats) {
     stats->current_queue_depth = log_async_get_queue_depth();
 }
 
+#define MAX_THREAD_CONTEXT_PAIRS 16
+
+typedef struct {
+    char key[32];
+    char value[128];
+} thread_context_pair_t;
+
+static clog_thread_local thread_context_pair_t g_thread_context[MAX_THREAD_CONTEXT_PAIRS];
+static clog_thread_local size_t g_thread_context_count = 0;
+
+clogx_errno_t log_set_thread_context(const char *key, const char *value) {
+    if (!key || strlen(key) == 0) {
+        return CLOG_ERR_INVALID_ARG;
+    }
+
+    for (size_t i = 0; i < g_thread_context_count; i++) {
+        if (strcmp(g_thread_context[i].key, key) == 0) {
+            if (!value || strlen(value) == 0) {
+                g_thread_context[i] = g_thread_context[g_thread_context_count - 1];
+                g_thread_context_count--;
+            } else {
+                snprintf(g_thread_context[i].value, sizeof(g_thread_context[i].value), "%s", value);
+            }
+            return CLOG_OK;
+        }
+    }
+
+    if (!value || strlen(value) == 0) {
+        return CLOG_OK;
+    }
+
+    if (g_thread_context_count >= MAX_THREAD_CONTEXT_PAIRS) {
+        return CLOG_ERR_INVALID_ARG;
+    }
+
+    snprintf(g_thread_context[g_thread_context_count].key,
+             sizeof(g_thread_context[g_thread_context_count].key), "%s", key);
+    snprintf(g_thread_context[g_thread_context_count].value,
+             sizeof(g_thread_context[g_thread_context_count].value), "%s", value);
+    g_thread_context_count++;
+    return CLOG_OK;
+}
+
+const char *log_get_thread_context(const char *key) {
+    if (!key)
+        return NULL;
+    for (size_t i = 0; i < g_thread_context_count; i++) {
+        if (strcmp(g_thread_context[i].key, key) == 0) {
+            return g_thread_context[i].value;
+        }
+    }
+    return NULL;
+}
+
+void log_clear_thread_context(void) {
+    g_thread_context_count = 0;
+}
+
 #ifndef _WIN32
 static pthread_once_t g_atfork_once = PTHREAD_ONCE_INIT;
 

@@ -282,4 +282,12 @@ static inline struct tm *clog_gmtime_r(const time_t *timep, struct tm *result) {
 #define F_OK 0
 #endif
 
+#if defined(_MSC_VER)
+#define clog_thread_local __declspec(thread)
+#elif defined(__GNUC__) || defined(__clang__)
+#define clog_thread_local __thread
+#else
+#define clog_thread_local _Thread_local
+#endif
+
 #endif /* CLOG_PORT_H */

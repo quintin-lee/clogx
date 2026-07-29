@@ -167,6 +167,7 @@ if(CLOG_BUILD_TESTS)
         test_custom_sink
         test_observability_stats
         test_syslog_sink
+        test_thread_context
     )
 
     # Tests that directly reference internal symbols (not exported from shared lib)
