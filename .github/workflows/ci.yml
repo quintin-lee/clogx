@@ -139,13 +139,14 @@ jobs:
 
       - name: Build with coverage
         run: |
-          make clean && make CC=gcc CFLAGS="--coverage -fprofile-arcs -ftest-coverage" EXTRA_LDFLAGS="--coverage"
+          make clean && make CC=gcc CFLAGS="-std=c99 -Wall -Wextra -Iinclude -O0 -g -D_GNU_SOURCE --coverage -fprofile-arcs -ftest-coverage" EXTRA_LDFLAGS="--coverage"
 
       - name: Run tests with coverage
         run: |
-          make test CC=gcc CFLAGS="--coverage -fprofile-arcs -ftest-coverage" EXTRA_LDFLAGS="--coverage"
-          lcov --capture --directory build --output-file coverage.info
-          lcov --remove coverage.info 'tests/*' --output-file coverage.info
+          make test CC=gcc CFLAGS="-std=c99 -Wall -Wextra -Iinclude -O0 -g -D_GNU_SOURCE --coverage -fprofile-arcs -ftest-coverage" EXTRA_LDFLAGS="--coverage"
+          lcov --capture --rc lcov_branch_coverage=1 --directory build --output-file coverage.info
+          lcov --remove coverage.info 'tests/*' 'deps/*' 'example/*' 'benchmarks/*' 'fuzz/*' --rc lcov_branch_coverage=1 --output-file coverage.info
+          lcov --summary coverage.info --rc lcov_branch_coverage=1
 
       - name: Upload to codecov
         uses: codecov/codecov-action@v3
