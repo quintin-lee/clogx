@@ -8,6 +8,7 @@
 #include "clog_port.h"
 #include "log_sink.h"
 #include "log_record.h"
+#include "clogx_plugin.h"
 
 typedef struct {
     FILE *stream;
@@ -81,6 +82,7 @@ log_sink_t *console_sink_create(bool use_color) {
     }
 #endif
 
+    sink->abi_version = CLOGX_PLUGIN_ABI_VERSION;
     sink->write = console_write;
     sink->flush = console_flush;
     sink->destroy = console_destroy;
@@ -111,6 +113,7 @@ log_sink_t *console_sink_create_stderr(bool use_color) {
     }
 #endif
 
+    sink->abi_version = CLOGX_PLUGIN_ABI_VERSION;
     sink->write = console_write;
     sink->flush = console_flush;
     sink->destroy = console_destroy;

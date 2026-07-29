@@ -17,6 +17,7 @@
 #include "dispatcher.h"
 #include "log_async.h"
 #include "log_record.h"
+#include "plugin_loader.h"
 
 static clog_mutex_t g_init_mutex = CLOG_MUTEX_INITIALIZER;
 static int g_initialized = 0;
@@ -382,6 +383,7 @@ void log_destroy(void) {
         log_rate_limit_reset();
         log_async_shutdown();
         log_dispatcher_destroy();
+        log_plugin_shutdown_all();
     }
 }
 

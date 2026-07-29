@@ -26,4 +26,12 @@
 #define CLOG_MAX_PATH_SIZE 512
 #endif
 
+#ifndef CLOG_MAX_PLUGINS
+#define CLOG_MAX_PLUGINS 8
+#endif
+
+#ifndef CLOG_MAX_PLUGIN_CONFIG_SIZE
+#define CLOG_MAX_PLUGIN_CONFIG_SIZE 4096
+#endif
+
 #endif /* LOG_LIMITS_H */

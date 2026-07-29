@@ -10,6 +10,7 @@
 #include "log_sink.h"
 #include "log_record.h"
 #include "rotate.h"
+#include "clogx_plugin.h"
 
 typedef struct {
     FILE *file;
@@ -181,6 +182,7 @@ log_sink_t *file_sink_create(const char *path, uint64_t max_size, int backups) {
         }
     }
 
+    sink->abi_version = CLOGX_PLUGIN_ABI_VERSION;
     sink->write = file_write;
     sink->flush = file_flush;
     sink->destroy = file_destroy;

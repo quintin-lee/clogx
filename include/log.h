@@ -19,6 +19,7 @@
 #include "log_config.h"
 #include "log_record.h"
 #include "log_sink.h"
+#include "clogx_plugin.h"
 
 /* Compiler portability macros. */
 #if defined(__GNUC__) || defined(__clang__)
@@ -195,6 +196,9 @@ CLOGX_API const char *log_get_thread_context(const char *key);
  * @brief Clear all thread-local context key-value pairs for the calling thread.
  */
 CLOGX_API void log_clear_thread_context(void);
+
+/* The Plugin ABI API (log_plugin_load, log_plugin_unload, log_plugin_create_sink,
+ * log_plugin_info, log_plugin_scan) is declared in <clogx_plugin.h> included above. */
 
 /**
  * @brief Reload configuration and rebuild sinks.

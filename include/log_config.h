@@ -8,6 +8,7 @@
 
 #include <stdbool.h>
 #include <stdint.h>
+#include <string.h>
 #include "log_record.h"
 #include "log_limits.h"
 
@@ -55,6 +56,15 @@ typedef struct {
     int rate_limit_max_per_sec;                  /**< Max allowed log events per second. */
     int rate_limit_burst;                        /**< Maximum burst capacity. */
     bool catch_signals;                          /**< Catch SIGTERM/SIGINT for graceful shutdown. */
+
+    /* ---- Plugin sink configuration (loaded from YAML "plugins:" section) ---- */
+
+    /** @brief Per-plugin configuration entry. */
+    char plugin_so_paths[CLOG_MAX_PLUGINS][CLOG_MAX_PATH_SIZE];
+    /** @brief Opaque JSON params for each plugin sink. */
+    char plugin_params_json[CLOG_MAX_PLUGINS][CLOG_MAX_PLUGIN_CONFIG_SIZE];
+    /** @brief Number of plugin entries parsed (0 .. CLOG_MAX_PLUGINS). */
+    int plugin_count;
 } log_config_t;
 
 /**

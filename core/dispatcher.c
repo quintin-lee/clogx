@@ -12,6 +12,7 @@
 #include "log_config.h"
 #include "log_limits.h"
 #include "log_record.h"
+#include "plugin_loader.h"
 
 typedef struct {
     log_sink_t **sinks;
@@ -152,7 +153,7 @@ int log_dispatcher_dispatch(log_record_t *record) {
 int log_dispatcher_init(void) {
     log_config_t *cfg = log_config_get();
 
-    log_sink_t *sinks[8] = {0};
+    log_sink_t *sinks[8 + CLOG_MAX_PLUGINS] = {0};
     int count = 0;
 
     if (cfg->console_enable) {
@@ -176,6 +177,15 @@ int log_dispatcher_init(void) {
                                    cfg->socket_tls_ca_file, cfg->socket_tls_skip_verify);
         if (sink) {
             sinks[count++] = sink;
+        }
+    }
+
+    /* Load plugin sinks from config. */
+    {
+        log_sink_t *plugin_sinks[CLOG_MAX_PLUGINS];
+        int n = log_plugin_create_sinks_from_config(cfg, plugin_sinks, CLOG_MAX_PLUGINS);
+        for (int i = 0; i < n && count < (int)(sizeof(sinks) / sizeof(sinks[0])); i++) {
+            sinks[count++] = plugin_sinks[i];
         }
     }
 
@@ -207,7 +217,7 @@ int log_dispatcher_init(void) {
 
 int log_dispatcher_build_snapshot(log_config_t *restrict cfg,
                                   log_dispatcher_snapshot_t *restrict snap) {
-    log_sink_t *sinks[8] = {0};
+    log_sink_t *sinks[8 + CLOG_MAX_PLUGINS] = {0};
     int count = 0;
 
     if (cfg->console_enable) {
@@ -231,6 +241,20 @@ int log_dispatcher_build_snapshot(log_config_t *restrict cfg,
                                    cfg->socket_tls_ca_file, cfg->socket_tls_skip_verify);
         if (sink) {
             sinks[count++] = sink;
+        }
+    }
+
+    /* Load plugin sinks from config. */
+    {
+        int max_plugin_sinks = (int)(sizeof(sinks) / sizeof(sinks[0])) - count;
+        if (max_plugin_sinks > CLOG_MAX_PLUGINS)
+            max_plugin_sinks = CLOG_MAX_PLUGINS;
+        if (max_plugin_sinks > 0) {
+            log_sink_t *plugin_sinks[CLOG_MAX_PLUGINS];
+            int n = log_plugin_create_sinks_from_config(cfg, plugin_sinks, max_plugin_sinks);
+            for (int i = 0; i < n && count < (int)(sizeof(sinks) / sizeof(sinks[0])); i++) {
+                sinks[count++] = plugin_sinks[i];
+            }
         }
     }
 

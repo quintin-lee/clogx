@@ -76,6 +76,7 @@ set(CLOG_SOURCES
     sinks/socket_sink.c
     sinks/custom_sink.c
     sinks/syslog_sink.c
+    core/plugin_loader.c
 )
 
 # Object library — all sources compiled once, shared across library and internal-symbol tests
@@ -233,6 +234,7 @@ install(FILES
     include/log_record.h
     include/log_sink.h
     include/clog_port.h
+    include/clogx_plugin.h
     DESTINATION ${CMAKE_INSTALL_INCLUDEDIR}/clogx
 )
 

@@ -19,13 +19,30 @@
 #endif
 #endif
 
+/** @brief Forward declaration used by @ref clogx_plugin_t. */
+struct clogx_plugin_t;
+
 /**
  * @struct log_sink
  * @brief Polymorphic sink: write/flush/destroy plus private state.
+ *
+ * @par ABI stability
+ * The @c abi_version field MUST be set to @ref CLOGX_PLUGIN_ABI_VERSION
+ * by every sink factory (built-in and plugin).  The plugin loader verifies
+ * this at load time.
  */
 typedef struct log_sink log_sink_t;
 
 struct log_sink {
+    /**
+     * @brief ABI version tag; must equal CLOGX_PLUGIN_ABI_VERSION.
+     *
+     * Set by every sink factory (built-in and plugin) to the current
+     * @ref CLOGX_PLUGIN_ABI_VERSION.  The plugin loader checks this
+     * when a .so is loaded; mismatched versions are rejected early.
+     */
+    uint32_t abi_version;
+
     /**
      * @brief Write @p len bytes from @p buf.
      * @return Number of bytes written, or -1 on error.

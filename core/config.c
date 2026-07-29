@@ -115,6 +115,17 @@ static int parse_config_file(const char *filepath, log_config_t *cfg) {
     char current_key[128] = "";
     yaml_event_t event;
 
+    /* Plugin parsing state */
+    int in_plugins = 0;          /* inside plugins: sequence */
+    int in_plugin_entry = 0;     /* inside a single plugin entry mapping */
+    int in_plugin_config = 0;    /* inside a plugin's config: mapping */
+    int plugin_index = 0;        /* current plugin entry index */
+    char plugin_path[CLOG_MAX_PATH_SIZE] = "";
+    char plugin_json[CLOG_MAX_PLUGIN_CONFIG_SIZE] = "";
+    /* Start with empty JSON object: "{" */
+    int plugin_json_len = 0;
+    char plugin_cfg_key[128] = "";
+
     while (1) {
         if (!yaml_parser_parse(&parser, &event)) {
             fprintf(stderr, "YAML parse error: %s\n", filepath);
@@ -123,8 +134,72 @@ static int parse_config_file(const char *filepath, log_config_t *cfg) {
         }
 
         switch (event.type) {
+        case YAML_SEQUENCE_START_EVENT:
+            depth++;
+            if (strcmp(current_key, "plugins") == 0 &&
+                (in_log_section || found_log_section == 0)) {
+                in_plugins = 1;
+                plugin_index = 0;
+            }
+            expect_key = 1;
+            break;
+
+        case YAML_SEQUENCE_END_EVENT:
+            depth--;
+            in_plugins = 0;
+            in_plugin_entry = 0;
+            in_plugin_config = 0;
+            expect_key = 1;
+            break;
+
         case YAML_SCALAR_EVENT: {
             const char *val = (const char *)event.data.scalar.value;
+
+            /* Plugin section scalars bypass the in_log_section guard. */
+            if (in_plugin_entry) {
+                if (in_plugin_config) {
+                    if (expect_key) {
+                        snprintf(plugin_cfg_key, sizeof(plugin_cfg_key), "%s", val);
+                        expect_key = 0;
+                    } else {
+                        /* Append "key":"escaped_value" to the JSON buffer. */
+                        int rem = (int)sizeof(plugin_json) - plugin_json_len;
+                        if (rem > 0 && plugin_json_len > 0) {
+                            int written = snprintf(
+                                plugin_json + plugin_json_len, (size_t)rem,
+                                "%s\"%s\":\"",
+                                plugin_json_len > 1 ? "," : "", plugin_cfg_key);
+                            if (written > 0 && written < rem) {
+                                plugin_json_len += written;
+                                rem -= written;
+                                /* JSON-escape the value. */
+                                for (const char *p = val; *p && rem > 2; p++) {
+                                    if (*p == '"' || *p == '\\') {
+                                        plugin_json[plugin_json_len++] = '\\';
+                                        rem--;
+                                    }
+                                    plugin_json[plugin_json_len++] = *p;
+                                    rem--;
+                                }
+                                if (rem > 0) {
+                                    plugin_json[plugin_json_len++] = '"';
+                                    plugin_json[plugin_json_len] = '\0';
+                                }
+                            }
+                        }
+                        expect_key = 1;
+                    }
+                } else if (expect_key) {
+                    snprintf(current_key, sizeof(current_key), "%s", val);
+                    expect_key = 0;
+                } else if (strcmp(current_key, "path") == 0) {
+                    snprintf(plugin_path, sizeof(plugin_path), "%s", val);
+                    expect_key = 1;
+                } else {
+                    expect_key = 1;
+                }
+                break;
+            }
 
             if (!in_log_section && !(found_log_section == 0 && depth == 1))
                 break;
@@ -340,6 +415,23 @@ static int parse_config_file(const char *filepath, log_config_t *cfg) {
         }
         case YAML_MAPPING_START_EVENT:
             depth++;
+            if (in_plugins && in_plugin_entry && !in_plugin_config) {
+                /* Entering a plugin's config: mapping. */
+                in_plugin_config = 1;
+                plugin_json_len = 0;
+                plugin_json[0] = '{';
+                plugin_json[1] = '\0';
+                plugin_json_len = 1;
+                expect_key = 1;
+                break;
+            }
+            if (in_plugins && !in_plugin_entry) {
+                /* Entering a plugin entry mapping inside the plugins: sequence. */
+                in_plugin_entry = 1;
+                plugin_path[0] = '\0';
+                expect_key = 1;
+                break;
+            }
             if (depth == 1) {
                 in_log_section = 0;
                 if (strcmp(current_key, "log") == 0) {
@@ -354,6 +446,36 @@ static int parse_config_file(const char *filepath, log_config_t *cfg) {
             expect_key = 1;
             break;
         case YAML_MAPPING_END_EVENT:
+            if (in_plugin_config) {
+                /* Finalize JSON object. */
+                if (plugin_json_len > 0 && plugin_json[plugin_json_len - 1] == '{') {
+                    plugin_json[plugin_json_len] = '}';
+                    plugin_json[plugin_json_len + 1] = '\0';
+                } else {
+                    plugin_json[plugin_json_len++] = '}';
+                    plugin_json[plugin_json_len] = '\0';
+                }
+                in_plugin_config = 0;
+                expect_key = 1;
+                break;
+            }
+            if (in_plugin_entry) {
+                /* Finalize this plugin entry: store path + JSON. */
+                if (plugin_index < CLOG_MAX_PLUGINS &&
+                    strlen(plugin_path) > 0) {
+                    snprintf(cfg->plugin_so_paths[plugin_index],
+                             sizeof(cfg->plugin_so_paths[0]),
+                             "%s", plugin_path);
+                    snprintf(cfg->plugin_params_json[plugin_index],
+                             sizeof(cfg->plugin_params_json[0]),
+                             "%s", plugin_json);
+                    plugin_index++;
+                    cfg->plugin_count = plugin_index;
+                }
+                in_plugin_entry = 0;
+                expect_key = 1;
+                break;
+            }
             if (depth <= 2) {
                 in_log_section = 0;
             }
@@ -395,6 +517,7 @@ static int load_default_and_apply(const char *yaml_path) {
     g_config.format = g_config_format;
     snprintf(g_config_time_format, sizeof(g_config_time_format), "%s", "%Y-%m-%d %H:%M:%S");
     g_config.time_format = g_config_time_format;
+    g_config.plugin_count = 0;
 
     /* Reload passes g_config_path itself; avoid overlapping copy (ASan). */
     if (yaml_path && yaml_path != g_config_path && strlen(yaml_path) > 0) {
@@ -436,6 +559,14 @@ static int apply_config(const log_config_t *cfg) {
     g_config.rate_limit_max_per_sec = cfg->rate_limit_max_per_sec;
     g_config.rate_limit_burst = cfg->rate_limit_burst;
     g_config.catch_signals = cfg->catch_signals;
+
+    g_config.plugin_count = cfg->plugin_count;
+    for (int i = 0; i < cfg->plugin_count && i < CLOG_MAX_PLUGINS; i++) {
+        snprintf(g_config.plugin_so_paths[i], sizeof(g_config.plugin_so_paths[0]),
+                 "%s", cfg->plugin_so_paths[i]);
+        snprintf(g_config.plugin_params_json[i], sizeof(g_config.plugin_params_json[0]),
+                 "%s", cfg->plugin_params_json[i]);
+    }
 
     if (cfg->format) {
         snprintf(g_config_format, sizeof(g_config_format), "%s", cfg->format);

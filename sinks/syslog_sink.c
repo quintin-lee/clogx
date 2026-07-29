@@ -7,6 +7,7 @@
 #include <stdlib.h>
 #include <string.h>
 #include "log_sink.h"
+#include "clogx_plugin.h"
 
 #ifndef _WIN32
 #include <syslog.h>
@@ -78,6 +79,7 @@ log_sink_t *syslog_sink_create(const char *ident, int facility) {
 
     openlog(data->ident, LOG_PID | LOG_NDELAY, data->facility);
 
+    sink->abi_version = CLOGX_PLUGIN_ABI_VERSION;
     sink->write = syslog_write;
     sink->flush = syslog_flush;
     sink->destroy = syslog_destroy;

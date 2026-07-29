@@ -8,6 +8,7 @@
 #include "clog_port.h"
 #include "log_sink.h"
 #include "log_record.h"
+#include "clogx_plugin.h"
 
 #ifdef CLOG_USE_TLS
 #include <openssl/ssl.h>
@@ -236,6 +237,7 @@ log_sink_t *socket_sink_create_tls(const char *host, int port, bool use_tls, con
     data->ssl = NULL;
 #endif
 
+    sink->abi_version = CLOGX_PLUGIN_ABI_VERSION;
     sink->write = socket_write;
     sink->flush = socket_flush;
     sink->destroy = socket_destroy;

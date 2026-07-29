@@ -4,6 +4,7 @@
  */
 #include <stdlib.h>
 #include "log_sink.h"
+#include "clogx_plugin.h"
 
 typedef struct {
     int (*user_write)(log_sink_t *sink, const char *buf, size_t len);
@@ -65,6 +66,7 @@ log_sink_t *custom_sink_create(int (*write_fn)(log_sink_t *sink, const char *buf
     data->user_destroy = destroy_fn;
     data->user_private = private_data;
 
+    sink->abi_version = CLOGX_PLUGIN_ABI_VERSION;
     sink->write = custom_write;
     sink->flush = custom_flush;
     sink->destroy = custom_destroy;
