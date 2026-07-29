@@ -202,13 +202,13 @@ coverage:
 	@command -v lcov >/dev/null || { echo "lcov not found; install it to generate coverage report"; exit 1; }
 	$(MAKE) clean
 	$(MAKE) test CC=gcc CFLAGS="$(CFLAGS) -O0 -g --coverage -fprofile-arcs -ftest-coverage -fprofile-update=atomic" EXTRA_LDFLAGS="$(EXTRA_LDFLAGS) --coverage"
-	python3 scripts/gcov_branch_summary.py build 75.0
+	./scripts/gcov_branch_summary.sh build 75.0
 	lcov --capture --rc branch_coverage=1 --ignore-errors unused,negative,empty --directory build --output-file coverage.info || lcov --capture --rc branch_coverage=1 --directory build --output-file coverage.info
 	lcov --remove coverage.info 'tests/*' 'deps/*' 'example/*' 'benchmarks/*' 'fuzz/*' 'include/*' --rc branch_coverage=1 --ignore-errors unused,negative,empty --output-file coverage.info || lcov --remove coverage.info 'tests/*' --rc branch_coverage=1 --output-file coverage.info
 	lcov --summary coverage.info --rc branch_coverage=1 --ignore-errors unused,negative,empty || true
 
 coverage-gcov:
-	python3 scripts/gcov_branch_summary.py build 75.0
+	./scripts/gcov_branch_summary.sh build 75.0
 
 ## Quality check
 

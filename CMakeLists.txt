@@ -313,10 +313,10 @@ if(CLANG_TIDY_EXECUTABLE)
 endif()
 
 # --- Gcov Branch Summary Target ---
-find_package(Python3 COMPONENTS Interpreter)
-if(Python3_Interpreter_FOUND)
+find_program(BASH_EXECUTABLE NAMES "bash")
+if(BASH_EXECUTABLE)
     add_custom_target(coverage-gcov
-        COMMAND ${Python3_EXECUTABLE} ${CMAKE_CURRENT_SOURCE_DIR}/scripts/gcov_branch_summary.py ${CMAKE_BINARY_DIR} 75.0
+        COMMAND ${BASH_EXECUTABLE} ${CMAKE_CURRENT_SOURCE_DIR}/scripts/gcov_branch_summary.sh ${CMAKE_BINARY_DIR} 75.0
         WORKING_DIRECTORY ${CMAKE_CURRENT_SOURCE_DIR}
         COMMENT "Running gcov -b C-source branch coverage summary"
         VERBATIM
