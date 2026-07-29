@@ -146,10 +146,10 @@ void log_writevprintf(log_level_t level, const char *file, int line, const char 
 
     g_total_logged_count++;
 
+    char message[CLOG_MAX_MESSAGE_SIZE];
+
     va_list args;
     va_start(args, fmt);
-
-    char message[CLOG_MAX_MESSAGE_SIZE];
     int ret = vsnprintf(message, sizeof(message), fmt, args);
     va_end(args);
 
