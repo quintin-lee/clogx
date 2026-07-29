@@ -209,6 +209,35 @@ if(CLOG_BUILD_TESTS)
             WORKING_DIRECTORY ${CMAKE_CURRENT_SOURCE_DIR}
         )
     endforeach()
+
+    # --- Plugin ABI test: build a dummy .so + link the test ---
+    set(PLUGIN_DUMMY_SO "${CMAKE_BINARY_DIR}/tests/plugin_dummy.so")
+    add_library(plugin_dummy SHARED tests/plugin_dummy.c)
+    target_include_directories(plugin_dummy PRIVATE
+        $<BUILD_INTERFACE:${CMAKE_CURRENT_SOURCE_DIR}/include>)
+    target_compile_definitions(plugin_dummy PRIVATE _GNU_SOURCE)
+    target_compile_options(plugin_dummy PRIVATE
+        $<$<C_COMPILER_ID:GNU,Clang,AppleClang>:-Wall -Wextra -Wconversion -fvisibility=default>)
+    set_target_properties(plugin_dummy PROPERTIES
+        RUNTIME_OUTPUT_DIRECTORY ${CMAKE_BINARY_DIR}/tests
+        LIBRARY_OUTPUT_DIRECTORY ${CMAKE_BINARY_DIR}/tests
+        PREFIX ""
+    )
+
+    add_executable(test_plugin_abi tests/test_plugin_abi.c)
+    target_link_libraries(test_plugin_abi PRIVATE clogx)
+    target_compile_definitions(test_plugin_abi PRIVATE
+        _GNU_SOURCE
+        TEST_PLUGIN_SO="${PLUGIN_DUMMY_SO}")
+    add_dependencies(test_plugin_abi plugin_dummy)
+    set_target_properties(test_plugin_abi PROPERTIES
+        RUNTIME_OUTPUT_DIRECTORY ${CMAKE_BINARY_DIR}/tests
+    )
+    add_test(
+        NAME test_plugin_abi
+        COMMAND test_plugin_abi
+        WORKING_DIRECTORY ${CMAKE_CURRENT_SOURCE_DIR}
+    )
 endif()
 
 if(CLOG_BUILD_BENCHMARKS)

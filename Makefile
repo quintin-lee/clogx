@@ -59,7 +59,7 @@ $(BUILD_DIR)/test_%: $(YAML_STATIC_LIB)
 $(BUILD_DIR)/verify_config: $(YAML_STATIC_LIB)
 endif
 
-CORE_SRCS = config.c formatter.c dispatcher.c queue.c async.c log.c rotate.c rate_limit.c signal_handler.c
+CORE_SRCS = config.c formatter.c dispatcher.c queue.c async.c log.c rotate.c rate_limit.c signal_handler.c plugin_loader.c
 SINK_SRCS = console_sink.c file_sink.c socket_sink.c custom_sink.c syslog_sink.c
 CLOG_SRCS = $(addprefix core/,$(CORE_SRCS)) $(addprefix sinks/,$(SINK_SRCS))
 CORE_OBJS = $(addprefix $(BUILD_DIR)/,$(CORE_SRCS:.c=.o))
@@ -75,7 +75,8 @@ TESTS = test_async_lifecycle test_async_reload test_dispatcher_lifecycle \
         test_multithread_sync test_config_set test_boundary_config \
         test_socket_sink test_sink_level test_log_level test_json_formatter \
         test_rate_limit test_fork_safety test_signal_handler test_custom_sink \
-        test_observability_stats test_syslog_sink test_thread_context test_coverage_boost test_mutex_guard_raii test_coverage_deep
+        test_observability_stats test_syslog_sink test_thread_context test_coverage_boost test_mutex_guard_raii test_coverage_deep \
+        test_plugin_abi
 TEST_BINS = $(addprefix $(BUILD_DIR)/,$(TESTS))
 
 BENCHMARK_SOURCES = $(wildcard benchmarks/*.c)
@@ -91,7 +92,7 @@ PREFIX ?= /usr/local
 LIBDIR ?= $(PREFIX)/lib
 INCLUDEDIR ?= $(PREFIX)/include
 
-PUBLIC_HEADERS := include/log.h include/log_config.h include/log_limits.h include/log_record.h include/log_sink.h
+PUBLIC_HEADERS := include/log.h include/log_config.h include/log_limits.h include/log_record.h include/log_sink.h include/clogx_plugin.h
 
 .PHONY: all clean example test docs format check-format check test-valgrind install uninstall asan ubsan test-asan test-ubsan fuzz-build fuzz-config fuzz-formatter benchmark
 
@@ -119,6 +120,14 @@ $(EXAMPLE_BIN): example/main.c $(LIB_TARGET) | $(BUILD_DIR)
 
 $(BUILD_DIR)/test_%: tests/test_%.c $(LIB_TARGET) | $(BUILD_DIR)
 	$(CC) $(EXTRA_LDFLAGS) $(CFLAGS) -o $@ $< $(LIB_TARGET) $(LDFLAGS)
+
+# Plugin test: build the dummy .so and link the test with the path define
+# Override -fvisibility=hidden since plugin exports must be visible to dlsym
+$(BUILD_DIR)/plugin_dummy.so: tests/plugin_dummy.c include/clogx_plugin.h include/log_sink.h | $(BUILD_DIR)
+	$(CC) $(EXTRA_LDFLAGS) $(CFLAGS:-fvisibility=hidden=) -shared -fPIC -o $@ $< $(LDFLAGS)
+
+$(BUILD_DIR)/test_plugin_abi: tests/test_plugin_abi.c $(LIB_TARGET) $(BUILD_DIR)/plugin_dummy.so
+	$(CC) $(EXTRA_LDFLAGS) $(CFLAGS) -DTEST_PLUGIN_SO=\"build/plugin_dummy.so\" -o $@ $< $(LIB_TARGET) $(LDFLAGS)
 
 $(BUILD_DIR)/verify_config: tests/verify_config.c $(LIB_TARGET) | $(BUILD_DIR)
 	$(CC) $(EXTRA_LDFLAGS) $(CFLAGS) -o $@ $< $(LIB_TARGET) $(LDFLAGS)
