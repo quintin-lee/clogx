@@ -358,8 +358,11 @@ int main(void) {
     LOG_FATAL("fatal pipeline msg");
     log_clear_thread_context();
 
-    if (c_err)
+    if (c_err) {
         log_remove_sink(c_err);
+        if (c_err->destroy)
+            c_err->destroy(c_err);
+    }
 
     log_flush();
     log_destroy();
