@@ -1,0 +1,47 @@
+name: Benchmark CI
+
+on:
+  schedule:
+    # Run every Sunday at midnight (UTC)
+    - cron: '0 0 * * 0'
+  workflow_dispatch:
+  push:
+    branches: [ main, master ]
+    paths:
+      - 'core/**'
+      - 'sinks/**'
+      - 'benchmarks/**'
+
+jobs:
+  benchmark:
+    name: Run Performance Benchmarks
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v7
+
+      - name: Install dependencies
+        run: sudo apt-get update && sudo apt-get install -y libyaml-dev
+
+      - name: Build benchmarks
+        run: make benchmark
+
+      - name: Run throughput benchmark
+        run: |
+          ./build/benchmark_throughput > throughput.log
+          cat throughput.log
+
+      - name: Run async vs sync benchmark
+        run: |
+          ./build/benchmark_async_vs_sync > async_vs_sync.log
+          cat async_vs_sync.log
+
+      - name: Generate Benchmark Summary
+        run: |
+          echo "## 🚀 Performance Benchmark Results" >> $GITHUB_STEP_SUMMARY
+          echo '```text' >> $GITHUB_STEP_SUMMARY
+          cat throughput.log >> $GITHUB_STEP_SUMMARY
+          echo "" >> $GITHUB_STEP_SUMMARY
+          cat async_vs_sync.log >> $GITHUB_STEP_SUMMARY
+          echo '```' >> $GITHUB_STEP_SUMMARY

@@ -79,7 +79,7 @@ TESTS = test_async_lifecycle test_async_reload test_dispatcher_lifecycle \
 TEST_BINS = $(addprefix $(BUILD_DIR)/,$(TESTS))
 
 BENCHMARK_SOURCES = $(wildcard benchmarks/*.c)
-BENCHMARK_BINS = $(patsubst benchmarks/%.c,$(BUILD_DIR)/benchmark_%,$(BENCHMARK_SOURCES))
+BENCHMARK_BINS = $(patsubst benchmarks/%.c,$(BUILD_DIR)/%,$(BENCHMARK_SOURCES))
 
 # Sanitizer configs (O1 -g for meaningful stack traces)
 ASAN_CFLAGS = -std=c99 -Wall -Wextra -Wconversion -Iinclude -O1 -g -D_GNU_SOURCE -fPIC -fvisibility=hidden -fsanitize=address -fno-omit-frame-pointer -fno-optimize-sibling-calls
@@ -132,7 +132,7 @@ $(BUILD_DIR)/fuzz_formatter: fuzz/fuzz_formatter.c $(LIB_TARGET) | $(BUILD_DIR)
 $(BUILD_DIR)/fuzz_pipeline: fuzz/fuzz_pipeline.c $(LIB_TARGET) | $(BUILD_DIR)
 	$(CC) $(EXTRA_LDFLAGS) $(CFLAGS) -o $@ $< $(LIB_TARGET) $(LDFLAGS)
 
-$(BUILD_DIR)/benchmark_%: benchmarks/%.c $(LIB_TARGET) | $(BUILD_DIR)
+$(BUILD_DIR)/%: benchmarks/%.c $(LIB_TARGET) | $(BUILD_DIR)
 	$(CC) $(EXTRA_LDFLAGS) $(CFLAGS) -o $@ $< $(LIB_TARGET) $(LDFLAGS) -lm
 
 fuzz-build: $(BUILD_DIR)/fuzz_config $(BUILD_DIR)/fuzz_formatter $(BUILD_DIR)/fuzz_pipeline

@@ -1,0 +1,8 @@
+log:
+  level: INFO
+  async: true
+  queue_size: 8192
+  color: false
+  console_enable: false
+  file_enable: true
+  file_path: "/dev/null"
