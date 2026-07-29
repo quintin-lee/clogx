@@ -74,6 +74,8 @@ All notable changes to this project will be documented in this file.
 - CI: clang-format check step, expanded Valgrind coverage to all 23 tests
 
 ### Fixed
+- macOS (Apple Silicon arm64 / Clang) linker failure: removed `__gcov_dump()` reference in `signal_handler.c` to prevent Mach-O `ld64` undefined symbol errors
+- ASan test build preload: dynamically query `libasan.so` via `gcc -print-file-name=libasan.so` and isolate preload to test execution phase to prevent compiler binary pollution
 - Replace `atoi` with `strtol` for robust numeric parsing of `queue_size`,
   `backups`, and `port` settings with full error validation
 - Add `uint64_t` overflow protection for `max_size` parsing
