@@ -114,7 +114,7 @@ int main(void) {
 #endif
 
     /* -------------------------------------------------------------
-     * 3. ASYNC API EDGE CASES
+     * 3. ASYNC API EDGE CASES & RECORD CLONE / FREE
      * ------------------------------------------------------------- */
     log_async_init(0);
     log_async_init(-1);
@@ -320,6 +320,13 @@ int main(void) {
     /* -------------------------------------------------------------
      * 7. CONFIG PARSING BOUNDARY & INVALID YAML TESTS
      * ------------------------------------------------------------- */
+    log_init(NULL);
+    log_init(NULL);      /* Re-entrant init test -> CLOG_ERR_INIT_REENTRANT */
+    log_get_stats(NULL); /* Null stats pointer */
+    log_reload();        /* Reload while initialized but path empty */
+    log_destroy();
+    log_reload(); /* Reload while uninitialized -> CLOG_ERR_RELOAD */
+
     write_temp_file("build/cfg_valid_full.yaml", "log:\n"
                                                  "  level: TRACE\n"
                                                  "  async: true\n"
@@ -341,6 +348,7 @@ int main(void) {
 
     if (log_init("build/cfg_valid_full.yaml") == 0) {
         log_add_sink(&valid_dummy);
+        log_reload(); /* Valid reload test */
         log_destroy();
     }
 
@@ -413,6 +421,9 @@ int main(void) {
             rot_s->destroy(rot_s);
     }
 
+    /* -------------------------------------------------------------
+     * 8. FORMATTER TRUNCATION & PATTERN VARIATIONS
+     * ------------------------------------------------------------- */
     log_record_t esc_rec = {
         .level = LOG_LEVEL_INFO,
         .timestamp = 1600000000000000ULL,
@@ -427,18 +438,26 @@ int main(void) {
     };
 
     log_formatter_init("json", "%Y-%m-%d");
-    size_t sizes[] = {5, 12, 25, 40, 55, 75, 100, 130, 200};
-    for (size_t i = 0; i < sizeof(sizes) / sizeof(sizes[0]); i++) {
-        char *tbuf = malloc(sizes[i]);
+    for (size_t sz = 1; sz <= 80; sz++) {
+        char *tbuf = malloc(sz);
         if (tbuf) {
-            log_formatter_format(&esc_rec, tbuf, sizes[i]);
+            log_formatter_format(&esc_rec, tbuf, sz);
             free(tbuf);
         }
     }
 
+    /* Text formatter tokens with NULL & filled fields under varying buffer sizes */
     log_formatter_init("[%time] [%level] [%thread] [%pid] [%file] [%line] [%func] [%module] [%tag] "
-                       "%newline %msg %xyz\n",
+                       "%context %newline %msg %xyz %%\n",
                        NULL);
+    for (size_t sz = 1; sz <= 80; sz++) {
+        char *tbuf = malloc(sz);
+        if (tbuf) {
+            log_formatter_format(&esc_rec, tbuf, sz);
+            free(tbuf);
+        }
+    }
+
     log_record_t null_fields_rec = {
         .level = LOG_LEVEL_WARN,
         .timestamp = 1600000000000000ULL,
@@ -455,6 +474,9 @@ int main(void) {
     log_formatter_format(&null_fields_rec, text_buf, sizeof(text_buf));
     log_formatter_reset();
 
+    /* -------------------------------------------------------------
+     * 9. MULTI-PIPELINE & ASYNC FULL RUN
+     * ------------------------------------------------------------- */
     log_config_t async_cfg = {0};
     async_cfg.level = LOG_LEVEL_DEBUG;
     async_cfg.async = true;
