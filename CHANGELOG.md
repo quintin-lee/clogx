@@ -2,7 +2,7 @@
 
 All notable changes to this project will be documented in this file.
 
-## [0.1.0] - 2026-07-29
+## [Unreleased]
 
 ### Added
 - POSIX Shell & AWK C-Source Branch Coverage Tool (`scripts/gcov_branch_summary.sh`): zero-dependency bash/awk script parsing `gcov -b` output, calculating true C-source AST branch execution rate (**96.20%** overall across core C files), integrated into Makefile (`make coverage-gcov`), CMake (`coverage-gcov` target), and GitHub Actions CI workflow with threshold enforcement (75%)
@@ -10,6 +10,15 @@ All notable changes to this project will be documented in this file.
 - Focused Fuzzing Harness (`fuzz/fuzz_pipeline.c`): AFL/libFuzzer test harness targeting formatting, string truncation, and boundary conditions
 - `clang-tidy` Static Analysis Integration: Makefile targets `make tidy` and `make check-tidy` (integrated into `make check`), CMake option `CLOG_ENABLE_CLANG_TIDY=ON`, and CMake custom target `tidy` with a zero-warning policy
 - MSVC RAII Mutex Guard: `CLOG_MUTEXGUARDED` macro updated with `__try / __finally` for MSVC (`_MSC_VER`), ensuring safe mutex release across Windows builds
+
+### Fixed
+- `clang-analyzer-valist.Uninitialized` false positive: suppressed in `.clang-tidy` and added NOLINT annotation to `vsnprintf` in `core/log.c`
+- Windows MSVC CTest process hang in `test_coverage_deep`: guarded POSIX signal handler and `pthread_atfork` tests with `#ifndef _WIN32` and set `catch_signals: false` in temporary test config
+- AddressSanitizer 64-byte memory leak in `test_coverage_deep`: added explicit `c_err->destroy(c_err)` call after `log_remove_sink(c_err)`
+
+## [0.1.0] - 2026-07-29
+
+### Added
 - Native POSIX Syslog Sink: `syslog_sink_create(ident, facility)` mapping log levels to syslog priorities (`LOG_DEBUG`, `LOG_INFO`, `LOG_WARNING`, `LOG_ERR`, `LOG_CRIT`) with automatic syslog re-connection in child processes after `fork()`
 - Thread-Local Mapped Diagnostic Context (MDC): `log_set_thread_context(key, val)`, `log_get_thread_context(key)`, and `log_clear_thread_context()` supporting `%context` format tokens and auto-injecting top-level JSON fields
 - Operational Observability Metrics API: `log_get_stats(&stats)` retrieving runtime counters (`total_logged_count`, `dropped_queue_full_count`, `suppressed_rate_count`, `current_queue_depth`)
@@ -79,9 +88,6 @@ All notable changes to this project will be documented in this file.
 - CI: clang-format check step, expanded Valgrind coverage to all 23 tests
 
 ### Fixed
-- `clang-analyzer-valist.Uninitialized` false positive: suppressed in `.clang-tidy` and added NOLINT annotation to `vsnprintf` in `core/log.c`
-- Windows MSVC CTest process hang in `test_coverage_deep`: guarded POSIX signal handler and `pthread_atfork` tests with `#ifndef _WIN32` and set `catch_signals: false` in temporary test config
-- AddressSanitizer 64-byte memory leak in `test_coverage_deep`: added explicit `c_err->destroy(c_err)` call after `log_remove_sink(c_err)`
 - macOS (Apple Silicon arm64 / Clang) linker failure: removed `__gcov_dump()` reference in `signal_handler.c` to prevent Mach-O `ld64` undefined symbol errors
 - ASan test build preload: dynamically query `libasan.so` via `gcc -print-file-name=libasan.so` and isolate preload to test execution phase to prevent compiler binary pollution
 - Replace `atoi` with `strtol` for robust numeric parsing of `queue_size`,
