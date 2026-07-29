@@ -23,7 +23,8 @@
 static int test_log_init_basic(const char *yaml) {
     /* Write a temp config, init, log one message, destroy. */
     FILE *f = fopen("/tmp/test_plugin_cfg.yaml", "w");
-    if (!f) return -1;
+    if (!f)
+        return -1;
     fprintf(f, "%s", yaml);
     fclose(f);
 
@@ -218,16 +219,16 @@ static void test_config_plugins_section(void) {
 
     char cfg[1024];
     snprintf(cfg, sizeof(cfg),
-        "log:\n"
-        "  level: TRACE\n"
-        "  console_enable: false\n"
-        "  format: \"%%msg\"\n"
-        "  plugins:\n"
-        "    - path: %s\n"
-        "      config:\n"
-        "        topic: test-topic\n"
-        "        brokers: \"broker1:9092\"\n",
-        TEST_PLUGIN_SO);
+             "log:\n"
+             "  level: TRACE\n"
+             "  console_enable: false\n"
+             "  format: \"%%msg\"\n"
+             "  plugins:\n"
+             "    - path: %s\n"
+             "      config:\n"
+             "        topic: test-topic\n"
+             "        brokers: \"broker1:9092\"\n",
+             TEST_PLUGIN_SO);
 
     assert(test_log_init_basic(cfg) == 0);
     fprintf(stderr, "PASS\n");
@@ -241,13 +242,13 @@ static void test_config_plugins_no_config(void) {
 
     char cfg[1024];
     snprintf(cfg, sizeof(cfg),
-        "log:\n"
-        "  level: TRACE\n"
-        "  console_enable: false\n"
-        "  format: \"%%msg\"\n"
-        "  plugins:\n"
-        "    - path: %s\n",
-        TEST_PLUGIN_SO);
+             "log:\n"
+             "  level: TRACE\n"
+             "  console_enable: false\n"
+             "  format: \"%%msg\"\n"
+             "  plugins:\n"
+             "    - path: %s\n",
+             TEST_PLUGIN_SO);
 
     assert(test_log_init_basic(cfg) == 0);
     fprintf(stderr, "PASS\n");
@@ -261,12 +262,12 @@ static void test_config_top_level_plugins(void) {
 
     char cfg[1024];
     snprintf(cfg, sizeof(cfg),
-        "level: TRACE\n"
-        "console_enable: false\n"
-        "format: \"%%msg\"\n"
-        "plugins:\n"
-        "  - path: %s\n",
-        TEST_PLUGIN_SO);
+             "level: TRACE\n"
+             "console_enable: false\n"
+             "format: \"%%msg\"\n"
+             "plugins:\n"
+             "  - path: %s\n",
+             TEST_PLUGIN_SO);
 
     assert(test_log_init_basic(cfg) == 0);
     fprintf(stderr, "PASS\n");
@@ -280,13 +281,13 @@ static void test_reload_with_plugins(void) {
 
     char cfg[1024];
     snprintf(cfg, sizeof(cfg),
-        "log:\n"
-        "  level: TRACE\n"
-        "  console_enable: false\n"
-        "  format: \"%%msg\"\n"
-        "  plugins:\n"
-        "    - path: %s\n",
-        TEST_PLUGIN_SO);
+             "log:\n"
+             "  level: TRACE\n"
+             "  console_enable: false\n"
+             "  format: \"%%msg\"\n"
+             "  plugins:\n"
+             "    - path: %s\n",
+             TEST_PLUGIN_SO);
 
     assert(test_log_init_basic(cfg) == 0);
     /* log_reload test: init again with plugin */
@@ -302,14 +303,14 @@ static void test_mixed_sinks(void) {
 
     char cfg[1024];
     snprintf(cfg, sizeof(cfg),
-        "log:\n"
-        "  level: TRACE\n"
-        "  console_enable: false\n"
-        "  format: \"%%msg\"\n"
-        "  plugins:\n"
-        "    - path: %s\n"
-        "    - path: %s\n",
-        TEST_PLUGIN_SO, TEST_PLUGIN_SO);
+             "log:\n"
+             "  level: TRACE\n"
+             "  console_enable: false\n"
+             "  format: \"%%msg\"\n"
+             "  plugins:\n"
+             "    - path: %s\n"
+             "    - path: %s\n",
+             TEST_PLUGIN_SO, TEST_PLUGIN_SO);
 
     assert(test_log_init_basic(cfg) == 0);
     fprintf(stderr, "PASS\n");

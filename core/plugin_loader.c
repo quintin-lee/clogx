@@ -25,11 +25,11 @@
 #define CLOGX_MAX_LOADED_PLUGINS 16
 
 struct clogx_plugin_handle {
-    void *dl_handle;                     /**< Result from dlopen(3).          */
-    clogx_plugin_create_fn create_fn;    /**< Resolved clogx_plugin_create.   */
-    const clogx_plugin_t *desc;          /**< Cached descriptor pointer.      */
-    char so_path[CLOG_MAX_PATH_SIZE];    /**< Canonicalised .so path.         */
-    int used;                            /**< Non-zero when slot is occupied. */
+    void *dl_handle;                  /**< Result from dlopen(3).          */
+    clogx_plugin_create_fn create_fn; /**< Resolved clogx_plugin_create.   */
+    const clogx_plugin_t *desc;       /**< Cached descriptor pointer.      */
+    char so_path[CLOG_MAX_PATH_SIZE]; /**< Canonicalised .so path.         */
+    int used;                         /**< Non-zero when slot is occupied. */
 };
 
 /** Global plugin handle cache — handles are long-lived (reload-safe). */
@@ -102,11 +102,10 @@ clogx_plugin_handle_t *log_plugin_load(const char *so_path) {
     }
 
     /* Resolve the descriptor symbol. */
-    clogx_plugin_desc_fn desc_fn = (clogx_plugin_desc_fn)dlsym(h->dl_handle,
-                                                                CLOGX_PLUGIN_DESC_SYM);
+    clogx_plugin_desc_fn desc_fn = (clogx_plugin_desc_fn)dlsym(h->dl_handle, CLOGX_PLUGIN_DESC_SYM);
     if (!desc_fn) {
-        fprintf(stderr, "[clogx] dlsym(%s, %s) failed: %s\n",
-                so_path, CLOGX_PLUGIN_DESC_SYM, dlerror());
+        fprintf(stderr, "[clogx] dlsym(%s, %s) failed: %s\n", so_path, CLOGX_PLUGIN_DESC_SYM,
+                dlerror());
         dlclose(h->dl_handle);
         memset(h, 0, sizeof(*h));
         clog_mutex_unlock(&g_plugin_mutex);
@@ -117,10 +116,8 @@ clogx_plugin_handle_t *log_plugin_load(const char *so_path) {
 
     /* ABI version check. */
     if (!h->desc || h->desc->abi_version != CLOGX_PLUGIN_ABI_VERSION) {
-        fprintf(stderr,
-                "[clogx] plugin %s ABI version mismatch: expected %u, got %u\n",
-                so_path, CLOGX_PLUGIN_ABI_VERSION,
-                h->desc ? (unsigned)h->desc->abi_version : 0U);
+        fprintf(stderr, "[clogx] plugin %s ABI version mismatch: expected %u, got %u\n", so_path,
+                CLOGX_PLUGIN_ABI_VERSION, h->desc ? (unsigned)h->desc->abi_version : 0U);
         dlclose(h->dl_handle);
         memset(h, 0, sizeof(*h));
         clog_mutex_unlock(&g_plugin_mutex);
@@ -129,8 +126,7 @@ clogx_plugin_handle_t *log_plugin_load(const char *so_path) {
 
     /* Resolve the factory symbol.  (Optional — a plugin might be
      * descriptor-only for capability discovery.) */
-    h->create_fn = (clogx_plugin_create_fn)dlsym(h->dl_handle,
-                                                  CLOGX_PLUGIN_CREATE_SYM);
+    h->create_fn = (clogx_plugin_create_fn)dlsym(h->dl_handle, CLOGX_PLUGIN_CREATE_SYM);
     if (!h->create_fn) {
         /* Not an error — some plugins may only export desc for
          * capability advertisement without sink creation. */
@@ -148,10 +144,8 @@ clogx_plugin_handle_t *log_plugin_load(const char *so_path) {
 
     clog_mutex_unlock(&g_plugin_mutex);
 
-    fprintf(stderr, "[clogx] plugin loaded: %s (v%u) — %s\n",
-            h->desc->name ? h->desc->name : "?",
-            (unsigned)h->desc->plugin_version,
-            h->desc->description ? h->desc->description : "");
+    fprintf(stderr, "[clogx] plugin loaded: %s (v%u) — %s\n", h->desc->name ? h->desc->name : "?",
+            (unsigned)h->desc->plugin_version, h->desc->description ? h->desc->description : "");
     return h;
 }
 
@@ -175,8 +169,7 @@ void log_plugin_unload(clogx_plugin_handle_t *h) {
     clog_mutex_unlock(&g_plugin_mutex);
 }
 
-log_sink_t *log_plugin_create_sink(clogx_plugin_handle_t *h,
-                                   const char *params_json) {
+log_sink_t *log_plugin_create_sink(clogx_plugin_handle_t *h, const char *params_json) {
     if (!h || !h->used || !h->create_fn) {
         fprintf(stderr, "[clogx] log_plugin_create_sink: invalid handle or no factory\n");
         return NULL;
@@ -258,8 +251,8 @@ int log_plugin_scan(const char *dir, clogx_plugin_handle_t **out, int max) {
  * @param[in]  max_sinks  Capacity of @p out_sinks.
  * @return Number of sinks created, or -1 on error.
  */
-int log_plugin_create_sinks_from_config(const log_config_t *cfg,
-                                        log_sink_t **out_sinks, int max_sinks) {
+int log_plugin_create_sinks_from_config(const log_config_t *cfg, log_sink_t **out_sinks,
+                                        int max_sinks) {
     if (!cfg || !out_sinks || max_sinks <= 0)
         return 0;
 
@@ -267,7 +260,7 @@ int log_plugin_create_sinks_from_config(const log_config_t *cfg,
 
     for (int i = 0; i < cfg->plugin_count && created < max_sinks; i++) {
         const char *so_path = cfg->plugin_so_paths[i];
-        const char *params  = cfg->plugin_params_json[i];
+        const char *params = cfg->plugin_params_json[i];
 
         if (!so_path || !*so_path)
             continue;

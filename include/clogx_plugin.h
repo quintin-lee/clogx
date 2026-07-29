@@ -47,11 +47,11 @@ extern "C" {
 /*  Capability flags                                                  */
 /* ------------------------------------------------------------------ */
 
-#define CLOGX_PLUGIN_CAP_NONE       0ULL
+#define CLOGX_PLUGIN_CAP_NONE 0ULL
 /** Plugin supports batched writes via write_batch (future). */
-#define CLOGX_PLUGIN_CAP_BATCH      (1ULL << 0)
+#define CLOGX_PLUGIN_CAP_BATCH (1ULL << 0)
 /** Plugin requires network I/O (influences fork-safety behaviour). */
-#define CLOGX_PLUGIN_CAP_NETWORK    (1ULL << 1)
+#define CLOGX_PLUGIN_CAP_NETWORK (1ULL << 1)
 
 /* ------------------------------------------------------------------ */
 /*  Plugin descriptor                                                 */
@@ -76,11 +76,11 @@ extern "C" {
  * @endcode
  */
 typedef struct {
-    uint32_t abi_version;       /**< MUST equal CLOGX_PLUGIN_ABI_VERSION. */
-    uint32_t plugin_version;    /**< Plugin's own semantic version.       */
-    uint64_t caps;              /**< Bitmask of CLOGX_PLUGIN_CAP_* flags. */
-    const char *name;           /**< Short name, e.g. "kafka".            */
-    const char *description;    /**< Human-readable one-liner.            */
+    uint32_t abi_version;    /**< MUST equal CLOGX_PLUGIN_ABI_VERSION. */
+    uint32_t plugin_version; /**< Plugin's own semantic version.       */
+    uint64_t caps;           /**< Bitmask of CLOGX_PLUGIN_CAP_* flags. */
+    const char *name;        /**< Short name, e.g. "kafka".            */
+    const char *description; /**< Human-readable one-liner.            */
 } clogx_plugin_t;
 
 /* ------------------------------------------------------------------ */
@@ -94,7 +94,7 @@ typedef log_sink_t *(*clogx_plugin_create_fn)(const char *params_json);
 typedef const clogx_plugin_t *(*clogx_plugin_desc_fn)(void);
 
 /** Symbol name that clogx's dlopen wrapper looks for via dlsym. */
-#define CLOGX_PLUGIN_DESC_SYM   "clogx_plugin_desc"
+#define CLOGX_PLUGIN_DESC_SYM "clogx_plugin_desc"
 
 /** Symbol name for the factory entry point. */
 #define CLOGX_PLUGIN_CREATE_SYM "clogx_plugin_create"
@@ -149,8 +149,7 @@ void log_plugin_unload(clogx_plugin_handle_t *h);
  * The returned sink is owned by the caller (ultimately by the dispatcher)
  * and will be destroyed via its @c destroy callback.
  */
-log_sink_t *log_plugin_create_sink(clogx_plugin_handle_t *h,
-                                   const char *params_json);
+log_sink_t *log_plugin_create_sink(clogx_plugin_handle_t *h, const char *params_json);
 
 /**
  * @brief Query a loaded plugin's descriptor.

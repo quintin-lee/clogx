@@ -116,10 +116,10 @@ static int parse_config_file(const char *filepath, log_config_t *cfg) {
     yaml_event_t event;
 
     /* Plugin parsing state */
-    int in_plugins = 0;          /* inside plugins: sequence */
-    int in_plugin_entry = 0;     /* inside a single plugin entry mapping */
-    int in_plugin_config = 0;    /* inside a plugin's config: mapping */
-    int plugin_index = 0;        /* current plugin entry index */
+    int in_plugins = 0;       /* inside plugins: sequence */
+    int in_plugin_entry = 0;  /* inside a single plugin entry mapping */
+    int in_plugin_config = 0; /* inside a plugin's config: mapping */
+    int plugin_index = 0;     /* current plugin entry index */
     char plugin_path[CLOG_MAX_PATH_SIZE] = "";
     char plugin_json[CLOG_MAX_PLUGIN_CONFIG_SIZE] = "";
     /* Start with empty JSON object: "{" */
@@ -136,8 +136,7 @@ static int parse_config_file(const char *filepath, log_config_t *cfg) {
         switch (event.type) {
         case YAML_SEQUENCE_START_EVENT:
             depth++;
-            if (strcmp(current_key, "plugins") == 0 &&
-                (in_log_section || found_log_section == 0)) {
+            if (strcmp(current_key, "plugins") == 0 && (in_log_section || found_log_section == 0)) {
                 in_plugins = 1;
                 plugin_index = 0;
             }
@@ -165,10 +164,9 @@ static int parse_config_file(const char *filepath, log_config_t *cfg) {
                         /* Append "key":"escaped_value" to the JSON buffer. */
                         int rem = (int)sizeof(plugin_json) - plugin_json_len;
                         if (rem > 0 && plugin_json_len > 0) {
-                            int written = snprintf(
-                                plugin_json + plugin_json_len, (size_t)rem,
-                                "%s\"%s\":\"",
-                                plugin_json_len > 1 ? "," : "", plugin_cfg_key);
+                            int written =
+                                snprintf(plugin_json + plugin_json_len, (size_t)rem, "%s\"%s\":\"",
+                                         plugin_json_len > 1 ? "," : "", plugin_cfg_key);
                             if (written > 0 && written < rem) {
                                 plugin_json_len += written;
                                 rem -= written;
@@ -418,7 +416,6 @@ static int parse_config_file(const char *filepath, log_config_t *cfg) {
             if (in_plugins && in_plugin_entry && !in_plugin_config) {
                 /* Entering a plugin's config: mapping. */
                 in_plugin_config = 1;
-                plugin_json_len = 0;
                 plugin_json[0] = '{';
                 plugin_json[1] = '\0';
                 plugin_json_len = 1;
@@ -461,14 +458,11 @@ static int parse_config_file(const char *filepath, log_config_t *cfg) {
             }
             if (in_plugin_entry) {
                 /* Finalize this plugin entry: store path + JSON. */
-                if (plugin_index < CLOG_MAX_PLUGINS &&
-                    strlen(plugin_path) > 0) {
-                    snprintf(cfg->plugin_so_paths[plugin_index],
-                             sizeof(cfg->plugin_so_paths[0]),
+                if (plugin_index < CLOG_MAX_PLUGINS && strlen(plugin_path) > 0) {
+                    snprintf(cfg->plugin_so_paths[plugin_index], sizeof(cfg->plugin_so_paths[0]),
                              "%s", plugin_path);
                     snprintf(cfg->plugin_params_json[plugin_index],
-                             sizeof(cfg->plugin_params_json[0]),
-                             "%s", plugin_json);
+                             sizeof(cfg->plugin_params_json[0]), "%s", plugin_json);
                     plugin_index++;
                     cfg->plugin_count = plugin_index;
                 }
@@ -562,10 +556,10 @@ static int apply_config(const log_config_t *cfg) {
 
     g_config.plugin_count = cfg->plugin_count;
     for (int i = 0; i < cfg->plugin_count && i < CLOG_MAX_PLUGINS; i++) {
-        snprintf(g_config.plugin_so_paths[i], sizeof(g_config.plugin_so_paths[0]),
-                 "%s", cfg->plugin_so_paths[i]);
-        snprintf(g_config.plugin_params_json[i], sizeof(g_config.plugin_params_json[0]),
-                 "%s", cfg->plugin_params_json[i]);
+        snprintf(g_config.plugin_so_paths[i], sizeof(g_config.plugin_so_paths[0]), "%s",
+                 cfg->plugin_so_paths[i]);
+        snprintf(g_config.plugin_params_json[i], sizeof(g_config.plugin_params_json[0]), "%s",
+                 cfg->plugin_params_json[i]);
     }
 
     if (cfg->format) {

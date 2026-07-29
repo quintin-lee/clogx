@@ -23,7 +23,8 @@ typedef struct {
 
 static int dummy_write(log_sink_t *sink, const char *buf, size_t len) {
     dummy_data_t *d = (dummy_data_t *)sink->private_data;
-    if (!d) return -1;
+    if (!d)
+        return -1;
     d->write_count++;
     size_t copy = len < sizeof(d->last_buf) - 1 ? len : sizeof(d->last_buf) - 1;
     memcpy(d->last_buf, buf, copy);
@@ -33,11 +34,13 @@ static int dummy_write(log_sink_t *sink, const char *buf, size_t len) {
 
 static void dummy_flush(log_sink_t *sink) {
     dummy_data_t *d = (dummy_data_t *)sink->private_data;
-    if (d) d->flush_count++;
+    if (d)
+        d->flush_count++;
 }
 
 static void dummy_destroy(log_sink_t *sink) {
-    if (!sink) return;
+    if (!sink)
+        return;
     dummy_data_t *d = (dummy_data_t *)sink->private_data;
     if (d) {
         d->destroy_called = 1;
@@ -58,17 +61,17 @@ static const clogx_plugin_t desc = {
     .description = "Test dummy sink for plugin ABI tests",
 };
 
-__attribute__((used, visibility("default")))
-const clogx_plugin_t *clogx_plugin_desc(void) {
+__attribute__((used, visibility("default"))) const clogx_plugin_t *clogx_plugin_desc(void) {
     return &desc;
 }
 
-__attribute__((used, visibility("default")))
-log_sink_t *clogx_plugin_create(const char *params_json) {
+__attribute__((used, visibility("default"))) log_sink_t *
+clogx_plugin_create(const char *params_json) {
     (void)params_json;
 
     log_sink_t *sink = (log_sink_t *)malloc(sizeof(log_sink_t));
-    if (!sink) return NULL;
+    if (!sink)
+        return NULL;
 
     dummy_data_t *d = (dummy_data_t *)malloc(sizeof(dummy_data_t));
     if (!d) {

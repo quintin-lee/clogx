@@ -1,8 +1,10 @@
 /**
  * @file log_formatter.h
- * @brief Token-based formatter for log lines.
+ * @brief Token-based formatter for log lines, with pattern compiler.
  *
  * Format strings use tokens such as `[%time] [%level] %msg`.
+ * The format string is compiled into an opcode sequence once at init
+ * time, so the hot path never needs to re-parse the format string.
  */
 
 #ifndef LOG_FORMATTER_H
@@ -10,6 +12,40 @@
 
 #include <stddef.h>
 #include "log_record.h"
+
+/* ------------------------------------------------------------------ */
+/*  Opcode compiler types                                             */
+/* ------------------------------------------------------------------ */
+
+/** Maximum number of compiled ops (safety limit, not a tuning parameter). */
+#define FMT_MAX_OPS 64
+
+/** @brief Opcode for one format token or literal segment. */
+typedef enum {
+    FMT_OP_LITERAL = 0, /**< Static text segment (literal / literal_len). */
+    FMT_OP_TIME,        /**< %time — timestamp with microsecond suffix.    */
+    FMT_OP_LEVEL,       /**< %level — severity name.                      */
+    FMT_OP_MSG,         /**< %msg — message body.                         */
+    FMT_OP_THREAD,      /**< %thread — thread ID.                         */
+    FMT_OP_PID,         /**< %pid — process ID.                           */
+    FMT_OP_FILE,        /**< %file — source file name.                    */
+    FMT_OP_LINE,        /**< %line — source line number.                  */
+    FMT_OP_FUNC,        /**< %func — function name.                       */
+    FMT_OP_MODULE,      /**< %module — module name.                       */
+    FMT_OP_TAG,         /**< %tag — tag string.                           */
+    FMT_OP_NEWLINE,     /**< %newline — literal newline.                  */
+} fmt_opcode_t;
+
+/** @brief One instruction in the compiled format program. */
+typedef struct {
+    fmt_opcode_t op;     /**< Opcode.                         */
+    const char *literal; /**< Text segment (FMT_OP_LITERAL).  */
+    size_t literal_len;  /**< Byte length of text segment.    */
+} fmt_op_t;
+
+/* ------------------------------------------------------------------ */
+/*  Public API                                                        */
+/* ------------------------------------------------------------------ */
 
 /**
  * @brief Format @p record into @p buf according to the active format string.
@@ -24,6 +60,9 @@ int log_formatter_format(log_record_t *restrict record, char *restrict buf, size
 /**
  * @brief Set the active format string and time template (both copied into
  *        internal storage).
+ *
+ * The format string is compiled into @ref fmt_op_t opcodes so the
+ * hot path only executes a flat switch — no strncmp parsing at runtime.
  *
  * Supported tokens:
  * - `%time` — local timestamp formatted with @p time_format + microseconds

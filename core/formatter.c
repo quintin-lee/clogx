@@ -1,6 +1,10 @@
 /**
  * @file formatter.c
  * @brief Token formatter and JSON renderer for log lines.
+ *
+ * The format string is compiled into an opcode sequence at init time
+ * (fmt_compile), so the hot path (log_formatter_format) dispatches
+ * through a flat switch statement with zero format-string re-parsing.
  */
 #include <ctype.h>
 #include <stdio.h>
@@ -12,13 +16,26 @@
 #include "log_limits.h"
 #include "log_record.h"
 
+/* ------------------------------------------------------------------ */
+/*  Global state                                                      */
+/* ------------------------------------------------------------------ */
+
 static char g_default_format[CLOG_MAX_FORMAT_SIZE] = "%msg";
 static char g_format_buf[CLOG_MAX_FORMAT_SIZE];
 static char *g_format_ptr = g_default_format;
 static char g_time_format_buf[64] = "%Y-%m-%d %H:%M:%S";
 static clog_mutex_t g_format_mutex = CLOG_MUTEX_INITIALIZER;
 
+/* Compiled opcode program (populated at init time). */
+static fmt_op_t g_format_ops[FMT_MAX_OPS];
+static int g_fmt_op_count = 1; /* default: one OP_LITERAL("%msg") */
+static int g_fmt_is_json = 0;  /* JSON fast-path flag */
+
 #define TIME_BUF_SIZE 64
+
+/* ------------------------------------------------------------------ */
+/*  Helpers                                                           */
+/* ------------------------------------------------------------------ */
 
 static const char *level_to_string(log_level_t level) {
     switch (level) {
@@ -40,15 +57,20 @@ static const char *level_to_string(log_level_t level) {
 }
 
 static int append_token(char **out, size_t *remaining, const char *token, size_t token_len) {
-    if (token_len >= *remaining) {
+    if (token_len >= *remaining)
         token_len = *remaining - 1;
+    if (token_len > 0) {
+        memcpy(*out, token, token_len);
+        *out += token_len;
+        *remaining -= token_len;
+        **out = '\0';
     }
-    memcpy(*out, token, token_len);
-    *out += token_len;
-    *remaining -= token_len;
-    **out = '\0';
     return (int)token_len;
 }
+
+/* ------------------------------------------------------------------ */
+/*  JSON escaping & rendering                                         */
+/* ------------------------------------------------------------------ */
 
 static void append_json_escaped_string(char **out, size_t *remaining, const char *str) {
     if (!str)
@@ -122,11 +144,7 @@ static int format_json(log_record_t *restrict record, char *restrict buf, size_t
     clog_localtime_r(&sec, &tm_buf);
 
     char time_buf[64];
-    const char *tf;
-    clog_mutex_lock(&g_format_mutex);
-    tf = g_time_format_buf;
-    clog_mutex_unlock(&g_format_mutex);
-    strftime(time_buf, sizeof(time_buf), tf, &tm_buf);
+    strftime(time_buf, sizeof(time_buf), g_time_format_buf, &tm_buf);
 
     char *out = buf;
     size_t remaining = buf_size;
@@ -182,117 +200,204 @@ static int format_json(log_record_t *restrict record, char *restrict buf, size_t
     return (int)(out - buf);
 }
 
+/* ------------------------------------------------------------------ */
+/*  Pattern compiler                                                   */
+/* ------------------------------------------------------------------ */
+
+/**
+ * @brief Match a token name at the current format-string position.
+ *
+ * Returns 1 and advances @p fmt past the token if the next characters
+ * match @p token and are followed by a non-alpha boundary.
+ */
+static int token_match(const char **fmt, const char *token) {
+    size_t len = strlen(token);
+    if (strncmp(*fmt, token, len) == 0) {
+        unsigned char c = (unsigned char)(*fmt)[len];
+        if (c == '\0' || !isalpha(c)) {
+            *fmt += len;
+            return 1;
+        }
+    }
+    return 0;
+}
+
+/**
+ * @brief Compile a format string into an opcode program.
+ *
+ * Walks @p fmt_str once, emitting one @ref fmt_op_t per literal
+ * segment or token.  Literal pointers reference @p fmt_str memory
+ * (the caller must ensure it outlives the ops array).
+ *
+ * @param[in]  fmt_str  Format string to compile.
+ * @param[out] ops      Output opcode array (capacity @p max_ops).
+ * @param[in]  max_ops  Capacity of @p ops.
+ * @return Number of ops written (always < max_ops).
+ */
+static int fmt_compile(const char *fmt_str, fmt_op_t *ops, int max_ops) {
+    int n = 0;
+    while (*fmt_str && n < max_ops - 1) {
+        if (*fmt_str != '%') {
+            const char *start = fmt_str;
+            while (*fmt_str && *fmt_str != '%')
+                fmt_str++;
+            size_t len = (size_t)(fmt_str - start);
+            if (len > 0) {
+                ops[n].op = FMT_OP_LITERAL;
+                ops[n].literal = start;
+                ops[n].literal_len = len;
+                n++;
+            }
+            continue;
+        }
+
+        fmt_str++; /* skip '%' */
+
+        if (token_match(&fmt_str, "time"))
+            ops[n++].op = FMT_OP_TIME;
+        else if (token_match(&fmt_str, "level"))
+            ops[n++].op = FMT_OP_LEVEL;
+        else if (token_match(&fmt_str, "msg"))
+            ops[n++].op = FMT_OP_MSG;
+        else if (token_match(&fmt_str, "thread"))
+            ops[n++].op = FMT_OP_THREAD;
+        else if (token_match(&fmt_str, "pid"))
+            ops[n++].op = FMT_OP_PID;
+        else if (token_match(&fmt_str, "file"))
+            ops[n++].op = FMT_OP_FILE;
+        else if (token_match(&fmt_str, "line"))
+            ops[n++].op = FMT_OP_LINE;
+        else if (token_match(&fmt_str, "func"))
+            ops[n++].op = FMT_OP_FUNC;
+        else if (token_match(&fmt_str, "module"))
+            ops[n++].op = FMT_OP_MODULE;
+        else if (token_match(&fmt_str, "tag"))
+            ops[n++].op = FMT_OP_TAG;
+        else if (token_match(&fmt_str, "newline"))
+            ops[n++].op = FMT_OP_NEWLINE;
+        else {
+            /* Unknown token — emit '%' as a literal. */
+            ops[n].op = FMT_OP_LITERAL;
+            ops[n].literal = fmt_str - 1;
+            ops[n].literal_len = 1;
+            n++;
+        }
+    }
+    return n;
+}
+
+/* ------------------------------------------------------------------ */
+/*  log_formatter_format — hot path                                   */
+/* ------------------------------------------------------------------ */
+
 int log_formatter_format(log_record_t *restrict record, char *restrict buf, size_t buf_size) {
-    const char *fmt;
+    int is_json;
+    int op_count;
+    const char *tf;
+
     clog_mutex_lock(&g_format_mutex);
-    fmt = g_format_ptr;
+    is_json = g_fmt_is_json;
+    op_count = g_fmt_op_count;
+    tf = g_time_format_buf;
     clog_mutex_unlock(&g_format_mutex);
 
-    if (strcmp(fmt, "json") == 0 || strcmp(fmt, "JSON") == 0) {
+    if (is_json)
         return format_json(record, buf, buf_size);
-    }
 
     char *out = buf;
     size_t remaining = buf_size;
     int total = 0;
+    struct tm tm_buf;
+    int tm_initialized = 0;
 
-    while (*fmt && remaining > 1) {
-        if (*fmt != '%') {
-            *out++ = *fmt++;
-            remaining--;
-            total++;
-            continue;
+    for (int i = 0; i < op_count; i++) {
+        switch (g_format_ops[i].op) {
+
+        case FMT_OP_LITERAL:
+            total += append_token(&out, &remaining, g_format_ops[i].literal,
+                                  g_format_ops[i].literal_len);
+            break;
+
+        case FMT_OP_TIME: {
+            time_t sec = (time_t)(record->timestamp / 1000000);
+            if (!tm_initialized) {
+                clog_localtime_r(&sec, &tm_buf);
+                tm_initialized = 1;
+            }
+            char time_buf[TIME_BUF_SIZE];
+            strftime(time_buf, sizeof(time_buf), tf, &tm_buf);
+            total += append_token(&out, &remaining, time_buf, strlen(time_buf));
+            break;
         }
 
-        fmt++;
+        case FMT_OP_LEVEL: {
+            const char *s = level_to_string(record->level);
+            total += append_token(&out, &remaining, s, strlen(s));
+            break;
+        }
 
-        if (strncmp(fmt, "time", 4) == 0 && (fmt[4] == '\0' || !isalpha(fmt[4]))) {
-            fmt += 4;
-            struct tm tm_buf;
-            time_t sec = (time_t)(record->timestamp / 1000000);
-            clog_localtime_r(&sec, &tm_buf);
-            char time_buf[TIME_BUF_SIZE];
-            const char *tf;
-            clog_mutex_lock(&g_format_mutex);
-            tf = g_time_format_buf;
-            clog_mutex_unlock(&g_format_mutex);
-            strftime(time_buf, sizeof(time_buf), tf, &tm_buf);
-            size_t tlen = strlen(time_buf);
-            if (tlen >= sizeof(time_buf))
-                tlen = sizeof(time_buf) - 1;
-            append_token(&out, &remaining, time_buf, tlen);
-            total += (int)tlen;
-        } else if (strncmp(fmt, "level", 5) == 0 && (fmt[5] == '\0' || !isalpha(fmt[5]))) {
-            fmt += 5;
-            const char *level_str = level_to_string(record->level);
-            size_t len = strlen(level_str);
-            append_token(&out, &remaining, level_str, len);
-            total += (int)len;
-        } else if (strncmp(fmt, "msg", 3) == 0 && (fmt[3] == '\0' || !isalpha(fmt[3]))) {
-            fmt += 3;
+        case FMT_OP_MSG: {
             const char *msg = record->message ? record->message : "(no message)";
-            size_t len = strlen(msg);
-            append_token(&out, &remaining, msg, len);
-            total += (int)len;
-        } else if (strncmp(fmt, "thread", 6) == 0 && (fmt[6] == '\0' || !isalpha(fmt[6]))) {
-            fmt += 6;
-            char thread_buf[32];
-            int ret = snprintf(thread_buf, sizeof(thread_buf), "%u", record->tid);
-            if (ret > 0) {
-                append_token(&out, &remaining, thread_buf, (size_t)ret);
-                total += ret;
-            }
-        } else if (strncmp(fmt, "pid", 3) == 0 && (fmt[3] == '\0' || !isalpha(fmt[3]))) {
-            fmt += 3;
-            char pid_buf[32];
-            int ret = snprintf(pid_buf, sizeof(pid_buf), "%u", record->pid);
-            if (ret > 0) {
-                append_token(&out, &remaining, pid_buf, (size_t)ret);
-                total += ret;
-            }
-        } else if (strncmp(fmt, "file", 4) == 0 && (fmt[4] == '\0' || !isalpha(fmt[4]))) {
-            fmt += 4;
-            const char *file = record->file ? record->file : "(unknown)";
-            size_t len = strlen(file);
-            append_token(&out, &remaining, file, len);
-            total += (int)len;
-        } else if (strncmp(fmt, "line", 4) == 0 && (fmt[4] == '\0' || !isalpha(fmt[4]))) {
-            fmt += 4;
-            char line_buf[32];
-            int ret = snprintf(line_buf, sizeof(line_buf), "%d", record->line);
-            if (ret > 0) {
-                append_token(&out, &remaining, line_buf, (size_t)ret);
-                total += ret;
-            }
-        } else if (strncmp(fmt, "func", 4) == 0 && (fmt[4] == '\0' || !isalpha(fmt[4]))) {
-            fmt += 4;
-            const char *func = record->func ? record->func : "(unknown)";
-            size_t len = strlen(func);
-            append_token(&out, &remaining, func, len);
-            total += (int)len;
-        } else if (strncmp(fmt, "module", 6) == 0 && (fmt[6] == '\0' || !isalpha(fmt[6]))) {
-            fmt += 6;
-            const char *module = record->module ? record->module : "(unknown)";
-            size_t len = strlen(module);
-            append_token(&out, &remaining, module, len);
-            total += (int)len;
-        } else if (strncmp(fmt, "tag", 3) == 0 && (fmt[3] == '\0' || !isalpha(fmt[3]))) {
-            fmt += 3;
-            const char *tag = record->tag ? record->tag : "";
-            size_t len = strlen(tag);
-            append_token(&out, &remaining, tag, len);
-            total += (int)len;
-        } else if (strncmp(fmt, "newline", 7) == 0 && (fmt[7] == '\0' || !isalpha(fmt[7]))) {
-            fmt += 7;
+            total += append_token(&out, &remaining, msg, strlen(msg));
+            break;
+        }
+
+        case FMT_OP_THREAD: {
+            char tmp[32];
+            int n = snprintf(tmp, sizeof(tmp), "%u", record->tid);
+            if (n > 0)
+                total += append_token(&out, &remaining, tmp, (size_t)n);
+            break;
+        }
+
+        case FMT_OP_PID: {
+            char tmp[32];
+            int n = snprintf(tmp, sizeof(tmp), "%u", record->pid);
+            if (n > 0)
+                total += append_token(&out, &remaining, tmp, (size_t)n);
+            break;
+        }
+
+        case FMT_OP_FILE: {
+            const char *s = record->file ? record->file : "(unknown)";
+            total += append_token(&out, &remaining, s, strlen(s));
+            break;
+        }
+
+        case FMT_OP_LINE: {
+            char tmp[32];
+            int n = snprintf(tmp, sizeof(tmp), "%d", record->line);
+            if (n > 0)
+                total += append_token(&out, &remaining, tmp, (size_t)n);
+            break;
+        }
+
+        case FMT_OP_FUNC: {
+            const char *s = record->func ? record->func : "(unknown)";
+            total += append_token(&out, &remaining, s, strlen(s));
+            break;
+        }
+
+        case FMT_OP_MODULE: {
+            const char *s = record->module ? record->module : "(unknown)";
+            total += append_token(&out, &remaining, s, strlen(s));
+            break;
+        }
+
+        case FMT_OP_TAG: {
+            const char *s = record->tag ? record->tag : "";
+            total += append_token(&out, &remaining, s, strlen(s));
+            break;
+        }
+
+        case FMT_OP_NEWLINE: {
             if (remaining > 1) {
                 *out++ = '\n';
                 remaining--;
                 total++;
             }
-        } else {
-            *out++ = '%';
-            remaining--;
-            total++;
+            break;
+        }
         }
     }
 
@@ -300,19 +405,31 @@ int log_formatter_format(log_record_t *restrict record, char *restrict buf, size
     return total;
 }
 
+/* ------------------------------------------------------------------ */
+/*  Init / reset                                                      */
+/* ------------------------------------------------------------------ */
+
 int log_formatter_init(const char *format, const char *time_format) {
     clog_mutex_lock(&g_format_mutex);
-    if (format && strlen(format) > 0) {
+
+    if (format && format[0]) {
         snprintf(g_format_buf, sizeof(g_format_buf), "%s", format);
         g_format_ptr = g_format_buf;
     } else {
         g_format_ptr = g_default_format;
     }
-    if (time_format && strlen(time_format) > 0) {
+
+    if (time_format && time_format[0]) {
         snprintf(g_time_format_buf, sizeof(g_time_format_buf), "%s", time_format);
     } else {
         snprintf(g_time_format_buf, sizeof(g_time_format_buf), "%s", "%Y-%m-%d %H:%M:%S");
     }
+
+    g_fmt_is_json = (strcmp(g_format_ptr, "json") == 0 || strcmp(g_format_ptr, "JSON") == 0);
+
+    if (!g_fmt_is_json)
+        g_fmt_op_count = fmt_compile(g_format_ptr, g_format_ops, FMT_MAX_OPS);
+
     clog_mutex_unlock(&g_format_mutex);
     return 0;
 }
@@ -320,6 +437,8 @@ int log_formatter_init(const char *format, const char *time_format) {
 void log_formatter_reset(void) {
     clog_mutex_lock(&g_format_mutex);
     g_format_ptr = g_default_format;
+    g_fmt_is_json = 0;
+    g_fmt_op_count = fmt_compile(g_default_format, g_format_ops, FMT_MAX_OPS);
     clog_mutex_unlock(&g_format_mutex);
 }
 
