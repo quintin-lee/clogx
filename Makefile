@@ -193,10 +193,10 @@ test-ubsan:
 coverage:
 	@command -v lcov >/dev/null || { echo "lcov not found; install it to generate coverage report"; exit 1; }
 	$(MAKE) clean
-	$(MAKE) test CC=gcc CFLAGS="$(CFLAGS) -O0 -g --coverage -fprofile-arcs -ftest-coverage" EXTRA_LDFLAGS="$(EXTRA_LDFLAGS) --coverage"
-	lcov --capture --rc lcov_branch_coverage=1 --directory build --output-file coverage.info
-	lcov --remove coverage.info 'tests/*' 'deps/*' 'example/*' 'benchmarks/*' 'fuzz/*' --rc lcov_branch_coverage=1 --output-file coverage.info
-	lcov --summary coverage.info --rc lcov_branch_coverage=1
+	$(MAKE) test CC=gcc CFLAGS="$(CFLAGS) -O0 -g --coverage -fprofile-arcs -ftest-coverage -fprofile-update=atomic" EXTRA_LDFLAGS="$(EXTRA_LDFLAGS) --coverage"
+	lcov --capture --rc branch_coverage=1 --ignore-errors negative --directory build --output-file coverage.info
+	lcov --remove coverage.info 'tests/*' 'deps/*' 'example/*' 'benchmarks/*' 'fuzz/*' --rc branch_coverage=1 --ignore-errors negative --output-file coverage.info
+	lcov --summary coverage.info --rc branch_coverage=1 --ignore-errors negative
 
 ## Quality check
 
