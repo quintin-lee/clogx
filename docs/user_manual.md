@@ -206,7 +206,6 @@ LOG_INFO("Info: %f", float_val);
 LOG_WARN("Warning: %d%% done", percent);
 LOG_ERROR("Error occurred: %s", strerror(errno));
 LOG_FATAL("Fatal error, aborting");
-TRACE("Alias for LOG_TRACE");  // Deprecated but still available
 ```
 
 Each macro expands to a call to `log_writevprintf()` with compile-time format string checking.
@@ -802,7 +801,6 @@ LOG_INFO(fmt, ...)    /* INFO level — general events */
 LOG_WARN(fmt, ...)    /* WARN level — potential issues */
 LOG_ERROR(fmt, ...)   /* ERROR level — recoverable errors */
 LOG_FATAL(fmt, ...)   /* FATAL level — fatal error, program terminates */
-TRACE(fmt, ...)       /* Deprecated alias for LOG_TRACE */
 
 /* ── Instance-level macros ── */
 

@@ -305,10 +305,6 @@ static inline const char *clogx_filename_only(const char *path) {
  * @def LOG_TRACE(...)
  * @brief Log a trace-level message.
  */
-/**
- * @def TRACE(...)
- * @brief Deprecated alias for @ref LOG_TRACE.
- */
 #define LOG_INFO(...)                                                                              \
     log_writevprintf(LOG_LEVEL_INFO, LOG_FILENAME_ONLY(), __LINE__, __func__, __VA_ARGS__)
 #define LOG_DEBUG(...)                                                                             \
@@ -321,7 +317,6 @@ static inline const char *clogx_filename_only(const char *path) {
     log_writevprintf(LOG_LEVEL_FATAL, LOG_FILENAME_ONLY(), __LINE__, __func__, __VA_ARGS__)
 #define LOG_TRACE(...)                                                                             \
     log_writevprintf(LOG_LEVEL_TRACE, LOG_FILENAME_ONLY(), __LINE__, __func__, __VA_ARGS__)
-#define TRACE(...) LOG_TRACE(__VA_ARGS__)
 
 /* ════════════════════════════════════════════════════════════════════════
  *  Multi-instance API (Phase 2)
