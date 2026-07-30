@@ -154,6 +154,20 @@ CLOGX_API void *custom_sink_get_private_data(log_sink_t *sink);
 CLOGX_API log_sink_t *syslog_sink_create(const char *ident, int facility);
 
 /**
+ * @brief Create an OpenTelemetry OTLP JSON log sink.
+ *
+ * Formats log records as OpenTelemetry OTLP JSON logs (`resourceLogs`)
+ * and emits them to an OTLP/HTTP collector or file endpoint.
+ *
+ * @param[in] endpoint     Target socket/file path or HTTP endpoint host:port (e.g.
+ * "http://localhost:4318/v1/logs" or "127.0.0.1:4318").
+ * @param[in] service_name Service name string attribute (defaults to "clogx_service" if
+ * NULL/empty).
+ * @return New sink, or NULL on allocation failure / invalid arguments.
+ */
+CLOGX_API log_sink_t *otlp_sink_create(const char *endpoint, const char *service_name);
+
+/**
  * @brief Set the minimum severity level for a sink.
  *
  * Messages below this level are dropped by the dispatcher before reaching

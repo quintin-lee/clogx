@@ -59,8 +59,8 @@ $(BUILD_DIR)/test_%: $(YAML_STATIC_LIB)
 $(BUILD_DIR)/verify_config: $(YAML_STATIC_LIB)
 endif
 
-CORE_SRCS = config.c formatter.c dispatcher.c queue.c async.c log.c rotate.c rate_limit.c signal_handler.c plugin_loader.c
-SINK_SRCS = console_sink.c file_sink.c socket_sink.c custom_sink.c syslog_sink.c
+CORE_SRCS = config.c formatter.c dispatcher.c queue.c async.c log.c rotate.c rate_limit.c signal_handler.c plugin_loader.c prometheus_exporter.c
+SINK_SRCS = console_sink.c file_sink.c socket_sink.c custom_sink.c syslog_sink.c otlp_sink.c
 CLOG_SRCS = $(addprefix core/,$(CORE_SRCS)) $(addprefix sinks/,$(SINK_SRCS))
 CORE_OBJS = $(addprefix $(BUILD_DIR)/,$(CORE_SRCS:.c=.o))
 SINK_OBJS = $(addprefix $(BUILD_DIR)/,$(SINK_SRCS:.c=.o))
@@ -76,7 +76,7 @@ TESTS = test_async_lifecycle test_async_reload test_dispatcher_lifecycle \
         test_socket_sink test_sink_level test_log_level test_json_formatter \
         test_rate_limit test_fork_safety test_signal_handler test_custom_sink \
         test_observability_stats test_syslog_sink test_thread_context test_coverage_boost test_mutex_guard_raii test_coverage_deep \
-        test_plugin_abi
+        test_plugin_abi test_otel test_prometheus
 TEST_BINS = $(addprefix $(BUILD_DIR)/,$(TESTS))
 
 BENCHMARK_SOURCES = $(wildcard benchmarks/*.c)

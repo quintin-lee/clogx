@@ -11,6 +11,7 @@
 #include <stdlib.h>
 #include <string.h>
 #include <time.h>
+#include <stdint.h>
 #include "clog_port.h"
 #include "log_formatter.h"
 #include "log_limits.h"
@@ -137,6 +138,23 @@ static void append_json_escaped_string(char **out, size_t *remaining, const char
     **out = '\0';
 }
 
+static void trace_id_hex(const uint8_t trace_id[16], char *out) {
+    for (int i = 0; i < 16; i++)
+        snprintf(out + (size_t)i * 2, 3, "%02x", trace_id[i]);
+}
+
+static void span_id_hex(const uint8_t span_id[8], char *out) {
+    for (int i = 0; i < 8; i++)
+        snprintf(out + (size_t)i * 2, 3, "%02x", span_id[i]);
+}
+
+static int is_zero_id(const uint8_t *id, int len) {
+    for (int i = 0; i < len; i++)
+        if (id[i])
+            return 0;
+    return 1;
+}
+
 static int format_json(log_record_t *restrict record, char *restrict buf, size_t buf_size) {
     struct tm tm_buf;
     time_t sec = (time_t)(record->timestamp / 1000000);
@@ -183,6 +201,25 @@ static int format_json(log_record_t *restrict record, char *restrict buf, size_t
 
     append_json_escaped_string(&out, &remaining, record->tag ? record->tag : "");
 
+    char tid_hex[33];
+    char sid_hex[17];
+    if (!is_zero_id(record->trace_id, 16)) {
+        trace_id_hex(record->trace_id, tid_hex);
+        ret = snprintf(out, remaining, "\",\"trace_id\":\"%s", tid_hex);
+        if (ret <= 0 || (size_t)ret >= remaining)
+            return -1;
+        out += ret;
+        remaining -= (size_t)ret;
+    }
+    if (!is_zero_id(record->span_id, 8)) {
+        span_id_hex(record->span_id, sid_hex);
+        ret = snprintf(out, remaining, "\",\"span_id\":\"%s", sid_hex);
+        if (ret <= 0 || (size_t)ret >= remaining)
+            return -1;
+        out += ret;
+        remaining -= (size_t)ret;
+    }
+
     ret = snprintf(out, remaining, "\",\"message\":\"");
     if (ret <= 0 || (size_t)ret >= remaining)
         return -1;
@@ -192,6 +229,197 @@ static int format_json(log_record_t *restrict record, char *restrict buf, size_t
     append_json_escaped_string(&out, &remaining, record->message ? record->message : "");
 
     ret = snprintf(out, remaining, "\"}");
+    if (ret <= 0 || (size_t)ret >= remaining)
+        return -1;
+    out += ret;
+    remaining -= (size_t)ret;
+
+    return (int)(out - buf);
+}
+
+/* ------------------------------------------------------------------ */
+/*  W3C TraceContext parser                                            */
+/* ------------------------------------------------------------------ */
+
+static int hex_nibble(char c) {
+    if (c >= '0' && c <= '9')
+        return c - '0';
+    if (c >= 'a' && c <= 'f')
+        return c - 'a' + 10;
+    if (c >= 'A' && c <= 'F')
+        return c - 'A' + 10;
+    return -1;
+}
+
+static int hex_decode(const char *hex, uint8_t *out, int n) {
+    for (int i = 0; i < n; i++) {
+        int hi = hex_nibble(hex[(size_t)i * 2]);
+        int lo = hex_nibble(hex[(size_t)i * 2 + 1]);
+        if (hi < 0 || lo < 0)
+            return 0;
+        out[i] = (uint8_t)((hi << 4) | lo);
+    }
+    return 1;
+}
+
+/**
+ * Extract trace context from the W3C Trace-Context env var.
+ * Output arrays are zeroed on parse failure (safety: env input is untrusted).
+ */
+static void parse_traceparent(uint8_t trace_id[16], uint8_t span_id[8]) {
+    const char *tp = getenv("TRACEPARENT");
+    if (!tp || tp[0] == '\0')
+        return;
+
+    const char *p = tp;
+    while (*p && *p != '-')
+        p++;
+    if (*p != '-')
+        return;
+    p++;
+
+    size_t remaining = strlen(p);
+    if (remaining < 32)
+        return;
+    if (!hex_decode(p, trace_id, 16)) {
+        memset(trace_id, 0, 16);
+        return;
+    }
+    p += 32;
+    if (*p != '-') {
+        memset(trace_id, 0, 16);
+        return;
+    }
+    p++;
+
+    remaining = strlen(p);
+    if (remaining < 16) {
+        memset(trace_id, 0, 16);
+        return;
+    }
+    if (!hex_decode(p, span_id, 8)) {
+        memset(trace_id, 0, 16);
+        memset(span_id, 0, 8);
+        return;
+    }
+}
+
+/* ------------------------------------------------------------------ */
+/*  OTel JSON renderer                                                */
+/* ------------------------------------------------------------------ */
+
+/**
+ * @brief Format @p record as OpenTelemetry-compatible JSON.
+ *
+ * Output follows the OTel Log Data Model:
+ * @code
+ * {"timestamp":"...","severity":"INFO","severity_number":9,
+ *  "trace_id":"...","span_id":"...",
+ *  "body":"message text",
+ *  "attributes":{"file":"app.c","line":42,"func":"main",
+ *                "module":"...","tag":"...","thread":1234,"pid":5678}}
+ * @endcode
+ *
+ * The `trace_id` and `span_id` fields are omitted when unset.
+ *
+ * @return Bytes written, or -1 on truncation.
+ */
+static int format_otel_json(log_record_t *restrict record, char *restrict buf, size_t buf_size) {
+    struct tm tm_buf;
+    time_t sec = (time_t)(record->timestamp / 1000000);
+    uint32_t usec = (uint32_t)(record->timestamp % 1000000);
+    clog_localtime_r(&sec, &tm_buf);
+
+    char time_buf[64];
+    strftime(time_buf, sizeof(time_buf), g_time_format_buf, &tm_buf);
+
+    char *out = buf;
+    size_t remaining = buf_size;
+    int ret;
+
+    /* Open the top-level object */
+    ret = snprintf(
+        out, remaining, "{\"timestamp\":\"%s.%06u\",\"severity\":\"%s\",\"severity_number\":%d",
+        time_buf, usec, level_to_string(record->level), otel_severity_number(record->level));
+    if (ret <= 0 || (size_t)ret >= remaining)
+        return -1;
+    out += ret;
+    remaining -= (size_t)ret;
+
+    /* Trace context (only when present) */
+    char tid_hex[33];
+    char sid_hex[17];
+    parse_traceparent(record->trace_id, record->span_id);
+    if (!is_zero_id(record->trace_id, 16)) {
+        trace_id_hex(record->trace_id, tid_hex);
+        ret = snprintf(out, remaining, ",\"trace_id\":\"%s\"", tid_hex);
+        if (ret <= 0 || (size_t)ret >= remaining)
+            return -1;
+        out += ret;
+        remaining -= (size_t)ret;
+    }
+    if (!is_zero_id(record->span_id, 8)) {
+        span_id_hex(record->span_id, sid_hex);
+        ret = snprintf(out, remaining, ",\"span_id\":\"%s\"", sid_hex);
+        if (ret <= 0 || (size_t)ret >= remaining)
+            return -1;
+        out += ret;
+        remaining -= (size_t)ret;
+    }
+
+    /* Body = message */
+    ret = snprintf(out, remaining, ",\"body\":\"");
+    if (ret <= 0 || (size_t)ret >= remaining)
+        return -1;
+    out += ret;
+    remaining -= (size_t)ret;
+    append_json_escaped_string(&out, &remaining, record->message ? record->message : "");
+    ret = snprintf(out, remaining, "\"");
+    if (ret <= 0 || (size_t)ret >= remaining)
+        return -1;
+    out += ret;
+    remaining -= (size_t)ret;
+
+    /* Attributes object */
+    ret = snprintf(out, remaining, ",\"attributes\":{");
+    if (ret <= 0 || (size_t)ret >= remaining)
+        return -1;
+    out += ret;
+    remaining -= (size_t)ret;
+
+    ret = snprintf(out, remaining, "\"module\":\"");
+    if (ret <= 0 || (size_t)ret >= remaining)
+        return -1;
+    out += ret;
+    remaining -= (size_t)ret;
+    append_json_escaped_string(&out, &remaining, record->module ? record->module : "");
+    ret = snprintf(out, remaining, "\",\"file\":\"");
+    if (ret <= 0 || (size_t)ret >= remaining)
+        return -1;
+    out += ret;
+    remaining -= (size_t)ret;
+    append_json_escaped_string(&out, &remaining, record->file ? record->file : "");
+    ret = snprintf(out, remaining, "\",\"line\":%d,\"func\":\"", record->line);
+    if (ret <= 0 || (size_t)ret >= remaining)
+        return -1;
+    out += ret;
+    remaining -= (size_t)ret;
+    append_json_escaped_string(&out, &remaining, record->func ? record->func : "");
+    ret = snprintf(out, remaining, "\",\"thread\":%u,\"pid\":%u,\"tag\":\"", record->tid,
+                   record->pid);
+    if (ret <= 0 || (size_t)ret >= remaining)
+        return -1;
+    out += ret;
+    remaining -= (size_t)ret;
+    append_json_escaped_string(&out, &remaining, record->tag ? record->tag : "");
+    ret = snprintf(out, remaining, "\"}");
+    if (ret <= 0 || (size_t)ret >= remaining)
+        return -1;
+    out += ret;
+    remaining -= (size_t)ret;
+
+    /* Close top-level object */
+    ret = snprintf(out, remaining, "}");
     if (ret <= 0 || (size_t)ret >= remaining)
         return -1;
     out += ret;
@@ -275,6 +503,10 @@ static int fmt_compile(const char *fmt_str, fmt_op_t *ops, int max_ops) {
             ops[n++].op = FMT_OP_TAG;
         else if (token_match(&fmt_str, "newline"))
             ops[n++].op = FMT_OP_NEWLINE;
+        else if (token_match(&fmt_str, "trace_id"))
+            ops[n++].op = FMT_OP_TRACE_ID;
+        else if (token_match(&fmt_str, "span_id"))
+            ops[n++].op = FMT_OP_SPAN_ID;
         else {
             /* Unknown token — emit '%' as a literal. */
             ops[n].op = FMT_OP_LITERAL;
@@ -301,8 +533,10 @@ int log_formatter_format(log_record_t *restrict record, char *restrict buf, size
     tf = g_time_format_buf;
     clog_mutex_unlock(&g_format_mutex);
 
-    if (is_json)
+    if (is_json == 1)
         return format_json(record, buf, buf_size);
+    if (is_json == 2)
+        return format_otel_json(record, buf, buf_size);
 
     char *out = buf;
     size_t remaining = buf_size;
@@ -398,11 +632,35 @@ int log_formatter_format(log_record_t *restrict record, char *restrict buf, size
             }
             break;
         }
+
+        case FMT_OP_TRACE_ID: {
+            char tid_hex[33] = "";
+            if (!is_zero_id(record->trace_id, 16)) {
+                trace_id_hex(record->trace_id, tid_hex);
+            }
+            total += append_token(&out, &remaining, tid_hex, strlen(tid_hex));
+            break;
+        }
+
+        case FMT_OP_SPAN_ID: {
+            char sid_hex[17] = "";
+            if (!is_zero_id(record->span_id, 8)) {
+                span_id_hex(record->span_id, sid_hex);
+            }
+            total += append_token(&out, &remaining, sid_hex, strlen(sid_hex));
+            break;
+        }
         }
     }
 
     *out = '\0';
     return total;
+}
+
+int log_formatter_format_otlp(log_record_t *restrict record, char *restrict buf, size_t buf_size) {
+    if (!record || !buf || buf_size == 0)
+        return -1;
+    return format_otel_json(record, buf, buf_size);
 }
 
 /* ------------------------------------------------------------------ */
@@ -425,7 +683,14 @@ int log_formatter_init(const char *format, const char *time_format) {
         snprintf(g_time_format_buf, sizeof(g_time_format_buf), "%s", "%Y-%m-%d %H:%M:%S");
     }
 
-    g_fmt_is_json = (strcmp(g_format_ptr, "json") == 0 || strcmp(g_format_ptr, "JSON") == 0);
+    if (strcmp(g_format_ptr, "json") == 0 || strcmp(g_format_ptr, "JSON") == 0) {
+        g_fmt_is_json = 1;
+    } else if (strcmp(g_format_ptr, "otlp") == 0 || strcmp(g_format_ptr, "OTLP") == 0 ||
+               strcmp(g_format_ptr, "otel") == 0 || strcmp(g_format_ptr, "OTEL") == 0) {
+        g_fmt_is_json = 2; /* 2 = OTLP JSON mode */
+    } else {
+        g_fmt_is_json = 0;
+    }
 
     if (!g_fmt_is_json)
         g_fmt_op_count = fmt_compile(g_format_ptr, g_format_ops, FMT_MAX_OPS);

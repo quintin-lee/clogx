@@ -21,7 +21,7 @@
 #endif
 #endif
 
-typedef enum { LOG_FORMAT_TEXT = 0, LOG_FORMAT_JSON } log_format_type_t;
+typedef enum { LOG_FORMAT_TEXT = 0, LOG_FORMAT_JSON, LOG_FORMAT_OTEL_JSON } log_format_type_t;
 
 /**
  * @struct log_config_t
@@ -56,6 +56,11 @@ typedef struct {
     int rate_limit_max_per_sec;                  /**< Max allowed log events per second. */
     int rate_limit_burst;                        /**< Maximum burst capacity. */
     bool catch_signals;                          /**< Catch SIGTERM/SIGINT for graceful shutdown. */
+
+    /* ---- Prometheus /metrics endpoint ---- */
+
+    bool prometheus_enable; /**< Enable Prometheus HTTP /metrics endpoint. */
+    int prometheus_port;    /**< Listen port for metrics HTTP server. */
 
     /* ---- Plugin sink configuration (loaded from YAML "plugins:" section) ---- */
 

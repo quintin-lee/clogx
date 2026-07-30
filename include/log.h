@@ -19,6 +19,7 @@
 #include "log_config.h"
 #include "log_record.h"
 #include "log_sink.h"
+#include "log_prometheus.h"
 #include "clogx_plugin.h"
 
 /* Compiler portability macros. */
@@ -196,6 +197,36 @@ CLOGX_API const char *log_get_thread_context(const char *key);
  * @brief Clear all thread-local context key-value pairs for the calling thread.
  */
 CLOGX_API void log_clear_thread_context(void);
+
+/**
+ * @brief Set thread-local W3C TraceContext trace ID (16 bytes) and span ID (8 bytes).
+ * @param[in] trace_id 16-byte raw trace ID array (or NULL to clear).
+ * @param[in] span_id  8-byte raw span ID array (or NULL to clear).
+ */
+CLOGX_API void clog_set_trace_context(const uint8_t trace_id[16], const uint8_t span_id[8]);
+
+/**
+ * @brief Get thread-local W3C TraceContext trace ID and span ID.
+ * @param[out] trace_id 16-byte buffer populated with current trace ID (or zeroed if unset).
+ * @param[out] span_id  8-byte buffer populated with current span ID (or zeroed if unset).
+ */
+CLOGX_API void clog_get_trace_context(uint8_t trace_id[16], uint8_t span_id[8]);
+
+/**
+ * @brief Clear thread-local W3C TraceContext for the calling thread.
+ */
+CLOGX_API void clog_clear_trace_context(void);
+
+/**
+ * @brief Set thread-local W3C TraceContext using hexadecimal strings.
+ * @param[in] trace_id_hex 32-character hex string representing 16-byte trace ID (or NULL/empty to
+ * clear).
+ * @param[in] span_id_hex  16-character hex string representing 8-byte span ID (or NULL/empty to
+ * clear).
+ * @return CLOG_OK on success, CLOG_ERR_INVALID_ARG if hex string is invalid.
+ */
+CLOGX_API clogx_errno_t clog_set_trace_context_hex(const char *trace_id_hex,
+                                                   const char *span_id_hex);
 
 /* The Plugin ABI API (log_plugin_load, log_plugin_unload, log_plugin_create_sink,
  * log_plugin_info, log_plugin_scan) is declared in <clogx_plugin.h> included above. */

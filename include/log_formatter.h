@@ -34,6 +34,8 @@ typedef enum {
     FMT_OP_MODULE,      /**< %module — module name.                       */
     FMT_OP_TAG,         /**< %tag — tag string.                           */
     FMT_OP_NEWLINE,     /**< %newline — literal newline.                  */
+    FMT_OP_TRACE_ID,    /**< %trace_id — W3C TraceContext trace ID hex string. */
+    FMT_OP_SPAN_ID,     /**< %span_id — W3C TraceContext span ID hex string.   */
 } fmt_opcode_t;
 
 /** @brief One instruction in the compiled format program. */
@@ -56,6 +58,16 @@ typedef struct {
  * @return Bytes written excluding the terminating NUL, or <= 0 on failure.
  */
 int log_formatter_format(log_record_t *restrict record, char *restrict buf, size_t buf_size);
+
+/**
+ * @brief Format @p record into @p buf as an OpenTelemetry OTLP JSON Log Record object.
+ *
+ * @param[in]  record   Log event to format.
+ * @param[out] buf      Output buffer (NUL-terminated on success).
+ * @param[in]  buf_size Capacity of @p buf in bytes.
+ * @return Bytes written, or <= 0 on failure.
+ */
+int log_formatter_format_otlp(log_record_t *restrict record, char *restrict buf, size_t buf_size);
 
 /**
  * @brief Set the active format string and time template (both copied into

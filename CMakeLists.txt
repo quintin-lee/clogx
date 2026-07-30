@@ -76,7 +76,9 @@ set(CLOG_SOURCES
     sinks/socket_sink.c
     sinks/custom_sink.c
     sinks/syslog_sink.c
+    sinks/otlp_sink.c
     core/plugin_loader.c
+    core/prometheus_exporter.c
 )
 
 # Object library — all sources compiled once, shared across library and internal-symbol tests
@@ -183,6 +185,8 @@ if(CLOG_BUILD_TESTS)
         test_thread_context
         test_coverage_boost
         test_coverage_deep
+        test_otel
+        test_prometheus
     )
 
     # Tests that directly reference internal symbols (not exported from shared lib)
@@ -262,6 +266,7 @@ install(FILES
     include/log_limits.h
     include/log_record.h
     include/log_sink.h
+    include/log_prometheus.h
     include/clog_port.h
     include/clogx_plugin.h
     DESTINATION ${CMAKE_INSTALL_INCLUDEDIR}/clogx

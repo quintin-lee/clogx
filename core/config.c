@@ -34,6 +34,8 @@ typedef enum {
     HANDLER_SOCKET_TLS_CA_FILE,
     HANDLER_SOCKET_TLS_SKIP_VERIFY,
     HANDLER_TIME_FORMAT,
+    HANDLER_PROMETHEUS_ENABLE,
+    HANDLER_PROMETHEUS_PORT,
 } config_handler_t;
 
 typedef struct {
@@ -63,6 +65,8 @@ static const config_key_t g_config_keys[] = {
     {"max_size", HANDLER_MAX_SIZE},
     {"path", HANDLER_FILE_PATH},
     {"port", HANDLER_PORT},
+    {"prometheus_enable", HANDLER_PROMETHEUS_ENABLE},
+    {"prometheus_port", HANDLER_PROMETHEUS_PORT},
     {"queue_size", HANDLER_QUEUE_SIZE},
     {"rate_limit_burst", HANDLER_RATE_LIMIT_BURST},
     {"rate_limit_enable", HANDLER_RATE_LIMIT_ENABLE},
@@ -405,6 +409,22 @@ static int parse_config_file(const char *filepath, log_config_t *cfg) {
                         }
                         break;
                     }
+                    case HANDLER_PROMETHEUS_ENABLE:
+                        cfg->prometheus_enable = (strcmp(val, "true") == 0);
+                        break;
+                    case HANDLER_PROMETHEUS_PORT: {
+                        char *end = NULL;
+                        errno = 0;
+                        long p = strtol(val, &end, 10);
+                        if (end == val || *end != '\0' || errno == ERANGE || p <= 0 || p > 65535) {
+                            fprintf(stderr, "Invalid prometheus_port: %s (must be 1..65535)\n",
+                                    val);
+                            has_errors = 1;
+                        } else {
+                            cfg->prometheus_port = (int)p;
+                        }
+                        break;
+                    }
                     }
                 }
                 /* unknown keys are silently skipped */
@@ -508,6 +528,8 @@ static int load_default_and_apply(const char *yaml_path) {
     g_config.socket_enable = 0;
     g_config.socket_host[0] = '\0';
     g_config.socket_port = 0;
+    g_config.prometheus_enable = false;
+    g_config.prometheus_port = 9090;
     g_config.format = g_config_format;
     snprintf(g_config_time_format, sizeof(g_config_time_format), "%s", "%Y-%m-%d %H:%M:%S");
     g_config.time_format = g_config_time_format;
@@ -553,6 +575,8 @@ static int apply_config(const log_config_t *cfg) {
     g_config.rate_limit_max_per_sec = cfg->rate_limit_max_per_sec;
     g_config.rate_limit_burst = cfg->rate_limit_burst;
     g_config.catch_signals = cfg->catch_signals;
+    g_config.prometheus_enable = cfg->prometheus_enable;
+    g_config.prometheus_port = cfg->prometheus_port;
 
     g_config.plugin_count = cfg->plugin_count;
     for (int i = 0; i < cfg->plugin_count && i < CLOG_MAX_PLUGINS; i++) {

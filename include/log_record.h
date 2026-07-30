@@ -29,19 +29,52 @@ typedef enum {
  * @details String fields (`file`, `func`, `module`, `tag`, `message`) are
  * borrowed pointers on the synchronous path. The async layer deep-copies
  * them onto the heap before enqueueing.
+ *
+ * Trace context fields (`trace_id`, `span_id`) carry W3C TraceContext
+ * values.  When all bytes are zero no trace context is active.
  */
 typedef struct {
-    uint64_t timestamp;  /**< Microseconds since Unix epoch. */
-    const char *file;    /**< Source file name. */
-    const char *func;    /**< Source function name. */
-    const char *module;  /**< Logical module name. */
-    const char *tag;     /**< Optional tag/label (may be NULL). */
-    const char *message; /**< Formatted message body. */
-    log_level_t level;   /**< Severity. */
-    uint32_t tid;        /**< Thread identifier (truncated pthread_t). */
-    uint32_t pid;        /**< Process identifier. */
-    int line;            /**< Source line number. */
+    uint64_t timestamp;   /**< Microseconds since Unix epoch. */
+    const char *file;     /**< Source file name. */
+    const char *func;     /**< Source function name. */
+    const char *module;   /**< Logical module name. */
+    const char *tag;      /**< Optional tag/label (may be NULL). */
+    const char *message;  /**< Formatted message body. */
+    log_level_t level;    /**< Severity. */
+    uint32_t tid;         /**< Thread identifier (truncated pthread_t). */
+    uint32_t pid;         /**< Process identifier. */
+    int line;             /**< Source line number. */
+    uint8_t trace_id[16]; /**< W3C TraceContext trace-id (zero = unset). */
+    uint8_t span_id[8];   /**< W3C TraceContext span-id (zero = unset). */
 } log_record_t;
+
+/**
+ * @brief Map clogx level to OpenTelemetry log severity number.
+ *
+ * Defined by the OTel Log Data Model:
+ *   1 = TRACE, 5 = DEBUG, 9 = INFO, 13 = WARN, 17 = ERROR, 21 = FATAL
+ *
+ * @param[in] level  clogx severity.
+ * @return OTel severity number, or 0 for unknown.
+ */
+static inline int otel_severity_number(log_level_t level) {
+    switch (level) {
+    case LOG_LEVEL_TRACE:
+        return 1;
+    case LOG_LEVEL_DEBUG:
+        return 5;
+    case LOG_LEVEL_INFO:
+        return 9;
+    case LOG_LEVEL_WARN:
+        return 13;
+    case LOG_LEVEL_ERROR:
+        return 17;
+    case LOG_LEVEL_FATAL:
+        return 21;
+    default:
+        return 0;
+    }
+}
 
 /**
  * @enum log_color_t

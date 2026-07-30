@@ -26,6 +26,11 @@ static clog_mutex_t g_module_mutex = CLOG_MUTEX_INITIALIZER;
 static char g_module[64] = "main";
 static volatile uint64_t g_total_logged_count = 0;
 static volatile uint64_t g_dropped_queue_full_count = 0;
+volatile uint64_t g_prometheus_level_counts[6] = {0};
+
+static clog_thread_local uint8_t g_thread_trace_id[16];
+static clog_thread_local uint8_t g_thread_span_id[8];
+static clog_thread_local bool g_has_thread_trace_context = false;
 
 const char *log_strerror(int err) {
     switch (err) {
@@ -146,6 +151,9 @@ void log_writevprintf(log_level_t level, const char *file, int line, const char 
     }
 
     g_total_logged_count++;
+    if ((int)level >= 0 && (int)level < 6) {
+        g_prometheus_level_counts[(int)level]++;
+    }
 
     char message[CLOG_MAX_MESSAGE_SIZE];
 
@@ -184,6 +192,13 @@ void log_writevprintf(log_level_t level, const char *file, int line, const char 
     record.module = module_buf;
     record.tag = NULL;
     record.message = message;
+    if (g_has_thread_trace_context) {
+        memcpy(record.trace_id, g_thread_trace_id, 16);
+        memcpy(record.span_id, g_thread_span_id, 8);
+    } else {
+        memset(record.trace_id, 0, 16);
+        memset(record.span_id, 0, 8);
+    }
 
     uint64_t suppressed = 0;
     if (!log_rate_limit_allow(&suppressed)) {
@@ -289,6 +304,83 @@ void log_clear_thread_context(void) {
     g_thread_context_count = 0;
 }
 
+void clog_set_trace_context(const uint8_t trace_id[16], const uint8_t span_id[8]) {
+    if (trace_id && span_id) {
+        memcpy(g_thread_trace_id, trace_id, 16);
+        memcpy(g_thread_span_id, span_id, 8);
+        g_has_thread_trace_context = true;
+    } else {
+        clog_clear_trace_context();
+    }
+}
+
+void clog_get_trace_context(uint8_t trace_id[16], uint8_t span_id[8]) {
+    if (trace_id) {
+        if (g_has_thread_trace_context) {
+            memcpy(trace_id, g_thread_trace_id, 16);
+        } else {
+            memset(trace_id, 0, 16);
+        }
+    }
+    if (span_id) {
+        if (g_has_thread_trace_context) {
+            memcpy(span_id, g_thread_span_id, 8);
+        } else {
+            memset(span_id, 0, 8);
+        }
+    }
+}
+
+void clog_clear_trace_context(void) {
+    memset(g_thread_trace_id, 0, 16);
+    memset(g_thread_span_id, 0, 8);
+    g_has_thread_trace_context = false;
+}
+
+static int parse_hex_nibble(char c) {
+    if (c >= '0' && c <= '9')
+        return c - '0';
+    if (c >= 'a' && c <= 'f')
+        return c - 'a' + 10;
+    if (c >= 'A' && c <= 'F')
+        return c - 'A' + 10;
+    return -1;
+}
+
+clogx_errno_t clog_set_trace_context_hex(const char *trace_id_hex, const char *span_id_hex) {
+    if (!trace_id_hex || !span_id_hex) {
+        clog_clear_trace_context();
+        return CLOG_OK;
+    }
+    if (strlen(trace_id_hex) == 0 && strlen(span_id_hex) == 0) {
+        clog_clear_trace_context();
+        return CLOG_OK;
+    }
+    if (strlen(trace_id_hex) < 32 || strlen(span_id_hex) < 16) {
+        return CLOG_ERR_INVALID_ARG;
+    }
+
+    uint8_t tid[16];
+    uint8_t sid[8];
+    for (int i = 0; i < 16; i++) {
+        int hi = parse_hex_nibble(trace_id_hex[(size_t)i * 2]);
+        int lo = parse_hex_nibble(trace_id_hex[(size_t)i * 2 + 1]);
+        if (hi < 0 || lo < 0)
+            return CLOG_ERR_INVALID_ARG;
+        tid[i] = (uint8_t)((hi << 4) | lo);
+    }
+    for (int i = 0; i < 8; i++) {
+        int hi = parse_hex_nibble(span_id_hex[(size_t)i * 2]);
+        int lo = parse_hex_nibble(span_id_hex[(size_t)i * 2 + 1]);
+        if (hi < 0 || lo < 0)
+            return CLOG_ERR_INVALID_ARG;
+        sid[i] = (uint8_t)((hi << 4) | lo);
+    }
+
+    clog_set_trace_context(tid, sid);
+    return CLOG_OK;
+}
+
 #ifndef _WIN32
 static pthread_once_t g_atfork_once = PTHREAD_ONCE_INIT;
 
@@ -359,6 +451,10 @@ int log_init(const char *yaml_path) {
         log_install_signal_handlers();
     }
 
+    if (cfg->prometheus_enable) {
+        clog_prometheus_exporter_start(cfg->prometheus_port);
+    }
+
     g_initialized = 1;
     clog_mutex_unlock(&g_init_mutex);
     return CLOG_OK;
@@ -379,6 +475,7 @@ void log_destroy(void) {
      * to avoid potential deadlocks if any of these functions indirectly try to
      * acquire g_init_mutex or other locks held during a concurrent init call. */
     if (was_initialized) {
+        clog_prometheus_exporter_stop();
         log_restore_signal_handlers();
         log_rate_limit_reset();
         log_async_shutdown();
