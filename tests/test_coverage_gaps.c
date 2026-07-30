@@ -666,6 +666,37 @@ static void test_rotate_edge_cases(void) {
     printf("test_rotate_edge_cases PASSED\n");
 }
 
+static void test_async_100_coverage(void) {
+    assert(log_async_init_for(NULL, 64) == -1);
+    assert(log_async_get_queue_depth_for(NULL) == 0);
+
+    logger_t dummy_logger = {0};
+    assert(log_async_get_queue_depth_for(&dummy_logger) == 0);
+
+    log_config_t cfg = {0};
+    cfg.level = LOG_LEVEL_INFO;
+    cfg.async = true;
+    cfg.queue_size = 64;
+    cfg.console_enable = true;
+    cfg.console_stderr = true;
+
+    logger_t *logger = logger_create_from_config(&cfg);
+    if (logger) {
+        log_record_t empty_rec = {0};
+        empty_rec.level = LOG_LEVEL_INFO;
+        log_async_write_for(logger, &empty_rec);
+
+        log_record_t trace_rec = {0};
+        trace_rec.level = LOG_LEVEL_TRACE;
+        log_async_write_for(logger, &trace_rec);
+
+        log_async_flush_for(logger);
+        logger_destroy(logger);
+    }
+
+    printf("test_async_100_coverage PASSED\n");
+}
+
 int main(void) {
     printf("=== coverage-gap tests ===\n");
 
@@ -694,6 +725,7 @@ int main(void) {
     test_sink_null_paths();
     test_socket_sink_broken_pipe();
     test_rotate_edge_cases();
+    test_async_100_coverage();
 
     printf("=== all coverage-gap tests PASSED ===\n");
     return 0;

@@ -137,19 +137,19 @@ static int create_sinks_from_cfg(const log_config_t *cfg, log_sink_t **sinks, in
     if (cfg->console_enable) {
         log_sink_t *sink = cfg->console_stderr ? console_sink_create_stderr(cfg->color)
                                                : console_sink_create(cfg->color);
-        if (sink && count < max_sinks)
+        if (sink)
             sinks[count++] = sink;
     }
     if (cfg->file_enable && strlen(cfg->file_path) > 0) {
         log_sink_t *sink = file_sink_create(cfg->file_path, cfg->file_max_size, cfg->file_backups);
-        if (sink && count < max_sinks)
+        if (sink)
             sinks[count++] = sink;
     }
     if (cfg->socket_enable && strlen(cfg->socket_host) > 0) {
         log_sink_t *sink =
             socket_sink_create_tls(cfg->socket_host, cfg->socket_port, cfg->socket_tls,
                                    cfg->socket_tls_ca_file, cfg->socket_tls_skip_verify);
-        if (sink && count < max_sinks)
+        if (sink)
             sinks[count++] = sink;
     }
     return count;

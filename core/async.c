@@ -102,7 +102,7 @@ static void *async_worker_for(void *arg) {
 /* ── Instance variants ── */
 
 int log_async_init_for(logger_t *logger, int queue_size) {
-    if (queue_size <= 0)
+    if (!logger || queue_size <= 0)
         return -1;
     if (logger->async_running)
         return 0;
@@ -120,7 +120,7 @@ int log_async_init_for(logger_t *logger, int queue_size) {
 }
 
 void log_async_shutdown_for(logger_t *logger) {
-    if (!logger->async_running || !logger->queue)
+    if (!logger || !logger->async_running || !logger->queue)
         return;
     mpsc_queue_close(logger->queue);
     logger->async_running = 0;
@@ -130,7 +130,7 @@ void log_async_shutdown_for(logger_t *logger) {
 }
 
 void log_async_flush_for(logger_t *logger) {
-    if (!logger->queue)
+    if (!logger || !logger->queue)
         return;
     mpsc_queue_wait_empty(logger->queue);
     while (logger->async_processing)
@@ -139,10 +139,12 @@ void log_async_flush_for(logger_t *logger) {
 }
 
 int log_async_is_running_for(logger_t *logger) {
-    return logger->async_running && logger->queue != NULL;
+    return logger && logger->async_running && logger->queue != NULL;
 }
 
 int log_async_write_for(logger_t *logger, log_record_t *restrict record) {
+    if (!logger || !record)
+        return -1;
     if (!logger->queue) {
         log_dispatcher_dispatch_for(logger, record);
         return CLOG_ERR_QUEUE_FULL;
@@ -162,7 +164,7 @@ int log_async_write_for(logger_t *logger, log_record_t *restrict record) {
 }
 
 size_t log_async_get_queue_depth_for(logger_t *logger) {
-    if (!logger->queue)
+    if (!logger || !logger->queue)
         return 0;
     clog_mutex_lock(&logger->queue->mutex);
     size_t depth = logger->queue->count;
@@ -171,7 +173,7 @@ size_t log_async_get_queue_depth_for(logger_t *logger) {
 }
 
 void log_async_atfork_child_for(logger_t *logger) {
-    if (!logger->async_running || !logger->queue)
+    if (!logger || !logger->async_running || !logger->queue)
         return;
     mpsc_queue_t *q = logger->queue;
     clog_mutex_init(&q->mutex);

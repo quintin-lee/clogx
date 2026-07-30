@@ -2,6 +2,7 @@
 #include <stdlib.h>
 #include <string.h>
 #include <assert.h>
+#include "dispatcher.h"
 #include "log.h"
 #include "log_config.h"
 #include "log_sink.h"
@@ -286,18 +287,30 @@ static void test_null_logger_error_paths(void) {
 
 static void test_dispatcher_multi_instance_gaps(void) {
     log_config_t cfg = {0};
-    cfg.level = LOG_LEVEL_TRACE;
+    cfg.level = LOG_LEVEL_WARN;
     cfg.async = false;
     cfg.console_enable = true;
     cfg.console_stderr = true;
+    cfg.color = (log_color_t)99;
 
     logger_t *logger = logger_create_from_config(&cfg);
     assert(logger != NULL);
+
+    log_record_t trace_rec = {0};
+    trace_rec.level = LOG_LEVEL_TRACE;
+    log_dispatcher_dispatch_for(logger, &trace_rec);
+
+    log_record_t warn_rec = {0};
+    warn_rec.level = LOG_LEVEL_WARN;
+    warn_rec.message = "warn test";
+    log_dispatcher_dispatch_for(logger, &warn_rec);
 
     log_sink_t *s1 = make_test_sink();
     log_sink_t *s2 = make_test_sink();
     assert(logger_add_sink(logger, s1) == CLOG_OK);
     assert(logger_add_sink(logger, s2) == CLOG_OK);
+
+    log_dispatcher_atfork_child_for(logger);
 
     assert(logger_remove_sink(logger, s1) == CLOG_OK);
     assert(logger_remove_sink(logger, s2) == CLOG_OK);
