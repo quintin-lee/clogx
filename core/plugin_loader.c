@@ -16,11 +16,7 @@
  * Stubs are provided so the library links and the rest of the
  * sink/logger pipeline works without dynamic-load support.          */
 #include "clogx_plugin.h"
-#include "log_sink.h"
-
-struct clogx_plugin_handle {
-    int unused;
-};
+#include "log_config.h"
 
 clogx_plugin_handle_t *log_plugin_load(const char *so_path) {
     (void)so_path;
