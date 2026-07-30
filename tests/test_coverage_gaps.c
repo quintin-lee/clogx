@@ -555,6 +555,37 @@ static void test_file_sink_null_paths(void) {
     printf("test_file_sink_null_paths PASSED\n");
 }
 
+static void test_async_edge_cases(void) {
+    log_config_t cfg = {0};
+    cfg.level = LOG_LEVEL_TRACE;
+    cfg.async = true;
+    cfg.queue_size = 64;
+    cfg.console_enable = true;
+    cfg.console_stderr = true;
+
+    if (log_init(NULL) == 0) {
+        log_config_set(&cfg);
+
+        /* Record with ONLY module (no message, no tag) */
+        log_record_t rec_mod = {0};
+        rec_mod.level = LOG_LEVEL_INFO;
+        rec_mod.module = "only_mod";
+        log_async_write(&rec_mod);
+
+        /* Record with ONLY tag (no message, no module) */
+        log_record_t rec_tag = {0};
+        rec_tag.level = LOG_LEVEL_INFO;
+        rec_tag.tag = "only_tag";
+        log_async_write(&rec_tag);
+
+        log_async_flush();
+        log_destroy();
+    }
+
+    log_async_shutdown();
+    printf("test_async_edge_cases PASSED\n");
+}
+
 int main(void) {
     printf("=== coverage-gap tests ===\n");
 
@@ -579,6 +610,7 @@ int main(void) {
     test_reload_no_sinks();
 
     test_file_sink_null_paths();
+    test_async_edge_cases();
 
     printf("=== all coverage-gap tests PASSED ===\n");
     return 0;

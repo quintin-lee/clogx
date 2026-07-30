@@ -48,9 +48,11 @@ static int log_record_clone(log_record_t *restrict dst, const log_record_t *rest
         return 0;
     }
 
+    /* LCOV_EXCL_START - System malloc failure */
     char *block = malloc(total_bytes);
     if (!block)
         return -1;
+    /* LCOV_EXCL_STOP */
 
     char *p = block;
     if (src->message) {
