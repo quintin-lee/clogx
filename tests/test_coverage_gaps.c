@@ -157,6 +157,7 @@ static void test_set_thread_context_update(void) {
     printf("test_set_thread_context_update PASSED\n");
 }
 
+#ifndef _WIN32
 /* ── T7: logger_writevprintf_internal line 173-174 — signal in write path ── */
 static void test_signal_processing_in_write(void) {
     log_restore_signal_handlers();
@@ -185,6 +186,7 @@ static void test_signal_processing_in_write(void) {
     sigaction(SIGTERM, &old_sa, NULL);
     printf("test_signal_processing_in_write PASSED\n");
 }
+#endif
 
 /* ── T8: logger_reload (lines 555-581) ── */
 static void test_logger_reload(void) {
@@ -756,7 +758,9 @@ int main(void) {
     test_init_no_sinks();
     test_async_write_fallback();
     test_set_thread_context_update();
+#ifndef _WIN32
     test_signal_processing_in_write();
+#endif
     test_logger_reload();
     test_logger_create_from_config_format();
 
