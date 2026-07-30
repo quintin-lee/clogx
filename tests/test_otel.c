@@ -59,6 +59,24 @@ static void test_trace_context_hex_uppercase(void) {
     printf("test_trace_context_hex_uppercase passed\n");
 }
 
+static void test_trace_context_hex_empty(void) {
+    clog_clear_trace_context();
+
+    int ret = clog_set_trace_context_hex("", "");
+    assert(ret == CLOG_OK);
+
+    uint8_t tid[16];
+    uint8_t sid[8];
+    clog_get_trace_context(tid, sid);
+    for (int i = 0; i < 16; i++)
+        assert(tid[i] == 0);
+    for (int i = 0; i < 8; i++)
+        assert(sid[i] == 0);
+
+    clog_clear_trace_context();
+    printf("test_trace_context_hex_empty passed\n");
+}
+
 static void test_pattern_trace_tokens(void) {
     clog_set_trace_context_hex("4bf92f3577b34da6a3ce929d0e0e4736", "00f067aa0ba902b7");
 
@@ -406,6 +424,7 @@ static void test_traceparent_invalid_hex(void) {
 int main(void) {
     test_trace_context_hex();
     test_trace_context_hex_uppercase();
+    test_trace_context_hex_empty();
     test_pattern_trace_tokens();
     test_otlp_formatter();
     test_traceparent_env();
