@@ -132,7 +132,7 @@ int log_dispatcher_dispatch_for(logger_t *logger, log_record_t *record) {
 
 /* ── Sink creation helpers (used by both old and _for variants) ── */
 
-static int create_sinks_from_cfg(const log_config_t *cfg, log_sink_t **sinks, int max_sinks) {
+static int create_sinks_from_cfg(const log_config_t *cfg, log_sink_t **sinks) {
     int count = 0;
     if (cfg->console_enable) {
         log_sink_t *sink = cfg->console_stderr ? console_sink_create_stderr(cfg->color)
@@ -200,7 +200,7 @@ int log_dispatcher_init_for(logger_t *logger) {
     log_config_t *cfg = &logger->config;
 
     log_sink_t *sinks[8] = {0};
-    int count = create_sinks_from_cfg(cfg, sinks, 8);
+    int count = create_sinks_from_cfg(cfg, sinks);
 
     /* Load plugin sinks from config. */
     {
@@ -240,7 +240,7 @@ int log_dispatcher_build_snapshot_for(logger_t *logger, log_config_t *restrict c
                                       log_dispatcher_snapshot_t *restrict snap) {
     (void)logger;
     log_sink_t *sinks[8 + CLOG_MAX_PLUGINS] = {0};
-    int count = create_sinks_from_cfg(cfg, sinks, 8);
+    int count = create_sinks_from_cfg(cfg, sinks);
 
     /* Load plugin sinks from config. */
     {
