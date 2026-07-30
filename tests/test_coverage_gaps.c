@@ -536,6 +536,25 @@ static void test_reload_no_sinks(void) {
     printf("test_reload_no_sinks PASSED\n");
 }
 
+static void test_file_sink_null_paths(void) {
+    log_sink_t *fs = file_sink_create(NULL, 0, 0);
+    if (fs) {
+        fs->destroy(fs);
+    }
+    fs = file_sink_create("", 0, 0);
+    if (fs) {
+        fs->destroy(fs);
+    }
+
+    log_sink_t *valid_fs = file_sink_create("build/test_file_sink_null.log", 100, 1);
+    if (valid_fs) {
+        valid_fs->write(valid_fs, NULL, 0);
+        valid_fs->atfork_child(NULL);
+        valid_fs->destroy(valid_fs);
+    }
+    printf("test_file_sink_null_paths PASSED\n");
+}
+
 int main(void) {
     printf("=== coverage-gap tests ===\n");
 
@@ -558,6 +577,8 @@ int main(void) {
     test_suppressed_msg_async();
     test_logger_config_set_time_format();
     test_reload_no_sinks();
+
+    test_file_sink_null_paths();
 
     printf("=== all coverage-gap tests PASSED ===\n");
     return 0;

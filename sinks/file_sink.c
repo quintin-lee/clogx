@@ -137,6 +137,7 @@ log_sink_t *file_sink_create(const char *path, uint64_t max_size, int backups) {
     if (!path || strlen(path) == 0)
         return NULL;
 
+    /* LCOV_EXCL_START - System allocation failure */
     log_sink_t *sink = malloc(sizeof(log_sink_t));
     if (!sink)
         return NULL;
@@ -153,6 +154,7 @@ log_sink_t *file_sink_create(const char *path, uint64_t max_size, int backups) {
         free(sink);
         return NULL;
     }
+    /* LCOV_EXCL_STOP */
 
     data->max_size = max_size;
     data->backups = backups;
