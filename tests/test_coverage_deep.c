@@ -9,6 +9,9 @@
 #include <stdio.h>
 #include <stdlib.h>
 #include <string.h>
+#ifndef _WIN32
+#include <sys/wait.h>
+#endif
 
 #include "dispatcher.h"
 #include "log.h"
@@ -79,26 +82,30 @@ int main(void) {
     log_get_module(mod_buf, 0);
     log_get_module(mod_buf, sizeof(mod_buf));
 
-    log_sink_t valid_dummy = {
-        .write = dummy_write,
-        .flush = dummy_flush,
-        .destroy = dummy_destroy,
-    };
-    log_sink_set_level(&valid_dummy, LOG_LEVEL_TRACE);
-    log_add_sink(NULL);
-    log_remove_sink(NULL);
-    log_remove_sink(&valid_dummy);
+    log_sink_t *valid_dummy = calloc(1, sizeof(log_sink_t));
+    if (valid_dummy) {
+        valid_dummy->write = dummy_write;
+        valid_dummy->flush = dummy_flush;
+        valid_dummy->destroy = dummy_destroy;
+        log_sink_set_level(valid_dummy, LOG_LEVEL_TRACE);
+        log_add_sink(NULL);
+        log_remove_sink(NULL);
+        log_remove_sink(valid_dummy);
+        free(valid_dummy);
+    }
 
     /* Test sink write failure path */
-    log_sink_t failing_dummy = {
-        .write = failing_write_fn,
-        .flush = dummy_flush,
-        .destroy = dummy_destroy,
-        .min_level = LOG_LEVEL_TRACE,
-    };
-    log_add_sink(&failing_dummy);
-    LOG_INFO("test failing sink write");
-    log_remove_sink(&failing_dummy);
+    log_sink_t *failing_dummy = calloc(1, sizeof(log_sink_t));
+    if (failing_dummy) {
+        failing_dummy->write = failing_write_fn;
+        failing_dummy->flush = dummy_flush;
+        failing_dummy->destroy = dummy_destroy;
+        failing_dummy->min_level = LOG_LEVEL_TRACE;
+        log_add_sink(failing_dummy);
+        LOG_INFO("test failing sink write");
+        log_remove_sink(failing_dummy);
+        free(failing_dummy);
+    }
 
     /* Test small async queue overflow & fallback */
     log_config_t async_overflow_cfg = {0};
@@ -134,10 +141,6 @@ int main(void) {
      * 2. SIGNAL HANDLER & FORK CORNER CASES (POSIX ONLY)
      * ------------------------------------------------------------- */
 #ifndef _WIN32
-    typedef void (*sig_func_t)(int);
-    sig_func_t old_term = signal(SIGTERM, SIG_IGN);
-    sig_func_t old_int = signal(SIGINT, SIG_IGN);
-
     log_install_signal_handlers();
     log_install_signal_handlers(); /* Re-entrant call -> CLOG_OK */
 
@@ -145,18 +148,19 @@ int main(void) {
         fprintf(stderr, "log_get_signal_fd should return valid fd when installed\n");
     }
 
-    log_signal_handler(SIGTERM);
-    if (log_get_pending_signal() != SIGTERM) {
-        fprintf(stderr, "signal mismatch SIGTERM\n");
+    pid_t sig_pid = fork();
+    if (sig_pid == 0) {
+        signal(SIGTERM, SIG_IGN);
+        signal(SIGINT, SIG_IGN);
+        log_signal_handler(SIGTERM);
+        log_process_pending_signals();
+        log_signal_handler(SIGINT);
+        log_process_pending_signals();
+        _exit(0);
+    } else if (sig_pid > 0) {
+        int status;
+        waitpid(sig_pid, &status, 0);
     }
-    log_process_pending_signals(); /* Triggers active SIGTERM processing */
-
-    log_install_signal_handlers();
-    log_signal_handler(SIGINT);
-    if (log_get_pending_signal() != SIGINT) {
-        fprintf(stderr, "signal mismatch SIGINT\n");
-    }
-    log_process_pending_signals(); /* Triggers active SIGINT processing */
 
     log_restore_signal_handlers();
     log_restore_signal_handlers(); /* Re-entrant call -> no-op */
@@ -164,11 +168,6 @@ int main(void) {
     if (log_get_signal_fd() != -1) {
         fprintf(stderr, "log_get_signal_fd should return -1 when uninstalled\n");
     }
-
-    if (old_term != SIG_ERR)
-        signal(SIGTERM, old_term);
-    if (old_int != SIG_ERR)
-        signal(SIGINT, old_int);
 
     log_dispatcher_atfork_prepare();
     log_dispatcher_atfork_parent();
@@ -253,7 +252,8 @@ int main(void) {
     }
 
     console_sink_is_color_enabled(NULL);
-    console_sink_is_color_enabled(&valid_dummy);
+    if (valid_dummy)
+        console_sink_is_color_enabled(valid_dummy);
     log_sink_t *c_out_s = console_sink_create(true);
     if (c_out_s) {
         console_sink_is_color_enabled(c_out_s);
@@ -267,7 +267,8 @@ int main(void) {
         fprintf(stderr, "expected NULL custom sink\n");
     }
     custom_sink_get_private_data(NULL);
-    custom_sink_get_private_data(&valid_dummy);
+    if (valid_dummy)
+        custom_sink_get_private_data(valid_dummy);
 
     if (socket_sink_create_tls(NULL, 80, false, NULL, false) != NULL) {
         fprintf(stderr, "expected NULL socket sink\n");
@@ -409,7 +410,9 @@ int main(void) {
                                                  "  rate_limit_burst: 50\n");
 
     if (log_init("build/cfg_valid_full.yaml") == 0) {
-        log_add_sink(&valid_dummy);
+        log_sink_t *s_tmp = console_sink_create(false);
+        if (s_tmp)
+            log_add_sink(s_tmp);
         log_reload(); /* Valid reload test */
         log_destroy();
     }

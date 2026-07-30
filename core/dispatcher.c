@@ -78,6 +78,8 @@ int log_dispatcher_dispatch(log_record_t *record) {
 }
 
 int log_dispatcher_dispatch_for(logger_t *logger, log_record_t *record) {
+    if (!logger || !record)
+        return -1;
     if (record->level < logger->config.level) {
         return 0;
     }

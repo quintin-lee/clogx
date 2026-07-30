@@ -511,7 +511,6 @@ static int parse_config_file(const char *filepath, log_config_t *cfg) {
     return has_errors ? -1 : 0;
 }
 
-
 /* ── Instance API ── */
 
 int log_config_load_into(logger_t *logger, const char *yaml_path) {
@@ -610,8 +609,7 @@ static int apply_config(const log_config_t *cfg) {
     g_default_logger.config.plugin_count = cfg->plugin_count;
     for (int i = 0; i < cfg->plugin_count && i < CLOG_MAX_PLUGINS; i++) {
         snprintf(g_default_logger.config.plugin_so_paths[i],
-                 sizeof(g_default_logger.config.plugin_so_paths[0]), "%s",
-                 cfg->plugin_so_paths[i]);
+                 sizeof(g_default_logger.config.plugin_so_paths[0]), "%s", cfg->plugin_so_paths[i]);
         snprintf(g_default_logger.config.plugin_params_json[i],
                  sizeof(g_default_logger.config.plugin_params_json[0]), "%s",
                  cfg->plugin_params_json[i]);

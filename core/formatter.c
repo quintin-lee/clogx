@@ -528,8 +528,8 @@ static int format_impl(log_record_t *restrict record, char *restrict buf, size_t
     if (strcmp(fmt, "json") == 0 || strcmp(fmt, "JSON") == 0) {
         return format_json_ex(record, buf, buf_size, time_format);
     }
-    if (strcmp(fmt, "otlp") == 0 || strcmp(fmt, "OTLP") == 0 ||
-        strcmp(fmt, "otel") == 0 || strcmp(fmt, "OTEL") == 0) {
+    if (strcmp(fmt, "otlp") == 0 || strcmp(fmt, "OTLP") == 0 || strcmp(fmt, "otel") == 0 ||
+        strcmp(fmt, "OTEL") == 0) {
         return format_otel_json(record, buf, buf_size);
     }
 
