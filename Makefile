@@ -1,5 +1,5 @@
 CC = gcc
-override CFLAGS := -std=c99 -Wall -Wextra -Wconversion -Iinclude -O2 -D_GNU_SOURCE -fPIC -fvisibility=hidden $(CFLAGS)
+override CFLAGS := -std=c99 -Wall -Wextra -Wconversion -Iinclude -Icore -O2 -D_GNU_SOURCE -fPIC -fvisibility=hidden $(CFLAGS)
 LDFLAGS = -lpthread
 
 TLS ?= 0
@@ -83,8 +83,8 @@ BENCHMARK_SOURCES = $(wildcard benchmarks/*.c)
 BENCHMARK_BINS = $(patsubst benchmarks/%.c,$(BUILD_DIR)/%,$(BENCHMARK_SOURCES))
 
 # Sanitizer configs (O1 -g for meaningful stack traces)
-ASAN_CFLAGS = -std=c99 -Wall -Wextra -Wconversion -Iinclude -O1 -g -D_GNU_SOURCE -fPIC -fvisibility=hidden -fsanitize=address -fno-omit-frame-pointer -fno-optimize-sibling-calls
-UBSAN_CFLAGS = -std=c99 -Wall -Wextra -Wconversion -Iinclude -O1 -g -D_GNU_SOURCE -fPIC -fvisibility=hidden -fsanitize=undefined
+ASAN_CFLAGS = -std=c99 -Wall -Wextra -Wconversion -Iinclude -Icore -O1 -g -D_GNU_SOURCE -fPIC -fvisibility=hidden -fsanitize=address -fno-omit-frame-pointer -fno-optimize-sibling-calls
+UBSAN_CFLAGS = -std=c99 -Wall -Wextra -Wconversion -Iinclude -Icore -O1 -g -D_GNU_SOURCE -fPIC -fvisibility=hidden -fsanitize=undefined
 
 VERSION = 0.1.0
 SO_VERSION = 0
@@ -257,11 +257,11 @@ check-format:
 
 tidy:
 	@command -v clang-tidy >/dev/null || { echo "clang-tidy not found"; exit 1; }
-	clang-tidy $(CLOG_SRCS) -- -Iinclude -D_GNU_SOURCE
+	clang-tidy $(CLOG_SRCS) -- -Iinclude -Icore -D_GNU_SOURCE
 
 check-tidy:
 	@command -v clang-tidy >/dev/null || { echo "clang-tidy not found; check-tidy skipped"; exit 0; }
-	clang-tidy $(CLOG_SRCS) -- -Iinclude -D_GNU_SOURCE
+	clang-tidy $(CLOG_SRCS) -- -Iinclude -Icore -D_GNU_SOURCE
 
 install: $(LIB_TARGET) $(SO_TARGET)
 	install -d $(DESTDIR)$(LIBDIR)

@@ -13,6 +13,8 @@
 #include <stddef.h>
 #include "log_record.h"
 
+typedef struct logger_t logger_t;
+
 /* ------------------------------------------------------------------ */
 /*  Opcode compiler types                                             */
 /* ------------------------------------------------------------------ */
@@ -102,5 +104,11 @@ void log_formatter_reset(void);
  * @return Pointer to internal storage (do not free).
  */
 const char *log_formatter_get_format(void);
+
+/* ── Instance variants ── */
+
+int log_formatter_format_for(logger_t *logger, log_record_t *restrict record, char *restrict buf,
+                             size_t buf_size);
+int log_formatter_init_for(logger_t *logger, const char *format, const char *time_format);
 
 #endif /* LOG_FORMATTER_H */

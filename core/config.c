@@ -10,6 +10,7 @@
 #include <yaml.h>
 #include "log_config.h"
 #include "log_formatter.h"
+#include "log_internal.h"
 
 typedef enum {
     HANDLER_ASYNC,
@@ -549,50 +550,113 @@ static int load_default_and_apply(const char *yaml_path) {
     return 0;
 }
 
+/* ── Instance API ── */
+
+int log_config_load_into(logger_t *logger, const char *yaml_path) {
+    char local_format[CLOG_MAX_FORMAT_SIZE] = "";
+    char local_time_format[64] = "";
+
+    logger->config.level = LOG_LEVEL_INFO;
+    logger->config.async = false;
+    logger->config.queue_size = 8192;
+    logger->config.color = true;
+    logger->config.console_enable = 1;
+    logger->config.console_stderr = 0;
+    logger->config.file_enable = 0;
+    logger->config.file_path[0] = '\0';
+    logger->config.file_max_size = (uint64_t)100 * 1024 * 1024;
+    logger->config.file_backups = 10;
+    logger->config.socket_enable = 0;
+    logger->config.socket_host[0] = '\0';
+    logger->config.socket_port = 0;
+    logger->config.socket_tls = false;
+    logger->config.socket_tls_ca_file[0] = '\0';
+    logger->config.socket_tls_skip_verify = false;
+    logger->config.rate_limit_enable = false;
+    logger->config.rate_limit_max_per_sec = 0;
+    logger->config.rate_limit_burst = 0;
+    logger->config.catch_signals = true;
+
+    snprintf(local_format, sizeof(local_format), "%s", "[%time] [%level] %msg");
+    snprintf(local_time_format, sizeof(local_time_format), "%s", "%Y-%m-%d %H:%M:%S");
+    logger->config.format = local_format;
+    logger->config.time_format = local_time_format;
+
+    if (yaml_path && yaml_path != logger->config_path && strlen(yaml_path) > 0) {
+        snprintf(logger->config_path, sizeof(logger->config_path), "%s", yaml_path);
+    } else if (!yaml_path || yaml_path[0] == '\0') {
+        logger->config_path[0] = '\0';
+    }
+
+    if (logger->config_path[0] != '\0' && clog_access(logger->config_path, R_OK) == 0) {
+        int ret = parse_config_file(logger->config_path, &logger->config);
+        if (ret != 0)
+            return ret;
+    }
+
+    const char *final_fmt = logger->config.format ? logger->config.format : local_format;
+    const char *final_tf =
+        logger->config.time_format ? logger->config.time_format : local_time_format;
+    snprintf(logger->format_str, sizeof(logger->format_str), "%s", final_fmt);
+    snprintf(logger->time_format_str, sizeof(logger->time_format_str), "%s", final_tf);
+    logger->config.format = logger->format_str;
+    logger->config.time_format = logger->time_format_str;
+
+    return 0;
+}
+
+/* ── Singleton API ── */
+
 log_config_t *log_config_get(void) {
-    return &g_config;
+    return &g_default_logger.config;
 }
 
 static int apply_config(const log_config_t *cfg) {
-    g_config.level = cfg->level;
-    g_config.async = cfg->async;
-    g_config.queue_size = cfg->queue_size;
-    g_config.color = cfg->color;
-    g_config.console_enable = cfg->console_enable;
-    g_config.console_stderr = cfg->console_stderr;
-    g_config.file_enable = cfg->file_enable;
-    g_config.file_max_size = cfg->file_max_size;
-    g_config.file_backups = cfg->file_backups;
-    g_config.socket_enable = cfg->socket_enable;
-    snprintf(g_config.file_path, sizeof(g_config.file_path), "%s", cfg->file_path);
-    snprintf(g_config.socket_host, sizeof(g_config.socket_host), "%s", cfg->socket_host);
-    g_config.socket_port = cfg->socket_port;
-    g_config.socket_tls = cfg->socket_tls;
-    snprintf(g_config.socket_tls_ca_file, sizeof(g_config.socket_tls_ca_file), "%s",
-             cfg->socket_tls_ca_file);
-    g_config.socket_tls_skip_verify = cfg->socket_tls_skip_verify;
-    g_config.rate_limit_enable = cfg->rate_limit_enable;
-    g_config.rate_limit_max_per_sec = cfg->rate_limit_max_per_sec;
-    g_config.rate_limit_burst = cfg->rate_limit_burst;
-    g_config.catch_signals = cfg->catch_signals;
-    g_config.prometheus_enable = cfg->prometheus_enable;
-    g_config.prometheus_port = cfg->prometheus_port;
+    g_default_logger.config.level = cfg->level;
+    g_default_logger.config.async = cfg->async;
+    g_default_logger.config.queue_size = cfg->queue_size;
+    g_default_logger.config.color = cfg->color;
+    g_default_logger.config.console_enable = cfg->console_enable;
+    g_default_logger.config.console_stderr = cfg->console_stderr;
+    g_default_logger.config.file_enable = cfg->file_enable;
+    g_default_logger.config.file_max_size = cfg->file_max_size;
+    g_default_logger.config.file_backups = cfg->file_backups;
+    g_default_logger.config.socket_enable = cfg->socket_enable;
+    snprintf(g_default_logger.config.file_path, sizeof(g_default_logger.config.file_path), "%s",
+             cfg->file_path);
+    snprintf(g_default_logger.config.socket_host, sizeof(g_default_logger.config.socket_host), "%s",
+             cfg->socket_host);
+    g_default_logger.config.socket_port = cfg->socket_port;
+    g_default_logger.config.socket_tls = cfg->socket_tls;
+    snprintf(g_default_logger.config.socket_tls_ca_file,
+             sizeof(g_default_logger.config.socket_tls_ca_file), "%s", cfg->socket_tls_ca_file);
+    g_default_logger.config.socket_tls_skip_verify = cfg->socket_tls_skip_verify;
+    g_default_logger.config.rate_limit_enable = cfg->rate_limit_enable;
+    g_default_logger.config.rate_limit_max_per_sec = cfg->rate_limit_max_per_sec;
+    g_default_logger.config.rate_limit_burst = cfg->rate_limit_burst;
+    g_default_logger.config.catch_signals = cfg->catch_signals;
+    g_default_logger.config.prometheus_enable = cfg->prometheus_enable;
+    g_default_logger.config.prometheus_port = cfg->prometheus_port;
 
-    g_config.plugin_count = cfg->plugin_count;
+    g_default_logger.config.plugin_count = cfg->plugin_count;
     for (int i = 0; i < cfg->plugin_count && i < CLOG_MAX_PLUGINS; i++) {
-        snprintf(g_config.plugin_so_paths[i], sizeof(g_config.plugin_so_paths[0]), "%s",
+        snprintf(g_default_logger.config.plugin_so_paths[i],
+                 sizeof(g_default_logger.config.plugin_so_paths[0]), "%s",
                  cfg->plugin_so_paths[i]);
-        snprintf(g_config.plugin_params_json[i], sizeof(g_config.plugin_params_json[0]), "%s",
+        snprintf(g_default_logger.config.plugin_params_json[i],
+                 sizeof(g_default_logger.config.plugin_params_json[0]), "%s",
                  cfg->plugin_params_json[i]);
     }
 
     if (cfg->format) {
-        snprintf(g_config_format, sizeof(g_config_format), "%s", cfg->format);
-        g_config.format = g_config_format;
+        snprintf(g_default_logger.format_str, sizeof(g_default_logger.format_str), "%s",
+                 cfg->format);
+        g_default_logger.config.format = g_default_logger.format_str;
     }
     if (cfg->time_format) {
-        snprintf(g_config_time_format, sizeof(g_config_time_format), "%s", cfg->time_format);
-        g_config.time_format = g_config_time_format;
+        snprintf(g_default_logger.time_format_str, sizeof(g_default_logger.time_format_str), "%s",
+                 cfg->time_format);
+        g_default_logger.config.time_format = g_default_logger.time_format_str;
     }
 
     return 0;
@@ -601,52 +665,46 @@ static int apply_config(const log_config_t *cfg) {
 int log_config_set(const log_config_t *cfg) {
     if (!cfg)
         return -1;
-    clog_rwlock_wrlock(&g_config_rwlock);
+    clog_rwlock_wrlock(&g_default_logger.config_rwlock);
     int ret = apply_config(cfg);
-    clog_rwlock_wrunlock(&g_config_rwlock);
+    clog_rwlock_wrunlock(&g_default_logger.config_rwlock);
     return ret;
 }
 
 int log_config_init(const char *yaml_path) {
     if (!yaml_path)
         yaml_path = "";
-    clog_rwlock_wrlock(&g_config_rwlock);
-    int ret = load_default_and_apply(yaml_path);
-    clog_rwlock_wrunlock(&g_config_rwlock);
-    return ret;
+    return log_config_load_into(&g_default_logger, yaml_path);
 }
 
 int log_config_reload(void) {
-    clog_rwlock_wrlock(&g_config_rwlock);
-    int ret = load_default_and_apply(g_config_path);
-    clog_rwlock_wrunlock(&g_config_rwlock);
-    return ret;
+    return log_config_load_into(&g_default_logger, g_default_logger.config_path);
 }
 
 int log_set_level(log_level_t level) {
-    clog_rwlock_wrlock(&g_config_rwlock);
-    g_config.level = level;
-    clog_rwlock_wrunlock(&g_config_rwlock);
+    clog_rwlock_wrlock(&g_default_logger.config_rwlock);
+    g_default_logger.config.level = level;
+    clog_rwlock_wrunlock(&g_default_logger.config_rwlock);
     return 0;
 }
 
 log_level_t log_get_level(void) {
-    clog_rwlock_rdlock(&g_config_rwlock);
-    log_level_t lvl = g_config.level;
-    clog_rwlock_rdunlock(&g_config_rwlock);
+    clog_rwlock_rdlock(&g_default_logger.config_rwlock);
+    log_level_t lvl = g_default_logger.config.level;
+    clog_rwlock_rdunlock(&g_default_logger.config_rwlock);
     return lvl;
 }
 
 bool log_config_is_async(void) {
-    clog_rwlock_rdlock(&g_config_rwlock);
-    bool async = g_config.async;
-    clog_rwlock_rdunlock(&g_config_rwlock);
+    clog_rwlock_rdlock(&g_default_logger.config_rwlock);
+    bool async = g_default_logger.config.async;
+    clog_rwlock_rdunlock(&g_default_logger.config_rwlock);
     return async;
 }
 
 bool log_config_color_enabled(void) {
-    clog_rwlock_rdlock(&g_config_rwlock);
-    bool color = g_config.color;
-    clog_rwlock_rdunlock(&g_config_rwlock);
+    clog_rwlock_rdlock(&g_default_logger.config_rwlock);
+    bool color = g_default_logger.config.color;
+    clog_rwlock_rdunlock(&g_default_logger.config_rwlock);
     return color;
 }

@@ -18,14 +18,11 @@
 #include "log_async.h"
 #include "log_record.h"
 #include "plugin_loader.h"
+#include "log_internal.h"
+
+logger_t g_default_logger = {0};
 
 static clog_mutex_t g_init_mutex = CLOG_MUTEX_INITIALIZER;
-static int g_initialized = 0;
-static void (*g_async_fallback_cb)(void);
-static clog_mutex_t g_module_mutex = CLOG_MUTEX_INITIALIZER;
-static char g_module[64] = "main";
-static volatile uint64_t g_total_logged_count = 0;
-static volatile uint64_t g_dropped_queue_full_count = 0;
 volatile uint64_t g_prometheus_level_counts[6] = {0};
 
 static clog_thread_local uint8_t g_thread_trace_id[16];
@@ -66,29 +63,33 @@ const char *log_strerror(int err) {
 }
 
 void log_set_async_fallback_cb(void (*cb)(void)) {
-    g_async_fallback_cb = cb;
+    g_default_logger.async_fallback_cb = cb;
 }
 
 void (*log_get_async_fallback_cb(void))(void) {
-    return g_async_fallback_cb;
+    return g_default_logger.async_fallback_cb;
+}
+
+static void logger_set_module_internal(logger_t *logger, const char *module) {
+    clog_mutex_lock(&logger->module_mutex);
+    if (!module || !*module) {
+        snprintf(logger->module, sizeof(logger->module), "%s", "main");
+    } else {
+        snprintf(logger->module, sizeof(logger->module), "%s", module);
+    }
+    clog_mutex_unlock(&logger->module_mutex);
 }
 
 void log_set_module(const char *module) {
-    clog_mutex_lock(&g_module_mutex);
-    if (!module || !*module) {
-        snprintf(g_module, sizeof(g_module), "%s", "main");
-    } else {
-        snprintf(g_module, sizeof(g_module), "%s", module);
-    }
-    clog_mutex_unlock(&g_module_mutex);
+    logger_set_module_internal(&g_default_logger, module);
 }
 
 void log_get_module(char *buf, size_t n) {
     if (!buf || n == 0)
         return;
-    clog_mutex_lock(&g_module_mutex);
-    snprintf(buf, n, "%s", g_module);
-    clog_mutex_unlock(&g_module_mutex);
+    clog_mutex_lock(&g_default_logger.module_mutex);
+    snprintf(buf, n, "%s", g_default_logger.module);
+    clog_mutex_unlock(&g_default_logger.module_mutex);
 }
 
 int log_add_sink(log_sink_t *sink) {
@@ -96,11 +97,11 @@ int log_add_sink(log_sink_t *sink) {
         return CLOG_ERR_INVALID_ARG;
 
     clog_mutex_lock(&g_init_mutex);
-    if (!g_initialized) {
+    if (!g_default_logger.initialized) {
         clog_mutex_unlock(&g_init_mutex);
         return CLOG_ERR_RELOAD;
     }
-    int ret = log_dispatcher_add_sink(sink);
+    int ret = log_dispatcher_add_sink_for(&g_default_logger, sink);
     clog_mutex_unlock(&g_init_mutex);
     return ret == 0 ? CLOG_OK : CLOG_ERR_OOM;
 }
@@ -108,7 +109,7 @@ int log_add_sink(log_sink_t *sink) {
 int log_remove_sink(log_sink_t *sink) {
     if (!sink)
         return CLOG_ERR_INVALID_ARG;
-    if (log_dispatcher_remove_sink(sink) != 0)
+    if (log_dispatcher_remove_sink_for(&g_default_logger, sink) != 0)
         return CLOG_ERR_INVALID_ARG;
     return CLOG_OK;
 }
@@ -140,17 +141,41 @@ static inline uint32_t get_thread_id(void) {
 #endif
 }
 
+static int logger_init_internal(logger_t *logger, const char *yaml_path) {
+    clog_rwlock_init(&logger->config_rwlock);
+
+    if (log_config_load_into(logger, yaml_path) != 0)
+        return CLOG_ERR_CONFIG_OPEN;
+
+    log_rate_limit_init_for(logger, logger->config.rate_limit_enable,
+                            logger->config.rate_limit_max_per_sec, logger->config.rate_limit_burst);
+
+    if (log_dispatcher_init_for(logger) != 0)
+        return CLOG_ERR_NO_SINKS;
+
+    if (logger->config.async) {
+        if (log_async_init_for(logger, logger->config.queue_size) != 0) {
+            log_dispatcher_destroy_for(logger);
+            return CLOG_ERR_THREAD_CREATE;
+        }
+    }
+
+    logger_set_module_internal(logger, "main");
+    logger->initialized = true;
+    return CLOG_OK;
+}
+
 void log_writevprintf(log_level_t level, const char *file, int line, const char *func,
                       const char *fmt, ...) {
     if (log_get_pending_signal() != 0) {
         log_process_pending_signals();
     }
 
-    if (level < log_get_level()) {
+    if (level < g_default_logger.config.level) {
         return;
     }
 
-    g_total_logged_count++;
+    g_default_logger.total_logged++;
     if ((int)level >= 0 && (int)level < 6) {
         g_prometheus_level_counts[(int)level]++;
     }
@@ -166,7 +191,6 @@ void log_writevprintf(log_level_t level, const char *file, int line, const char 
     if (ret < 0) {
         message[0] = '\0';
     } else if (ret >= (int)sizeof(message)) {
-        /* Mark truncated messages so callers can detect overflow. */
         if (sizeof(message) >= 4) {
             memcpy(message + sizeof(message) - 4, "...", 4);
         } else {
@@ -175,12 +199,10 @@ void log_writevprintf(log_level_t level, const char *file, int line, const char 
     }
 
     char module_buf[64];
-    log_get_module(module_buf, sizeof(module_buf));
+    clog_mutex_lock(&g_default_logger.module_mutex);
+    snprintf(module_buf, sizeof(module_buf), "%s", g_default_logger.module);
+    clog_mutex_unlock(&g_default_logger.module_mutex);
 
-    /*
-     * record.message / file / func / module point at caller stack or static storage.
-     * Async mode must deep-copy before the caller returns (see log_async_write).
-     */
     log_record_t record;
     record.level = level;
     record.timestamp = get_timestamp();
@@ -201,7 +223,7 @@ void log_writevprintf(log_level_t level, const char *file, int line, const char 
     }
 
     uint64_t suppressed = 0;
-    if (!log_rate_limit_allow(&suppressed)) {
+    if (!log_rate_limit_allow_for(&g_default_logger, &suppressed)) {
         return;
     }
 
@@ -213,37 +235,37 @@ void log_writevprintf(log_level_t level, const char *file, int line, const char 
         log_record_t supp_rec = record;
         supp_rec.level = LOG_LEVEL_WARN;
         supp_rec.message = supp_msg;
-        if (log_config_is_async()) {
-            if (log_async_write(&supp_rec) != 0) {
-                void (*cb)(void) = log_get_async_fallback_cb();
+        if (g_default_logger.config.async) {
+            if (log_async_write_for(&g_default_logger, &supp_rec) != 0) {
+                void (*cb)(void) = g_default_logger.async_fallback_cb;
                 if (cb)
                     cb();
             }
         } else {
-            log_dispatcher_dispatch(&supp_rec);
+            log_dispatcher_dispatch_for(&g_default_logger, &supp_rec);
         }
     }
 
-    if (log_config_is_async()) {
-        int ar = log_async_write(&record);
+    if (g_default_logger.config.async) {
+        int ar = log_async_write_for(&g_default_logger, &record);
         if (ar != 0) {
-            g_dropped_queue_full_count++;
-            void (*cb)(void) = log_get_async_fallback_cb();
+            g_default_logger.dropped_queue_full++;
+            void (*cb)(void) = g_default_logger.async_fallback_cb;
             if (cb)
                 cb();
         }
     } else {
-        log_dispatcher_dispatch(&record);
+        log_dispatcher_dispatch_for(&g_default_logger, &record);
     }
 }
 
 void log_get_stats(log_stats_t *stats) {
     if (!stats)
         return;
-    stats->total_logged_count = g_total_logged_count;
-    stats->dropped_queue_full_count = g_dropped_queue_full_count;
-    stats->suppressed_rate_count = log_rate_limit_get_total_suppressed();
-    stats->current_queue_depth = log_async_get_queue_depth();
+    stats->total_logged_count = g_default_logger.total_logged;
+    stats->dropped_queue_full_count = g_default_logger.dropped_queue_full;
+    stats->suppressed_rate_count = log_rate_limit_get_total_suppressed_for(&g_default_logger);
+    stats->current_queue_depth = log_async_get_queue_depth_for(&g_default_logger);
 }
 
 #define MAX_THREAD_CONTEXT_PAIRS 16
@@ -386,21 +408,21 @@ static pthread_once_t g_atfork_once = PTHREAD_ONCE_INIT;
 
 static void log_atfork_prepare(void) {
     clog_mutex_lock(&g_init_mutex);
-    clog_mutex_lock(&g_module_mutex);
-    log_dispatcher_atfork_prepare();
+    clog_mutex_lock(&g_default_logger.module_mutex);
+    log_dispatcher_atfork_prepare_for(&g_default_logger);
 }
 
 static void log_atfork_parent(void) {
-    log_dispatcher_atfork_parent();
-    clog_mutex_unlock(&g_module_mutex);
+    log_dispatcher_atfork_parent_for(&g_default_logger);
+    clog_mutex_unlock(&g_default_logger.module_mutex);
     clog_mutex_unlock(&g_init_mutex);
 }
 
 static void log_atfork_child(void) {
-    log_dispatcher_atfork_child();
-    clog_mutex_unlock(&g_module_mutex);
+    log_dispatcher_atfork_child_for(&g_default_logger);
+    clog_mutex_unlock(&g_default_logger.module_mutex);
     clog_mutex_unlock(&g_init_mutex);
-    log_async_atfork_child();
+    log_async_atfork_child_for(&g_default_logger);
 }
 
 static void register_atfork(void) {
@@ -414,115 +436,85 @@ int log_init(const char *yaml_path) {
 #endif
 
     clog_mutex_lock(&g_init_mutex);
-    if (g_initialized) {
+    if (g_default_logger.initialized) {
         clog_mutex_unlock(&g_init_mutex);
         return CLOG_ERR_INIT_REENTRANT;
     }
 
-    if (!yaml_path)
-        yaml_path = "";
-
-    if (log_config_init(yaml_path) != 0) {
+    int ret = logger_init_internal(&g_default_logger, yaml_path);
+    if (ret != CLOG_OK) {
         clog_mutex_unlock(&g_init_mutex);
-        return CLOG_ERR_CONFIG_OPEN;
+        return ret;
     }
 
-    log_config_t *cfg = log_config_get();
-    log_formatter_init(cfg->format, cfg->time_format);
-    log_rate_limit_init(cfg->rate_limit_enable, cfg->rate_limit_max_per_sec, cfg->rate_limit_burst);
-
-    if (log_dispatcher_init() != 0) {
-        clog_mutex_unlock(&g_init_mutex);
-        return CLOG_ERR_NO_SINKS;
-    }
-
-    if (cfg->async) {
-        if (log_async_init(cfg->queue_size) != 0) {
-            // Async init failed after dispatcher was set up — clean up dispatcher to avoid leak
-            // Must unlock BEFORE calling any cleanup to prevent deadlock (log_destroy could
-            // reacquire mutex)
-            clog_mutex_unlock(&g_init_mutex);
-            log_dispatcher_destroy(); // Direct cleanup: destroys sinks, frees g_dispatcher.sinks
-            return CLOG_ERR_THREAD_CREATE;
-        }
-    }
-
-    if (cfg->catch_signals) {
+    if (g_default_logger.config.catch_signals) {
         log_install_signal_handlers();
     }
 
-    if (cfg->prometheus_enable) {
-        clog_prometheus_exporter_start(cfg->prometheus_port);
+    if (g_default_logger.config.prometheus_enable) {
+        clog_prometheus_exporter_start(g_default_logger.config.prometheus_port);
     }
-
-    g_initialized = 1;
     clog_mutex_unlock(&g_init_mutex);
     return CLOG_OK;
 }
 
 void log_destroy(void) {
-    /* Save state before releasing lock to avoid re-entrant calls during cleanup. */
-    int was_initialized = 0;
+    bool was_initialized = false;
 
     clog_mutex_lock(&g_init_mutex);
-    if (g_initialized) {
-        g_initialized = 0;
-        was_initialized = 1;
+    if (g_default_logger.initialized) {
+        g_default_logger.initialized = false;
+        was_initialized = true;
     }
     clog_mutex_unlock(&g_init_mutex);
 
-    /* Clean up only if we were previously initialized. Do this outside the lock
-     * to avoid potential deadlocks if any of these functions indirectly try to
-     * acquire g_init_mutex or other locks held during a concurrent init call. */
     if (was_initialized) {
         clog_prometheus_exporter_stop();
         log_restore_signal_handlers();
-        log_rate_limit_reset();
-        log_async_shutdown();
-        log_dispatcher_destroy();
+        log_async_shutdown_for(&g_default_logger);
+        log_dispatcher_destroy_for(&g_default_logger);
+        log_rate_limit_reset_for(&g_default_logger);
         log_plugin_shutdown_all();
     }
 }
 
 void log_flush(void) {
-    if (log_config_is_async()) {
-        log_async_flush();
+    if (g_default_logger.config.async) {
+        log_async_flush_for(&g_default_logger);
     } else {
-        log_dispatcher_flush();
+        log_dispatcher_flush_for(&g_default_logger);
     }
 }
 
 int log_reload(void) {
     clog_mutex_lock(&g_init_mutex);
-    if (!g_initialized) {
+    if (!g_default_logger.initialized) {
         clog_mutex_unlock(&g_init_mutex);
         return CLOG_ERR_RELOAD;
     }
     clog_mutex_unlock(&g_init_mutex);
 
-    int ret = log_config_reload();
-    if (ret != 0) {
+    int ret = log_config_load_into(&g_default_logger, g_default_logger.config_path);
+    if (ret != 0)
         return CLOG_ERR_CONFIG_OPEN;
-    }
 
-    log_config_t *cfg = log_config_get();
-    log_formatter_init(cfg->format, cfg->time_format);
-    log_rate_limit_init(cfg->rate_limit_enable, cfg->rate_limit_max_per_sec, cfg->rate_limit_burst);
+    log_rate_limit_init_for(&g_default_logger, g_default_logger.config.rate_limit_enable,
+                            g_default_logger.config.rate_limit_max_per_sec,
+                            g_default_logger.config.rate_limit_burst);
 
     log_dispatcher_snapshot_t snap = {0};
-    ret = log_dispatcher_build_snapshot(cfg, &snap);
+    ret = log_dispatcher_build_snapshot_for(&g_default_logger, &g_default_logger.config, &snap);
     if (ret != 0) {
         return CLOG_ERR_NO_SINKS;
     }
 
-    log_async_shutdown();
-    log_dispatcher_commit_snapshot(&snap);
+    log_async_shutdown_for(&g_default_logger);
+    log_dispatcher_commit_snapshot_for(&g_default_logger, &snap);
     log_dispatcher_destroy_snapshot(&snap);
 
-    if (cfg->async) {
-        if (log_async_init(cfg->queue_size) != 0) {
+    if (g_default_logger.config.async) {
+        if (log_async_init_for(&g_default_logger, g_default_logger.config.queue_size) != 0)
             return CLOG_ERR_THREAD_CREATE;
-        }
     }
 
     return CLOG_OK;

@@ -17,6 +17,31 @@ The library currently uses a singleton global pattern — all subsystem state li
 | `logger_t*` ownership | Heap-allocated by `logger_create()`, caller frees via `logger_destroy()` | Simple, explicit. `logger_destroy(NULL)` is a no-op. |
 | Internal refactoring strategy | Add `*_for(logger_t *)` variants, wrap old API | Progressive — each commit compilable and test-passing. |
 
+## Implementation Notes
+
+### `g_default_logger` cross-module access
+
+`g_default_logger` is `static` in `log.c`. The old `log_*` wrapper functions that currently live in other modules (e.g. `log_add_sink()` in dispatcher.c) need access to it. Two options:
+
+- **A (recommended)**: Move all `log_*` wrapper functions to `log.c`. Each simply calls the `*_for(logger_t *)` variant with `&g_default_logger`.
+- **B**: Expose `logger_t *log_get_default_logger(void)` as an internal non-static accessor.
+
+Approach A is cleaner — it keeps the default instance reference centralized and avoids exposing `g_default_logger` beyond `log.c`.
+
+### `logger_create(NULL)` behavior
+
+When `yaml_path` is NULL, `logger_create(NULL)` creates an instance with default configuration (equivalent to `log_config_default()`).
+
+### Error handling
+
+`logger_create()` returns `NULL` on failure. Error details follow the existing convention: the library may stderr-log the reason before returning. The internal `clogx_errno_t` global is sufficient for the initial implementation — per-instance error state is a future concern.
+
+### Thread safety
+
+- `logger_create()` / `logger_create_from_config()` are thread-safe (the instance isn't visible to other threads yet).
+- `logger_destroy()` must not be called while any thread is writing to that instance. Caller's responsibility.
+- After `logger_destroy()`, all resources (sinks, async queue/thread, mutexes) are freed.
+
 ## Type Definition
 
 ```c
@@ -121,7 +146,7 @@ Each internal module adds a `*_for(logger_t *)` variant. The old global-state fu
 | Module | New Entry Point | Old Wrapper |
 |--------|----------------|-------------|
 | dispatcher | `log_dispatcher_dispatch_for(logger_t *, record)` | `log_dispatcher_dispatch(record)` |
-| async | `log_async_write_for(logger_t *, record)` | `log_async_write(record)` |
+| async | `log_async_write_for(logger_t *, record)` | `log_async_write(record)` — current signature is `log_async_write(record, sinks, sink_count)` which maps to `logger->queue`, `logger->sinks`, `logger->sink_count` |
 | formatter | `log_formatter_format_for(logger_t *, record, buf, size)` | `log_formatter_format(record, buf, size)` |
 | rate_limit | `log_rate_limit_allow_for(logger_t *)` | `log_rate_limit_allow()` |
 

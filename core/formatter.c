@@ -16,6 +16,7 @@
 #include "log_formatter.h"
 #include "log_limits.h"
 #include "log_record.h"
+#include "log_internal.h"
 
 /* ------------------------------------------------------------------ */
 /*  Global state                                                      */
@@ -155,14 +156,17 @@ static int is_zero_id(const uint8_t *id, int len) {
     return 1;
 }
 
-static int format_json(log_record_t *restrict record, char *restrict buf, size_t buf_size) {
+static int format_json_ex(log_record_t *restrict record, char *restrict buf, size_t buf_size,
+                          const char *time_format) {
     struct tm tm_buf;
     time_t sec = (time_t)(record->timestamp / 1000000);
     uint32_t usec = (uint32_t)(record->timestamp % 1000000);
     clog_localtime_r(&sec, &tm_buf);
 
     char time_buf[64];
-    strftime(time_buf, sizeof(time_buf), g_time_format_buf, &tm_buf);
+    if (!time_format)
+        time_format = "%Y-%m-%d %H:%M:%S";
+    strftime(time_buf, sizeof(time_buf), time_format, &tm_buf);
 
     char *out = buf;
     size_t remaining = buf_size;
@@ -518,25 +522,20 @@ static int fmt_compile(const char *fmt_str, fmt_op_t *ops, int max_ops) {
     return n;
 }
 
-/* ------------------------------------------------------------------ */
-/*  log_formatter_format — hot path                                   */
-/* ------------------------------------------------------------------ */
-
-int log_formatter_format(log_record_t *restrict record, char *restrict buf, size_t buf_size) {
-    int is_json;
-    int op_count;
-    const char *tf;
-
-    clog_mutex_lock(&g_format_mutex);
-    is_json = g_fmt_is_json;
-    op_count = g_fmt_op_count;
-    tf = g_time_format_buf;
-    clog_mutex_unlock(&g_format_mutex);
-
-    if (is_json == 1)
-        return format_json(record, buf, buf_size);
-    if (is_json == 2)
+/** Internal: format a record with given format and time_format strings (no copy). */
+static int format_impl(log_record_t *restrict record, char *restrict buf, size_t buf_size,
+                       const char *fmt, const char *time_format) {
+    if (strcmp(fmt, "json") == 0 || strcmp(fmt, "JSON") == 0) {
+        return format_json_ex(record, buf, buf_size, time_format);
+    }
+    if (strcmp(fmt, "otlp") == 0 || strcmp(fmt, "OTLP") == 0 ||
+        strcmp(fmt, "otel") == 0 || strcmp(fmt, "OTEL") == 0) {
         return format_otel_json(record, buf, buf_size);
+    }
+
+    fmt_op_t ops[FMT_MAX_OPS];
+    int op_count = fmt_compile(fmt, ops, FMT_MAX_OPS);
+    const char *tf = (time_format && time_format[0]) ? time_format : "%Y-%m-%d %H:%M:%S";
 
     char *out = buf;
     size_t remaining = buf_size;
@@ -545,11 +544,10 @@ int log_formatter_format(log_record_t *restrict record, char *restrict buf, size
     int tm_initialized = 0;
 
     for (int i = 0; i < op_count; i++) {
-        switch (g_format_ops[i].op) {
+        switch (ops[i].op) {
 
         case FMT_OP_LITERAL:
-            total += append_token(&out, &remaining, g_format_ops[i].literal,
-                                  g_format_ops[i].literal_len);
+            total += append_token(&out, &remaining, ops[i].literal, ops[i].literal_len);
             break;
 
         case FMT_OP_TIME: {
@@ -663,54 +661,48 @@ int log_formatter_format_otlp(log_record_t *restrict record, char *restrict buf,
     return format_otel_json(record, buf, buf_size);
 }
 
-/* ------------------------------------------------------------------ */
-/*  Init / reset                                                      */
-/* ------------------------------------------------------------------ */
+/* ── Singleton wrappers ── */
+
+int log_formatter_format(log_record_t *restrict record, char *restrict buf, size_t buf_size) {
+    return log_formatter_format_for(&g_default_logger, record, buf, buf_size);
+}
 
 int log_formatter_init(const char *format, const char *time_format) {
-    clog_mutex_lock(&g_format_mutex);
-
-    if (format && format[0]) {
-        snprintf(g_format_buf, sizeof(g_format_buf), "%s", format);
-        g_format_ptr = g_format_buf;
-    } else {
-        g_format_ptr = g_default_format;
-    }
-
-    if (time_format && time_format[0]) {
-        snprintf(g_time_format_buf, sizeof(g_time_format_buf), "%s", time_format);
-    } else {
-        snprintf(g_time_format_buf, sizeof(g_time_format_buf), "%s", "%Y-%m-%d %H:%M:%S");
-    }
-
-    if (strcmp(g_format_ptr, "json") == 0 || strcmp(g_format_ptr, "JSON") == 0) {
-        g_fmt_is_json = 1;
-    } else if (strcmp(g_format_ptr, "otlp") == 0 || strcmp(g_format_ptr, "OTLP") == 0 ||
-               strcmp(g_format_ptr, "otel") == 0 || strcmp(g_format_ptr, "OTEL") == 0) {
-        g_fmt_is_json = 2; /* 2 = OTLP JSON mode */
-    } else {
-        g_fmt_is_json = 0;
-    }
-
-    if (!g_fmt_is_json)
-        g_fmt_op_count = fmt_compile(g_format_ptr, g_format_ops, FMT_MAX_OPS);
-
-    clog_mutex_unlock(&g_format_mutex);
-    return 0;
+    return log_formatter_init_for(&g_default_logger, format, time_format);
 }
 
 void log_formatter_reset(void) {
-    clog_mutex_lock(&g_format_mutex);
-    g_format_ptr = g_default_format;
-    g_fmt_is_json = 0;
-    g_fmt_op_count = fmt_compile(g_default_format, g_format_ops, FMT_MAX_OPS);
-    clog_mutex_unlock(&g_format_mutex);
+    log_formatter_init_for(&g_default_logger, NULL, NULL);
 }
 
 const char *log_formatter_get_format(void) {
-    const char *fmt;
-    clog_mutex_lock(&g_format_mutex);
-    fmt = g_format_ptr;
-    clog_mutex_unlock(&g_format_mutex);
-    return fmt;
+    return g_default_logger.format_str[0] ? g_default_logger.format_str : g_default_format;
+}
+
+/* ── Instance variants ── */
+
+int log_formatter_format_for(logger_t *logger, log_record_t *restrict record, char *restrict buf,
+                             size_t buf_size) {
+    if (!logger || !record || !buf || buf_size == 0)
+        return -1;
+    const char *fmt = logger->format_str[0] ? logger->format_str : g_default_format;
+    const char *tf = logger->time_format_str[0] ? logger->time_format_str : "%Y-%m-%d %H:%M:%S";
+    return format_impl(record, buf, buf_size, fmt, tf);
+}
+
+int log_formatter_init_for(logger_t *logger, const char *format, const char *time_format) {
+    clog_mutex_lock(&logger->fmt_mutex);
+    if (format && strlen(format) > 0) {
+        snprintf(logger->format_str, sizeof(logger->format_str), "%s", format);
+    } else {
+        snprintf(logger->format_str, sizeof(logger->format_str), "%s", g_default_format);
+    }
+    if (time_format && strlen(time_format) > 0) {
+        snprintf(logger->time_format_str, sizeof(logger->time_format_str), "%s", time_format);
+    } else {
+        snprintf(logger->time_format_str, sizeof(logger->time_format_str), "%s",
+                 "%Y-%m-%d %H:%M:%S");
+    }
+    clog_mutex_unlock(&logger->fmt_mutex);
+    return 0;
 }

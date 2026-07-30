@@ -13,6 +13,9 @@
 #include "log_sink.h"
 #include "log_config.h"
 
+/* Opaque logger_t forward declaration for _for variants. */
+typedef struct logger_t logger_t;
+
 /**
  * @brief Dispatcher snapshot used for atomic reload.
  */
@@ -92,5 +95,22 @@ void log_dispatcher_commit_snapshot(log_dispatcher_snapshot_t *restrict snap);
 void log_dispatcher_atfork_prepare(void);
 void log_dispatcher_atfork_parent(void);
 void log_dispatcher_atfork_child(void);
+
+/* ── Instance variants ── */
+
+int log_dispatcher_dispatch_for(logger_t *logger, log_record_t *restrict record);
+int log_dispatcher_add_sink_for(logger_t *logger, log_sink_t *restrict sink);
+int log_dispatcher_remove_sink_for(logger_t *logger, log_sink_t *restrict sink);
+void log_dispatcher_destroy_for(logger_t *logger);
+void log_dispatcher_flush_for(logger_t *logger);
+int log_dispatcher_init_for(logger_t *logger);
+int log_dispatcher_build_snapshot_for(logger_t *logger, log_config_t *restrict cfg,
+                                      log_dispatcher_snapshot_t *restrict snap);
+void log_dispatcher_commit_snapshot_for(logger_t *logger, log_dispatcher_snapshot_t *restrict snap);
+void log_dispatcher_destroy_snapshot_for(logger_t *logger,
+                                         log_dispatcher_snapshot_t *restrict snap);
+void log_dispatcher_atfork_prepare_for(logger_t *logger);
+void log_dispatcher_atfork_parent_for(logger_t *logger);
+void log_dispatcher_atfork_child_for(logger_t *logger);
 
 #endif /* DISPATCHER_H */

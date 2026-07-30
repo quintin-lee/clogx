@@ -72,6 +72,20 @@ typedef struct {
     int plugin_count;
 } log_config_t;
 
+typedef struct logger_t logger_t;
+
+/**
+ * @brief Load configuration into a specific logger instance.
+ *
+ * Sets defaults on @p logger->config, then optionally parses a YAML file.
+ * Format strings are copied into logger-owned storage.
+ *
+ * @param[out] logger  Target logger instance.
+ * @param[in]  yaml_path  Config file path (NULL or "" defaults to ./config.yaml).
+ * @return 0 on success, -1 on parse error.
+ */
+CLOGX_API int log_config_load_into(logger_t *logger, const char *yaml_path);
+
 /**
  * @brief Access the process-wide configuration object.
  *

@@ -37,4 +37,12 @@ void log_rate_limit_reset(void);
  */
 uint64_t log_rate_limit_get_total_suppressed(void);
 
+/* ── Instance variants ── */
+typedef struct logger_t logger_t;
+
+void log_rate_limit_init_for(logger_t *logger, bool enable, int max_per_sec, int burst);
+bool log_rate_limit_allow_for(logger_t *logger, uint64_t *out_suppressed_count);
+void log_rate_limit_reset_for(logger_t *logger);
+uint64_t log_rate_limit_get_total_suppressed_for(logger_t *logger);
+
 #endif /* LOG_RATE_LIMIT_H */
