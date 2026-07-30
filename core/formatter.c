@@ -23,15 +23,9 @@
 /* ------------------------------------------------------------------ */
 
 static char g_default_format[CLOG_MAX_FORMAT_SIZE] = "%msg";
-static char g_format_buf[CLOG_MAX_FORMAT_SIZE];
-static char *g_format_ptr = g_default_format;
 static char g_time_format_buf[64] = "%Y-%m-%d %H:%M:%S";
-static clog_mutex_t g_format_mutex = CLOG_MUTEX_INITIALIZER;
 
 /* Compiled opcode program (populated at init time). */
-static fmt_op_t g_format_ops[FMT_MAX_OPS];
-static int g_fmt_op_count = 1; /* default: one OP_LITERAL("%msg") */
-static int g_fmt_is_json = 0;  /* JSON fast-path flag */
 
 #define TIME_BUF_SIZE 64
 
