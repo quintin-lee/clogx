@@ -77,6 +77,19 @@ static void test_trace_context_hex_empty(void) {
     printf("test_trace_context_hex_empty passed\n");
 }
 
+static void test_trace_context_hex_short(void) {
+    clog_clear_trace_context();
+
+    int ret = clog_set_trace_context_hex("short", "00f067aa0ba902b7");
+    assert(ret == CLOG_ERR_INVALID_ARG);
+
+    ret = clog_set_trace_context_hex("4bf92f3577b34da6a3ce929d0e0e4736", "short");
+    assert(ret == CLOG_ERR_INVALID_ARG);
+
+    clog_clear_trace_context();
+    printf("test_trace_context_hex_short passed\n");
+}
+
 static void test_pattern_trace_tokens(void) {
     clog_set_trace_context_hex("4bf92f3577b34da6a3ce929d0e0e4736", "00f067aa0ba902b7");
 
@@ -425,6 +438,7 @@ int main(void) {
     test_trace_context_hex();
     test_trace_context_hex_uppercase();
     test_trace_context_hex_empty();
+    test_trace_context_hex_short();
     test_pattern_trace_tokens();
     test_otlp_formatter();
     test_traceparent_env();
