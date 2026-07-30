@@ -212,6 +212,7 @@ log_sink_t *socket_sink_create_tls(const char *host, int port, bool use_tls, con
                                    bool skip_verify) {
     if (!host || strlen(host) == 0 || port <= 0 || port > 65535)
         return NULL;
+    /* LCOV_EXCL_START - System allocation failure */
     log_sink_t *sink = malloc(sizeof(log_sink_t));
     if (!sink)
         return NULL;
@@ -226,6 +227,7 @@ log_sink_t *socket_sink_create_tls(const char *host, int port, bool use_tls, con
         free(sink);
         return NULL;
     }
+    /* LCOV_EXCL_STOP */
     data->port = port;
     data->sockfd = CLOG_INVALID_SOCKET;
     data->connected = 0;

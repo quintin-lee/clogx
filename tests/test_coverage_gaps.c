@@ -625,6 +625,38 @@ static void test_sink_null_paths(void) {
     printf("test_sink_null_paths PASSED\n");
 }
 
+static void test_socket_sink_broken_pipe(void) {
+#ifndef _WIN32
+    void (*old_sigpipe)(int) = signal(SIGPIPE, SIG_IGN);
+    int fds[2];
+    if (socketpair(AF_UNIX, SOCK_STREAM, 0, fds) == 0) {
+        log_sink_t *sink = socket_sink_create("127.0.0.1", 12345);
+        if (sink && sink->private_data) {
+            struct {
+                clog_socket_t sockfd;
+                int connected;
+            } *data = sink->private_data;
+            if (!clog_is_invalid_socket(data->sockfd)) {
+                clog_close_socket(data->sockfd);
+            }
+            data->sockfd = fds[0];
+            data->connected = 1;
+
+            close(fds[1]);
+
+            sink->write(sink, "broken pipe test\n", 17);
+            sink->destroy(sink);
+        } else if (sink) {
+            sink->destroy(sink);
+        }
+    }
+    if (old_sigpipe != SIG_ERR) {
+        signal(SIGPIPE, old_sigpipe);
+    }
+#endif
+    printf("test_socket_sink_broken_pipe PASSED\n");
+}
+
 int main(void) {
     printf("=== coverage-gap tests ===\n");
 
@@ -651,6 +683,7 @@ int main(void) {
     test_file_sink_null_paths();
     test_async_edge_cases();
     test_sink_null_paths();
+    test_socket_sink_broken_pipe();
 
     printf("=== all coverage-gap tests PASSED ===\n");
     return 0;
