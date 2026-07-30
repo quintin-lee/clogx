@@ -154,9 +154,11 @@ static void test_set_thread_context_update(void) {
 
 /* ── T7: logger_writevprintf_internal line 173-174 — signal in write path ── */
 static void test_signal_processing_in_write(void) {
-    /* Replace SIGTERM handler with SIG_IGN so the re-raise is a no-op. */
-    typedef void (*sigh_t)(int);
-    sigh_t old = signal(SIGTERM, SIG_IGN);
+    log_restore_signal_handlers();
+    struct sigaction sa_ign, old_sa;
+    memset(&sa_ign, 0, sizeof(sa_ign));
+    sa_ign.sa_handler = SIG_IGN;
+    sigaction(SIGTERM, &sa_ign, &old_sa);
 
     write_file("build/gap_signal.yaml", "log:\n"
                                         "  level: TRACE\n"
@@ -175,8 +177,7 @@ static void test_signal_processing_in_write(void) {
     LOG_INFO("signal-in-write test");
 
     log_destroy();
-    if (old != SIG_ERR)
-        signal(SIGTERM, old);
+    sigaction(SIGTERM, &old_sa, NULL);
     printf("test_signal_processing_in_write PASSED\n");
 }
 
@@ -586,6 +587,44 @@ static void test_async_edge_cases(void) {
     printf("test_async_edge_cases PASSED\n");
 }
 
+static void test_sink_null_paths(void) {
+    log_sink_t *ss = socket_sink_create(NULL, 0);
+    if (ss)
+        ss->destroy(ss);
+    ss = socket_sink_create("", -1);
+    if (ss)
+        ss->destroy(ss);
+    socket_sink_create_tls(NULL, 0, false, NULL, false);
+    socket_sink_create_tls("127.0.0.1", -1, false, NULL, false);
+
+    log_sink_t *sys_s = syslog_sink_create("ident", 0);
+    if (sys_s) {
+        sys_s->write(sys_s, NULL, 0);
+        sys_s->flush(NULL);
+        sys_s->flush(sys_s);
+        if (sys_s->atfork_child)
+            sys_s->atfork_child(NULL);
+        sys_s->destroy(sys_s);
+    }
+
+    log_sink_t *cs = console_sink_create(false);
+    if (cs) {
+        cs->flush(NULL);
+        if (cs->atfork_child)
+            cs->atfork_child(NULL);
+        cs->destroy(cs);
+    }
+
+    log_sink_t *cust_s = custom_sink_create(NULL, NULL, NULL, NULL);
+    if (cust_s) {
+        cust_s->flush(NULL);
+        cust_s->atfork_child(NULL);
+        cust_s->destroy(cust_s);
+    }
+
+    printf("test_sink_null_paths PASSED\n");
+}
+
 int main(void) {
     printf("=== coverage-gap tests ===\n");
 
@@ -611,6 +650,7 @@ int main(void) {
 
     test_file_sink_null_paths();
     test_async_edge_cases();
+    test_sink_null_paths();
 
     printf("=== all coverage-gap tests PASSED ===\n");
     return 0;

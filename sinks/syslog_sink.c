@@ -20,7 +20,7 @@ typedef struct {
 static int syslog_write(log_sink_t *sink, const char *buf, size_t len) {
     (void)len;
     syslog_sink_data_t *data = (syslog_sink_data_t *)sink->private_data;
-    if (!data)
+    if (!data || !buf)
         return -1;
 
     /* Parse priority from prefix if available, or default to LOG_INFO */
