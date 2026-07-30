@@ -291,7 +291,7 @@ static void test_dispatcher_multi_instance_gaps(void) {
     cfg.async = false;
     cfg.console_enable = true;
     cfg.console_stderr = true;
-    cfg.color = (log_color_t)99;
+    cfg.color = true;
 
     logger_t *logger = logger_create_from_config(&cfg);
     assert(logger != NULL);
