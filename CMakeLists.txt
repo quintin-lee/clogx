@@ -232,6 +232,7 @@ if(CLOG_BUILD_TESTS)
         RUNTIME_OUTPUT_DIRECTORY ${CMAKE_BINARY_DIR}/tests
         LIBRARY_OUTPUT_DIRECTORY ${CMAKE_BINARY_DIR}/tests
         PREFIX ""
+        SUFFIX ".so"
     )
 
     add_executable(test_plugin_abi tests/test_plugin_abi.c)
