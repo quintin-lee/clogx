@@ -92,6 +92,7 @@ int main(void) {
         log_remove_sink(NULL);
         log_remove_sink(valid_dummy);
         free(valid_dummy);
+        valid_dummy = NULL;
     }
 
     /* Test sink write failure path */

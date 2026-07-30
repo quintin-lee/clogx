@@ -180,7 +180,7 @@ benchmark: $(BENCHMARK_BINS)
 
 asan:
 	$(MAKE) clean
-	$(MAKE) test CC=$(CC) CFLAGS="$(ASAN_CFLAGS)" EXTRA_LDFLAGS="$(ASAN_CFLAGS)"
+	$(MAKE) test-asan CC=$(CC) CFLAGS="$(ASAN_CFLAGS)" EXTRA_LDFLAGS="$(ASAN_CFLAGS)"
 
 ubsan:
 	$(MAKE) clean
