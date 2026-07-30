@@ -87,6 +87,8 @@ target_include_directories(clogx_objects
     PUBLIC
         $<BUILD_INTERFACE:${CMAKE_CURRENT_SOURCE_DIR}/include>
         $<INSTALL_INTERFACE:include>
+    PRIVATE
+        $<BUILD_INTERFACE:${CMAKE_CURRENT_SOURCE_DIR}/core>
 )
 target_compile_definitions(clogx_objects PRIVATE _GNU_SOURCE)
 target_compile_options(clogx_objects
@@ -187,6 +189,7 @@ if(CLOG_BUILD_TESTS)
         test_coverage_deep
         test_otel
         test_prometheus
+        test_multi_instance
     )
 
     # Tests that directly reference internal symbols (not exported from shared lib)
