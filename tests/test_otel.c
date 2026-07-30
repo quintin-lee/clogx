@@ -336,6 +336,54 @@ static void test_otlp_sink_empty_service_name(void) {
     printf("test_otlp_sink_empty_service_name passed\n");
 }
 
+static void test_traceparent_uppercase_hex(void) {
+    clog_clear_trace_context();
+    setenv("TRACEPARENT", "00-4BF92F3577B34DA6A3CE929D0E0E4736-00F067AA0BA902B7-01", 1);
+
+    log_record_t rec = {0};
+    rec.level = LOG_LEVEL_INFO;
+    rec.timestamp = 1625000000000000ULL;
+    rec.module = "auth";
+    rec.file = "auth.c";
+    rec.line = 42;
+    rec.func = "login";
+    rec.message = "uppercase traceparent";
+
+    char buf[1024];
+    int len = log_formatter_format_otlp(&rec, buf, sizeof(buf));
+    assert(len > 0);
+    assert(strstr(buf, "\"trace_id\":\"4bf92f3577b34da6a3ce929d0e0e4736\"") != NULL);
+    assert(strstr(buf, "\"span_id\":\"00f067aa0ba902b7\"") != NULL);
+
+    unsetenv("TRACEPARENT");
+    clog_clear_trace_context();
+    printf("test_traceparent_uppercase_hex passed\n");
+}
+
+static void test_traceparent_invalid_hex(void) {
+    clog_clear_trace_context();
+    setenv("TRACEPARENT", "00-4BF9XZ3577B34DA6A3CE929D0E0E4736-00F067AA0BA902B7-01", 1);
+
+    log_record_t rec = {0};
+    rec.level = LOG_LEVEL_INFO;
+    rec.timestamp = 1625000000000000ULL;
+    rec.module = "auth";
+    rec.file = "auth.c";
+    rec.line = 42;
+    rec.func = "login";
+    rec.message = "invalid traceparent";
+
+    char buf[1024];
+    int len = log_formatter_format_otlp(&rec, buf, sizeof(buf));
+    assert(len > 0);
+    assert(strstr(buf, "\"trace_id\"") == NULL);
+    assert(strstr(buf, "\"body\":\"invalid traceparent\"") != NULL);
+
+    unsetenv("TRACEPARENT");
+    clog_clear_trace_context();
+    printf("test_traceparent_invalid_hex passed\n");
+}
+
 int main(void) {
     test_trace_context_hex();
     test_pattern_trace_tokens();
@@ -354,6 +402,8 @@ int main(void) {
     test_otlp_sink_file_endpoint();
     test_otlp_sink_null_and_empty_endpoint();
     test_otlp_sink_empty_service_name();
+    test_traceparent_uppercase_hex();
+    test_traceparent_invalid_hex();
     printf("all otel tests passed!\n");
     return 0;
 }
