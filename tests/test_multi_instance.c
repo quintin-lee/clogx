@@ -259,9 +259,35 @@ static void test_default_logger_unaffected(void) {
     printf("test_default_logger_unaffected PASSED\n");
 }
 
+static void test_null_logger_error_paths(void) {
+    logger_set_level(NULL, LOG_LEVEL_INFO);
+    assert(logger_get_level(NULL) == LOG_LEVEL_INFO);
+
+    logger_set_module(NULL, "test");
+    char mod[32] = {0};
+    logger_get_module(NULL, mod, sizeof(mod));
+    assert(mod[0] == '\0');
+
+    assert(logger_config_get(NULL) == NULL);
+    assert(logger_config_set(NULL, NULL) == CLOG_ERR_INVALID_ARG);
+
+    log_stats_t stats;
+    memset(&stats, 0, sizeof(stats));
+    logger_get_stats(NULL, &stats);
+
+    assert(logger_add_sink(NULL, NULL) == CLOG_ERR_INVALID_ARG);
+    assert(logger_remove_sink(NULL, NULL) == CLOG_ERR_INVALID_ARG);
+
+    logger_flush(NULL);
+    logger_writevprintf(NULL, LOG_LEVEL_INFO, "file", 10, "func", "msg");
+
+    printf("test_null_logger_error_paths PASSED\n");
+}
+
 int main(void) {
     printf("=== multi-instance tests ===\n");
 
+    test_null_logger_error_paths();
     test_create_null();
     test_create_from_config_null();
     test_destroy_null();
