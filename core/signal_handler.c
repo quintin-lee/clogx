@@ -96,6 +96,7 @@ static void setup_self_pipe(void) {
         return;
     }
 #if defined(F_SETFD) && defined(FD_CLOEXEC) && defined(O_NONBLOCK)
+    /* LCOV_EXCL_START - System call failures */
     if (pipe(g_signal_pipe) == 0) {
         for (int i = 0; i < 2; i++) {
             int flags = fcntl(g_signal_pipe[i], F_GETFL, 0);
@@ -108,6 +109,7 @@ static void setup_self_pipe(void) {
             }
         }
     }
+    /* LCOV_EXCL_STOP */
 #endif
 }
 

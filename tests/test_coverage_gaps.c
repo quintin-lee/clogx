@@ -1,3 +1,4 @@
+#include <assert.h>
 #include <signal.h>
 #include <stdio.h>
 #include <stdlib.h>
@@ -12,6 +13,7 @@
 #include "log_record.h"
 #include "log_signal.h"
 #include "log_sink.h"
+#include "rotate.h"
 
 static int g_fb_count;
 static void inc_fallback(void) {
@@ -657,6 +659,13 @@ static void test_socket_sink_broken_pipe(void) {
     printf("test_socket_sink_broken_pipe PASSED\n");
 }
 
+static void test_rotate_edge_cases(void) {
+    assert(file_rotate_file(NULL, 10) == 0);
+    assert(file_rotate_file("build/nonexistent.log", -1) == 0);
+    assert(file_rotate_file("build/nonexistent.log", 0) == 0);
+    printf("test_rotate_edge_cases PASSED\n");
+}
+
 int main(void) {
     printf("=== coverage-gap tests ===\n");
 
@@ -684,6 +693,7 @@ int main(void) {
     test_async_edge_cases();
     test_sink_null_paths();
     test_socket_sink_broken_pipe();
+    test_rotate_edge_cases();
 
     printf("=== all coverage-gap tests PASSED ===\n");
     return 0;
