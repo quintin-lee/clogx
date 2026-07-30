@@ -22,7 +22,7 @@ static void test_sink_flush(log_sink_t *sink) {
 }
 
 static void test_sink_destroy(log_sink_t *sink) {
-    (void)sink;
+    free(sink);
 }
 
 static log_sink_t *make_test_sink(void) {
