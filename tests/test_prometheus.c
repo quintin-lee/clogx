@@ -9,6 +9,20 @@
 #include "log.h"
 #include "log_prometheus.h"
 
+#ifdef _WIN32
+#include <winsock2.h>
+#include <ws2tcpip.h>
+typedef SOCKET sockfd_t;
+#define CLOSE_SOCKET closesocket
+#else
+#include <sys/socket.h>
+#include <netinet/in.h>
+#include <arpa/inet.h>
+#include <unistd.h>
+typedef int sockfd_t;
+#define CLOSE_SOCKET close
+#endif
+
 static void test_prometheus_render(void) {
     char buf[2048];
     int len = clog_prometheus_render_metrics(buf, sizeof(buf));
@@ -42,9 +56,56 @@ static void test_prometheus_exporter(void) {
     printf("test_prometheus_exporter passed (port %d)\n", port);
 }
 
+static void test_prometheus_http_socket(void) {
+    int port = 19100;
+    int ret = -1;
+    for (int p = 19100; p < 19110; p++) {
+        ret = clog_prometheus_exporter_start(p);
+        if (ret == CLOG_OK) {
+            port = p;
+            break;
+        }
+    }
+    assert(ret == CLOG_OK);
+
+    sockfd_t fd = socket(AF_INET, SOCK_STREAM, 0);
+    assert(fd >= 0);
+
+    struct sockaddr_in addr;
+    memset(&addr, 0, sizeof(addr));
+    addr.sin_family = AF_INET;
+    addr.sin_port = htons((uint16_t)port);
+    inet_pton(AF_INET, "127.0.0.1", &addr.sin_addr);
+
+    ret = connect(fd, (struct sockaddr *)&addr, sizeof(addr));
+    assert(ret == 0);
+
+    const char *req = "GET / HTTP/1.1\r\nHost: 127.0.0.1\r\nConnection: close\r\n\r\n";
+    send(fd, req, (int)strlen(req), 0);
+
+    char resp[4096];
+    int total = 0;
+    int n;
+    while ((n = (int)recv(fd, resp + total, (int)sizeof(resp) - total - 1, 0)) > 0) {
+        total += n;
+        if (total >= (int)sizeof(resp) - 1)
+            break;
+    }
+    resp[total] = '\0';
+    CLOSE_SOCKET(fd);
+
+    assert(strstr(resp, "HTTP/1.1 200 OK") != NULL);
+    assert(strstr(resp, "Content-Type: text/plain; version=0.0.4; charset=utf-8") != NULL);
+    assert(strstr(resp, "clogx_log_events_total") != NULL);
+
+    clog_prometheus_exporter_stop();
+    printf("test_prometheus_http_socket passed (port %d)\n", port);
+}
+
 int main(void) {
     test_prometheus_render();
     test_prometheus_exporter();
+    test_prometheus_http_socket();
     printf("all prometheus tests passed!\n");
     return 0;
 }

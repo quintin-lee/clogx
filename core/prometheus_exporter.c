@@ -117,6 +117,10 @@ static void *prometheus_worker_thread(void *arg) {
         }
 
         char recv_buf[1024];
+        struct timeval tv;
+        tv.tv_sec = 5;
+        tv.tv_usec = 0;
+        setsockopt(client_fd, SOL_SOCKET, SO_RCVTIMEO, (const char *)&tv, sizeof(tv));
         int bytes = (int)recv(client_fd, recv_buf, sizeof(recv_buf) - 1, 0);
         if (bytes > 0) {
             recv_buf[bytes] = '\0';
@@ -205,6 +209,7 @@ void clog_prometheus_exporter_stop(void) {
 
     g_prom_running = false;
     if (g_prom_server_fd != CLOG_INVALID_SOCKET) {
+        shutdown(g_prom_server_fd, SHUT_RDWR);
         clog_close_socket(g_prom_server_fd);
         g_prom_server_fd = CLOG_INVALID_SOCKET;
     }
