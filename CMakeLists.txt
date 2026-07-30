@@ -207,6 +207,8 @@ if(CLOG_BUILD_TESTS)
             add_executable(${test_name} tests/${test_name}.c)
             target_link_libraries(${test_name} PRIVATE clogx)
         endif()
+        target_include_directories(${test_name} PRIVATE
+            $<BUILD_INTERFACE:${CMAKE_CURRENT_SOURCE_DIR}/core>)
         target_compile_definitions(${test_name} PRIVATE _GNU_SOURCE)
         set_target_properties(${test_name} PROPERTIES
             RUNTIME_OUTPUT_DIRECTORY ${CMAKE_BINARY_DIR}/tests
