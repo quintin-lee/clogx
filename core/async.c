@@ -14,7 +14,6 @@
 #include "log.h"
 #include "log_internal.h"
 
-
 static void log_record_free_owned(log_record_t *record) {
     if (!record)
         return;
