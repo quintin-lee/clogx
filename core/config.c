@@ -579,8 +579,13 @@ int log_config_load_into(logger_t *logger, const char *yaml_path) {
 
     snprintf(local_format, sizeof(local_format), "%s", "[%time] [%level] %msg");
     snprintf(local_time_format, sizeof(local_time_format), "%s", "%Y-%m-%d %H:%M:%S");
-    logger->config.format = local_format;
-    logger->config.time_format = local_time_format;
+
+    /* Point format/time_format at logger-owned storage immediately — never leave
+     * them pointing at a stack local, even on early-error paths. */
+    snprintf(logger->format_str, sizeof(logger->format_str), "%s", local_format);
+    snprintf(logger->time_format_str, sizeof(logger->time_format_str), "%s", local_time_format);
+    logger->config.format = logger->format_str;
+    logger->config.time_format = logger->time_format_str;
 
     if (yaml_path && yaml_path != logger->config_path && strlen(yaml_path) > 0) {
         snprintf(logger->config_path, sizeof(logger->config_path), "%s", yaml_path);
@@ -589,18 +594,20 @@ int log_config_load_into(logger_t *logger, const char *yaml_path) {
     }
 
     if (logger->config_path[0] != '\0' && clog_access(logger->config_path, R_OK) == 0) {
+        /* parse_config_file writes to cfg->format / cfg->time_format — these will
+         * point into g_config_format from within YAML_HEAD .c. After parse we
+         * re-copy back into logger-owned storage below. */
         int ret = parse_config_file(logger->config_path, &logger->config);
         if (ret != 0)
             return ret;
+        const char *final_fmt = logger->config.format ? logger->config.format : local_format;
+        const char *final_tf =
+            logger->config.time_format ? logger->config.time_format : local_time_format;
+        snprintf(logger->format_str, sizeof(logger->format_str), "%s", final_fmt);
+        snprintf(logger->time_format_str, sizeof(logger->time_format_str), "%s", final_tf);
+        logger->config.format = logger->format_str;
+        logger->config.time_format = logger->time_format_str;
     }
-
-    const char *final_fmt = logger->config.format ? logger->config.format : local_format;
-    const char *final_tf =
-        logger->config.time_format ? logger->config.time_format : local_time_format;
-    snprintf(logger->format_str, sizeof(logger->format_str), "%s", final_fmt);
-    snprintf(logger->time_format_str, sizeof(logger->time_format_str), "%s", final_tf);
-    logger->config.format = logger->format_str;
-    logger->config.time_format = logger->time_format_str;
 
     return 0;
 }
