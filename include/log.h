@@ -323,4 +323,62 @@ static inline const char *clogx_filename_only(const char *path) {
     log_writevprintf(LOG_LEVEL_TRACE, LOG_FILENAME_ONLY(), __LINE__, __func__, __VA_ARGS__)
 #define TRACE(...) LOG_TRACE(__VA_ARGS__)
 
+/* ════════════════════════════════════════════════════════════════════════
+ *  Multi-instance API (Phase 2)
+ * ════════════════════════════════════════════════════════════════════════ */
+
+/**
+ * @brief Opaque logger instance handle.
+ *
+ * Create independent loggers with @ref logger_create or
+ * @ref logger_create_from_config. Each instance has its own config, sinks,
+ * async worker, rate limiter, formatter, and module name.
+ */
+typedef struct logger_t logger_t;
+
+/* Instance creation / destruction */
+CLOGX_API logger_t *logger_create(const char *yaml_path);
+CLOGX_API logger_t *logger_create_from_config(const log_config_t *cfg);
+CLOGX_API void logger_destroy(logger_t *logger);
+
+/* Instance-level operations */
+CLOGX_API void logger_writevprintf(logger_t *logger, log_level_t level, const char *file, int line,
+                                   const char *func, const char *fmt, ...) CLOGX_PRINTF_FMT(6, 7);
+CLOGX_API void logger_flush(logger_t *logger);
+CLOGX_API int logger_reload(logger_t *logger);
+CLOGX_API int logger_add_sink(logger_t *logger, log_sink_t *sink);
+CLOGX_API int logger_remove_sink(logger_t *logger, log_sink_t *sink);
+CLOGX_API int logger_set_level(logger_t *logger, log_level_t level);
+CLOGX_API log_level_t logger_get_level(const logger_t *logger);
+CLOGX_API void logger_set_module(logger_t *logger, const char *module);
+CLOGX_API void logger_get_module(const logger_t *logger, char *buf, size_t n);
+CLOGX_API void logger_get_stats(const logger_t *logger, log_stats_t *stats);
+CLOGX_API int logger_config_set(logger_t *logger, const log_config_t *cfg);
+CLOGX_API log_config_t *logger_config_get(const logger_t *logger);
+
+/**
+ * @name LOGGER_* macros
+ * @brief Instance-level logging macros, identical to @c LOG_* but take a logger first.
+ * @{
+ */
+#define LOGGER_TRACE(logger, ...)                                                                  \
+    logger_writevprintf((logger), LOG_LEVEL_TRACE, LOG_FILENAME_ONLY(), __LINE__, __func__,        \
+                        __VA_ARGS__)
+#define LOGGER_DEBUG(logger, ...)                                                                  \
+    logger_writevprintf((logger), LOG_LEVEL_DEBUG, LOG_FILENAME_ONLY(), __LINE__, __func__,        \
+                        __VA_ARGS__)
+#define LOGGER_INFO(logger, ...)                                                                   \
+    logger_writevprintf((logger), LOG_LEVEL_INFO, LOG_FILENAME_ONLY(), __LINE__, __func__,         \
+                        __VA_ARGS__)
+#define LOGGER_WARN(logger, ...)                                                                   \
+    logger_writevprintf((logger), LOG_LEVEL_WARN, LOG_FILENAME_ONLY(), __LINE__, __func__,         \
+                        __VA_ARGS__)
+#define LOGGER_ERROR(logger, ...)                                                                  \
+    logger_writevprintf((logger), LOG_LEVEL_ERROR, LOG_FILENAME_ONLY(), __LINE__, __func__,        \
+                        __VA_ARGS__)
+#define LOGGER_FATAL(logger, ...)                                                                  \
+    logger_writevprintf((logger), LOG_LEVEL_FATAL, LOG_FILENAME_ONLY(), __LINE__, __func__,        \
+                        __VA_ARGS__)
+/** @} */
+
 #endif /* LOG_H */
