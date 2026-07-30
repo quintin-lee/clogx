@@ -284,9 +284,34 @@ static void test_null_logger_error_paths(void) {
     printf("test_null_logger_error_paths PASSED\n");
 }
 
+static void test_dispatcher_multi_instance_gaps(void) {
+    log_config_t cfg = {0};
+    cfg.level = LOG_LEVEL_TRACE;
+    cfg.async = false;
+    cfg.console_enable = true;
+    cfg.console_stderr = true;
+
+    logger_t *logger = logger_create_from_config(&cfg);
+    assert(logger != NULL);
+
+    log_sink_t *s1 = make_test_sink();
+    log_sink_t *s2 = make_test_sink();
+    assert(logger_add_sink(logger, s1) == CLOG_OK);
+    assert(logger_add_sink(logger, s2) == CLOG_OK);
+
+    assert(logger_remove_sink(logger, s1) == CLOG_OK);
+    assert(logger_remove_sink(logger, s2) == CLOG_OK);
+    s1->destroy(s1);
+    s2->destroy(s2);
+
+    logger_destroy(logger);
+    printf("test_dispatcher_multi_instance_gaps PASSED\n");
+}
+
 int main(void) {
     printf("=== multi-instance tests ===\n");
 
+    test_dispatcher_multi_instance_gaps();
     test_null_logger_error_paths();
     test_create_null();
     test_create_from_config_null();

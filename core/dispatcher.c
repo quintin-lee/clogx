@@ -15,15 +15,6 @@
 #include "log_internal.h"
 #include "plugin_loader.h"
 
-typedef struct {
-    log_sink_t **sinks;
-    int sink_count;
-    clog_mutex_t mutex;
-} log_dispatcher_t;
-
-static log_dispatcher_t g_dispatcher = {
-    .sinks = NULL, .sink_count = 0, .mutex = CLOG_MUTEX_INITIALIZER};
-
 int log_dispatcher_add_sink(log_sink_t *restrict sink) {
     return log_dispatcher_add_sink_for(&g_default_logger, sink);
 }
@@ -35,9 +26,11 @@ int log_dispatcher_add_sink_for(logger_t *logger, log_sink_t *restrict sink) {
     CLOG_MUTEXGUARDED(&logger->dispatcher_mutex, {
         log_sink_t **new_sinks = (log_sink_t **)realloc(
             (void *)logger->sinks, ((size_t)logger->sink_count + 1) * sizeof(log_sink_t *));
+        /* LCOV_EXCL_START - System realloc failure */
         if (!new_sinks) {
             ret = -1;
         } else {
+            /* LCOV_EXCL_STOP */
             logger->sinks = new_sinks;
             logger->sinks[logger->sink_count] = sink;
             logger->sink_count++;
@@ -47,39 +40,11 @@ int log_dispatcher_add_sink_for(logger_t *logger, log_sink_t *restrict sink) {
 }
 
 int log_dispatcher_remove_sink(log_sink_t *restrict sink) {
-    if (!sink)
-        return -1;
-
-    CLOG_MUTEXGUARDED(&g_dispatcher.mutex, {
-        for (int i = 0; i < g_dispatcher.sink_count; i++) {
-            if (g_dispatcher.sinks[i] == sink) {
-                for (int j = i; j < g_dispatcher.sink_count - 1; j++) {
-                    g_dispatcher.sinks[j] = g_dispatcher.sinks[j + 1];
-                }
-                g_dispatcher.sinks[g_dispatcher.sink_count - 1] = NULL;
-                g_dispatcher.sink_count--;
-                if (g_dispatcher.sink_count > 0) {
-                    log_sink_t **resized = (log_sink_t **)realloc((void *)g_dispatcher.sinks,
-                                                                  (size_t)g_dispatcher.sink_count *
-                                                                      sizeof(log_sink_t *));
-                    /* LCOV_EXCL_START - System realloc failure */
-                    if (resized) {
-                        g_dispatcher.sinks = resized;
-                    }
-                    /* LCOV_EXCL_STOP */
-                } else {
-                    free((void *)g_dispatcher.sinks);
-                    g_dispatcher.sinks = NULL;
-                }
-                break;
-            }
-        }
-    });
-    return 0;
+    return log_dispatcher_remove_sink_for(&g_default_logger, sink);
 }
 
 int log_dispatcher_remove_sink_for(logger_t *logger, log_sink_t *restrict sink) {
-    if (!sink)
+    if (!logger || !sink)
         return -1;
     CLOG_MUTEXGUARDED(&logger->dispatcher_mutex, {
         for (int i = 0; i < logger->sink_count; i++) {
@@ -92,9 +57,11 @@ int log_dispatcher_remove_sink_for(logger_t *logger, log_sink_t *restrict sink) 
                 if (logger->sink_count > 0) {
                     log_sink_t **resized = (log_sink_t **)realloc(
                         (void *)logger->sinks, (size_t)logger->sink_count * sizeof(log_sink_t *));
+                    /* LCOV_EXCL_START - System realloc failure */
                     if (resized) {
                         logger->sinks = resized;
                     }
+                    /* LCOV_EXCL_STOP */
                 } else {
                     free((void *)logger->sinks);
                     logger->sinks = NULL;
@@ -107,78 +74,7 @@ int log_dispatcher_remove_sink_for(logger_t *logger, log_sink_t *restrict sink) 
 }
 
 int log_dispatcher_dispatch(log_record_t *record) {
-    if (!record)
-        return -1;
-
-    if (record->level < log_get_level()) {
-        return 0;
-    }
-
-    /* Format and pre-compute colored output OUTSIDE the dispatcher lock.
-     * Formatter has its own mutex for the format string; config reads use
-     * an rwlock.  This keeps the dispatcher critical section short (I/O only). */
-    char formatted_buf[CLOG_MAX_FORMATTED_SIZE];
-    int len = log_formatter_format(record, formatted_buf, sizeof(formatted_buf));
-    if (len <= 0) {
-        return -1;
-    }
-
-    static const char *ansi_codes[] = {
-        "\x1b[30m", /* COLOR_NONE / fallback */
-        "\x1b[30m", /* COLOR_BLACK */
-        "\x1b[31m", /* COLOR_RED */
-        "\x1b[32m", /* COLOR_GREEN */
-        "\x1b[33m", /* COLOR_YELLOW */
-        "\x1b[34m", /* COLOR_BLUE */
-        "\x1b[35m", /* COLOR_PURPLE */
-        "\x1b[36m", /* COLOR_CYAN */
-        "\x1b[37m"  /* COLOR_WHITE */
-    };
-    const char *reset_code = "\x1b[0m";
-    bool color_enabled = log_config_color_enabled();
-
-    char colored_buf[CLOG_MAX_COLORED_SIZE];
-    int colored_len = -1;
-
-    if (color_enabled) {
-        log_color_t color = get_log_color(record->level);
-        size_t ansi_count = sizeof(ansi_codes) / sizeof(ansi_codes[0]);
-        int color_idx = (size_t)color < ansi_count ? (int)color : 0;
-        int ret = snprintf(colored_buf, sizeof(colored_buf), "%s%s%s", ansi_codes[color_idx],
-                           formatted_buf, reset_code);
-        if (ret > 0 && ret < (int)sizeof(colored_buf)) {
-            colored_len = ret;
-        }
-    }
-
-    /* Short critical section: iterate sink array and write. */
-    CLOG_MUTEXGUARDED(&g_dispatcher.mutex, {
-        for (int i = 0; i < g_dispatcher.sink_count; i++) {
-            log_sink_t *sink = g_dispatcher.sinks[i];
-            if (!sink)
-                continue;
-
-            /* Per-sink level gate: skip if the record is below this sink's
-             * minimum level.  The global level has already been checked above. */
-            if ((int)record->level < (int)sink->min_level)
-                continue;
-
-            const char *write_buf = formatted_buf;
-            size_t write_len = (size_t)len;
-
-            if (colored_len > 0 && console_sink_is_color_enabled(sink)) {
-                write_buf = colored_buf;
-                write_len = (size_t)colored_len;
-            }
-
-            sink->write(sink, write_buf, write_len);
-            if (write_len > 0 && write_buf[write_len - 1] != '\n') {
-                sink->write(sink, "\n", 1);
-            }
-        }
-    });
-
-    return 0;
+    return log_dispatcher_dispatch_for(&g_default_logger, record);
 }
 
 int log_dispatcher_dispatch_for(logger_t *logger, log_record_t *record) {
@@ -325,11 +221,13 @@ int log_dispatcher_init_for(logger_t *logger) {
     int ret = 0;
     CLOG_MUTEXGUARDED(&logger->dispatcher_mutex, {
         logger->sinks = (log_sink_t **)malloc((size_t)count * sizeof(log_sink_t *));
+        /* LCOV_EXCL_START - System malloc failure */
         if (!logger->sinks) {
             for (int i = 0; i < count; i++)
                 sinks[i]->destroy(sinks[i]);
             ret = -1;
         } else {
+            /* LCOV_EXCL_STOP */
             for (int i = 0; i < count; i++)
                 logger->sinks[i] = sinks[i];
             logger->sink_count = count;
@@ -364,11 +262,13 @@ int log_dispatcher_build_snapshot_for(logger_t *logger, log_config_t *restrict c
     }
 
     snap->sinks = (log_sink_t **)malloc((size_t)count * sizeof(log_sink_t *));
+    /* LCOV_EXCL_START - System malloc failure */
     if (!snap->sinks) {
         for (int i = 0; i < count; i++)
             sinks[i]->destroy(sinks[i]);
         return -1;
     }
+    /* LCOV_EXCL_STOP */
     for (int i = 0; i < count; i++)
         snap->sinks[i] = sinks[i];
     snap->sink_count = count;
