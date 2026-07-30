@@ -10,6 +10,53 @@
 #include <stdio.h>
 #include <stdlib.h>
 #include <string.h>
+
+#ifdef _WIN32
+/* Plugin ABI is not supported on Windows.
+ * Stubs are provided so the library links and the rest of the
+ * sink/logger pipeline works without dynamic-load support.          */
+#include "clogx_plugin.h"
+#include "log_sink.h"
+
+struct clogx_plugin_handle {
+    int unused;
+};
+
+clogx_plugin_handle_t *log_plugin_load(const char *so_path) {
+    (void)so_path;
+    return NULL;
+}
+
+void log_plugin_unload(clogx_plugin_handle_t *h) {
+    (void)h;
+}
+
+log_sink_t *log_plugin_create_sink(clogx_plugin_handle_t *h, const char *params_json) {
+    (void)h; (void)params_json;
+    return NULL;
+}
+
+const clogx_plugin_t *log_plugin_info(clogx_plugin_handle_t *h) {
+    (void)h;
+    return NULL;
+}
+
+int log_plugin_scan(const char *dir, clogx_plugin_handle_t **out, int max) {
+    (void)dir; (void)out; (void)max;
+    return 0;
+}
+
+int log_plugin_create_sinks_from_config(const log_config_t *cfg, log_sink_t **out_sinks,
+                                        int max_out) {
+    (void)cfg; (void)out_sinks; (void)max_out;
+    return 0;
+}
+
+void log_plugin_shutdown_all(void) {
+}
+
+#else /* POSIX */
+
 #include <dlfcn.h>
 #include <dirent.h>
 #include <errno.h>
@@ -305,3 +352,4 @@ void log_plugin_shutdown_all(void) {
 
     clog_mutex_unlock(&g_plugin_mutex);
 }
+#endif /* _WIN32 */

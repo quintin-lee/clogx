@@ -31,6 +31,18 @@
 #include <winsock2.h>
 #include <ws2tcpip.h>
 
+#if defined(_WIN32) || defined(_WIN64)
+#ifndef strdup
+#define strdup _strdup
+#endif
+#ifndef fileno
+#define fileno _fileno
+#endif
+#ifndef SHUT_RDWR
+#define SHUT_RDWR SD_BOTH
+#endif
+#endif
+
 #ifndef R_OK
 #define R_OK 4
 #endif

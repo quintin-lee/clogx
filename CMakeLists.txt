@@ -221,6 +221,7 @@ if(CLOG_BUILD_TESTS)
     endforeach()
 
     # --- Plugin ABI test: build a dummy .so + link the test ---
+    if(NOT WIN32)
     set(PLUGIN_DUMMY_SO "${CMAKE_BINARY_DIR}/tests/plugin_dummy.so")
     add_library(plugin_dummy SHARED tests/plugin_dummy.c)
     target_include_directories(plugin_dummy PRIVATE
@@ -250,6 +251,7 @@ if(CLOG_BUILD_TESTS)
         COMMAND test_plugin_abi
         WORKING_DIRECTORY ${CMAKE_CURRENT_SOURCE_DIR}
     )
+    endif()
 endif()
 
 if(CLOG_BUILD_BENCHMARKS)
