@@ -539,6 +539,53 @@ static void test_reload_no_sinks(void) {
     printf("test_reload_no_sinks PASSED\n");
 }
 
+static void test_config_set_null(void) {
+    int ret = log_config_set(NULL);
+    if (ret != -1) {
+        fprintf(stderr, "FAIL: log_config_set(NULL) expected -1, got %d\n", ret);
+        exit(1);
+    }
+    printf("test_config_set_null PASSED\n");
+}
+
+static void test_config_reload(void) {
+    write_file("build/gap_config_reload.yaml", "log:\n"
+                                               "  level: TRACE\n"
+                                               "  async: false\n"
+                                               "  console_enable: true\n"
+                                               "  console_stderr: true\n");
+
+    if (log_init("build/gap_config_reload.yaml") != 0) {
+        fprintf(stderr, "FAIL: log_init for config_reload\n");
+        exit(1);
+    }
+    int ret = log_config_reload();
+    if (ret != 0) {
+        fprintf(stderr, "FAIL: log_config_reload expected 0, got %d\n", ret);
+        exit(1);
+    }
+    log_destroy();
+    printf("test_config_reload PASSED\n");
+}
+
+static void test_prometheus_config_yaml(void) {
+    write_file("build/gap_prometheus.yaml", "log:\n"
+                                            "  level: TRACE\n"
+                                            "  async: false\n"
+                                            "  console_enable: true\n"
+                                            "  console_stderr: true\n"
+                                            "  prometheus_enable: true\n"
+                                            "  prometheus_port: 19090\n");
+
+    int ret = log_init("build/gap_prometheus.yaml");
+    if (ret != 0) {
+        fprintf(stderr, "FAIL: log_init prometheus config expected 0, got %d\n", ret);
+        exit(1);
+    }
+    log_destroy();
+    printf("test_prometheus_config_yaml PASSED\n");
+}
+
 static void test_file_sink_null_paths(void) {
     log_sink_t *fs = file_sink_create(NULL, 0, 0);
     if (fs) {
@@ -719,6 +766,9 @@ int main(void) {
     test_suppressed_msg_async();
     test_logger_config_set_time_format();
     test_reload_no_sinks();
+    test_config_set_null();
+    test_config_reload();
+    test_prometheus_config_yaml();
 
     test_file_sink_null_paths();
     test_async_edge_cases();
