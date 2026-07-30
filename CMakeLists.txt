@@ -190,10 +190,11 @@ if(CLOG_BUILD_TESTS)
         test_otel
         test_prometheus
         test_multi_instance
+        test_coverage_gaps
     )
 
     # Tests that directly reference internal symbols (not exported from shared lib)
-    set(CLOG_INTERNAL_TESTS test_queue_try_put test_async_fallback test_async_reload)
+    set(CLOG_INTERNAL_TESTS test_queue_try_put test_async_fallback test_async_reload test_coverage_gaps)
 
     foreach(test_name IN LISTS CLOG_TEST_SOURCES)
         if(CLOG_BUILD_SHARED AND test_name IN_LIST CLOG_INTERNAL_TESTS)

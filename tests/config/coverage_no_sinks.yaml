@@ -1,0 +1,5 @@
+log:
+  console_enable: false
+  file_enable: false
+  socket_enable: false
+  catch_signals: false
