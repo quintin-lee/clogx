@@ -50,6 +50,18 @@
 #define F_OK 0
 #endif
 
+#if defined(_WIN32) || defined(_WIN64)
+#ifndef ssize_t
+typedef SSIZE_T ssize_t;
+#endif
+#ifndef setenv
+#define setenv(name, value, overwrite) _putenv_s(name, value)
+#endif
+#ifndef unsetenv
+#define unsetenv(name) _putenv_s(name, "")
+#endif
+#endif
+
 typedef struct _stat64 clog_stat_t;
 #define clog_fstat(fd, st) _fstat64((fd), (st))
 #define clog_stat(path, st) _stat64((path), (st))

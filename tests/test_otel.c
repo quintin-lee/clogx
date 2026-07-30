@@ -10,6 +10,7 @@
 #include "log.h"
 #include "log_formatter.h"
 #include "log_sink.h"
+#include "clog_port.h"
 
 static void test_trace_context_hex(void) {
     clog_clear_trace_context();
