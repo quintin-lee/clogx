@@ -5,6 +5,7 @@
 
 #include <assert.h>
 #include <stdio.h>
+#include <stdlib.h>
 #include <string.h>
 #include "log.h"
 #include "log_formatter.h"
@@ -101,10 +102,116 @@ static void test_otlp_sink(void) {
     printf("test_otlp_sink passed\n");
 }
 
+static void test_traceparent_env(void) {
+    clog_clear_trace_context();
+    setenv("TRACEPARENT", "00-4bf92f3577b34da6a3ce929d0e0e4736-00f067aa0ba902b7-01", 1);
+
+    log_record_t rec = {0};
+    rec.level = LOG_LEVEL_INFO;
+    rec.timestamp = 1625000000000000ULL;
+    rec.module = "auth";
+    rec.file = "auth.c";
+    rec.line = 42;
+    rec.func = "login";
+    rec.message = "traceparent from env";
+
+    char buf[1024];
+    int len = log_formatter_format_otlp(&rec, buf, sizeof(buf));
+    assert(len > 0);
+    assert(strstr(buf, "\"trace_id\":\"4bf92f3577b34da6a3ce929d0e0e4736\"") != NULL);
+    assert(strstr(buf, "\"span_id\":\"00f067aa0ba902b7\"") != NULL);
+
+    unsetenv("TRACEPARENT");
+    clog_clear_trace_context();
+    printf("test_traceparent_env passed\n");
+}
+
+static void test_uppercase_format_strings(void) {
+    log_record_t rec = {0};
+    rec.level = LOG_LEVEL_INFO;
+    rec.timestamp = 1625000000000000ULL;
+    rec.module = "test";
+    rec.file = "test.c";
+    rec.line = 1;
+    rec.func = "main";
+    rec.message = "uppercase test";
+
+    char buf[1024];
+
+    log_formatter_init("JSON", NULL);
+    int len = log_formatter_format(&rec, buf, sizeof(buf));
+    assert(len > 0);
+    assert(strstr(buf, "{\"timestamp\":") != NULL);
+    assert(strstr(buf, "\"level\":\"INFO\"") != NULL);
+
+    log_formatter_init("OTLP", NULL);
+    rec.trace_id[0] = 0x4b;
+    rec.span_id[0] = 0x00;
+    rec.span_id[1] = 0xf0;
+    len = log_formatter_format(&rec, buf, sizeof(buf));
+    assert(len > 0);
+    assert(strstr(buf, "\"severity\":\"INFO\"") != NULL);
+
+    log_formatter_init("OTEL", NULL);
+    len = log_formatter_format(&rec, buf, sizeof(buf));
+    assert(len > 0);
+    assert(strstr(buf, "\"severity\":\"INFO\"") != NULL);
+
+    log_formatter_reset();
+    printf("test_uppercase_format_strings passed\n");
+}
+
+static void test_log_formatter_get_format(void) {
+    log_formatter_init("[%level] %msg", NULL);
+    const char *fmt = log_formatter_get_format();
+    assert(fmt != NULL);
+    assert(strcmp(fmt, "[%level] %msg") == 0);
+    log_formatter_reset();
+    printf("test_log_formatter_get_format passed\n");
+}
+
+static void test_tiny_buffer_truncation(void) {
+    log_record_t rec = {0};
+    rec.level = LOG_LEVEL_INFO;
+    rec.timestamp = 1625000000000000ULL;
+    rec.module = "test";
+    rec.file = "test.c";
+    rec.line = 1;
+    rec.func = "main";
+    rec.message = "truncation test";
+
+    log_formatter_init("OTLP", NULL);
+    char buf[16];
+    int len = log_formatter_format_otlp(&rec, buf, sizeof(buf));
+    assert(len == -1);
+    log_formatter_reset();
+    printf("test_tiny_buffer_truncation passed\n");
+}
+
+static void test_invalid_level_default(void) {
+    log_formatter_init("json", NULL);
+    log_record_t rec = {0};
+    rec.level = (log_level_t)99;
+    rec.timestamp = 1625000000000000ULL;
+    rec.message = "invalid level";
+
+    char buf[256];
+    int len = log_formatter_format(&rec, buf, sizeof(buf));
+    assert(len > 0);
+    assert(strstr(buf, "UNKNOWN") != NULL);
+    log_formatter_reset();
+    printf("test_invalid_level_default passed\n");
+}
+
 int main(void) {
     test_trace_context_hex();
     test_pattern_trace_tokens();
     test_otlp_formatter();
+    test_traceparent_env();
+    test_uppercase_format_strings();
+    test_log_formatter_get_format();
+    test_tiny_buffer_truncation();
+    test_invalid_level_default();
     test_otlp_sink();
     printf("all otel tests passed!\n");
     return 0;

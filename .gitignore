@@ -4,6 +4,7 @@ logs/
 docs/api/
 deps/
 .codegraph/
+.omo/
 
 cmake_build/
 .cache/
