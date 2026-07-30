@@ -82,11 +82,8 @@ static const config_key_t g_config_keys[] = {
     {"tls_skip_verify", HANDLER_SOCKET_TLS_SKIP_VERIFY},
 };
 
-static log_config_t g_config;
-static clog_rwlock_t g_config_rwlock = CLOG_RWLOCK_INITIALIZER;
 static char g_config_format[512] = "";
 static char g_config_time_format[64] = "";
-static char g_config_path[512] = "./config.yaml";
 
 /**
  * @brief Parse a YAML config file using libyaml's event-based API.
@@ -514,41 +511,6 @@ static int parse_config_file(const char *filepath, log_config_t *cfg) {
     return has_errors ? -1 : 0;
 }
 
-static int load_default_and_apply(const char *yaml_path) {
-    g_config.level = LOG_LEVEL_INFO;
-    g_config.async = false;
-    g_config.queue_size = 8192;
-    g_config.color = true;
-    strcpy(g_config_format, "[%time] [%level] %msg");
-    g_config.console_enable = 1;
-    g_config.console_stderr = 0;
-    g_config.file_enable = 0;
-    g_config.file_path[0] = '\0';
-    g_config.file_max_size = (uint64_t)100 * 1024 * 1024;
-    g_config.file_backups = 10;
-    g_config.socket_enable = 0;
-    g_config.socket_host[0] = '\0';
-    g_config.socket_port = 0;
-    g_config.prometheus_enable = false;
-    g_config.prometheus_port = 9090;
-    g_config.format = g_config_format;
-    snprintf(g_config_time_format, sizeof(g_config_time_format), "%s", "%Y-%m-%d %H:%M:%S");
-    g_config.time_format = g_config_time_format;
-    g_config.plugin_count = 0;
-
-    /* Reload passes g_config_path itself; avoid overlapping copy (ASan). */
-    if (yaml_path && yaml_path != g_config_path && strlen(yaml_path) > 0) {
-        snprintf(g_config_path, sizeof(g_config_path), "%s", yaml_path);
-    } else if (!yaml_path || yaml_path[0] == '\0') {
-        g_config_path[0] = '\0';
-    }
-
-    if (clog_access(g_config_path, R_OK) == 0) {
-        return parse_config_file(g_config_path, &g_config);
-    }
-
-    return 0;
-}
 
 /* ── Instance API ── */
 

@@ -7,15 +7,6 @@
 #include "log_rate_limit.h"
 #include "log_internal.h"
 
-static volatile bool g_enabled = false;
-static double g_tokens = 0.0;
-static double g_max_tokens = 0.0;
-static double g_fill_rate = 0.0;
-static uint64_t g_last_update_ms = 0;
-static uint64_t g_suppressed_count = 0;
-static uint64_t g_total_suppressed = 0;
-static clog_mutex_t g_rate_mutex = CLOG_MUTEX_INITIALIZER;
-
 static uint64_t get_now_ms(void) {
 #if defined(_WIN32) || defined(_WIN64)
     LARGE_INTEGER freq, count;

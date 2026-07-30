@@ -14,15 +14,6 @@
 #include "log.h"
 #include "log_internal.h"
 
-/* Legacy singleton state — kept until Task 1.8 removal pass. */
-typedef struct {
-    mpsc_queue_t *queue;
-    clog_thread_t worker_thread;
-    volatile int running;
-    volatile int processing;
-} async_logger_t;
-
-static async_logger_t g_async_logger = {.queue = NULL, .running = 0, .processing = 0};
 
 static void log_record_free_owned(log_record_t *record) {
     if (!record)
@@ -103,25 +94,6 @@ static void *async_worker_for(void *arg) {
         }
         log_dispatcher_flush_for(logger);
         logger->async_processing = 0;
-    }
-    return NULL;
-}
-
-/* Legacy worker using g_async_logger (unchanged). */
-static void *async_worker(void *arg) {
-    async_logger_t *al = (async_logger_t *)arg;
-    log_record_t batch[ASYNC_BATCH_SIZE];
-    while (1) {
-        int count = mpsc_queue_get_batch(al->queue, batch, ASYNC_BATCH_SIZE);
-        if (count <= 0)
-            break;
-        al->processing = 1;
-        for (int i = 0; i < count; i++) {
-            log_dispatcher_dispatch(&batch[i]);
-            log_record_free_owned(&batch[i]);
-        }
-        log_dispatcher_flush();
-        al->processing = 0;
     }
     return NULL;
 }
