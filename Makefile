@@ -289,5 +289,5 @@ uninstall:
 	-rm -f $(DESTDIR)$(LIBDIR)/pkgconfig/clogx.pc
 
 clean:
-	rm -rf $(BUILD_DIR)
-	rm -rf docs/api
+	rm -rf $(BUILD_DIR) build-bench build-cmake build_cmake cmake_build docs/api __pycache__ logs/
+	rm -f config_async.yaml config_sync.yaml *.gcov coverage.info
