@@ -81,14 +81,14 @@ static void test_prometheus_http_socket(void) {
     assert(ret == 0);
 
     const char *req = "GET / HTTP/1.1\r\nHost: 127.0.0.1\r\nConnection: close\r\n\r\n";
-    send(fd, req, (int)strlen(req), 0);
+    send(fd, req, strlen(req), 0);
 
     char resp[4096];
-    int total = 0;
-    int n;
-    while ((n = (int)recv(fd, resp + total, (int)sizeof(resp) - total - 1, 0)) > 0) {
-        total += n;
-        if (total >= (int)sizeof(resp) - 1)
+    size_t total = 0;
+    ssize_t n;
+    while ((n = recv(fd, resp + total, sizeof(resp) - total - 1, 0)) > 0) {
+        total += (size_t)n;
+        if (total >= sizeof(resp) - 1)
             break;
     }
     resp[total] = '\0';
