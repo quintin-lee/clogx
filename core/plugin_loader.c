@@ -32,7 +32,8 @@ void log_plugin_unload(clogx_plugin_handle_t *h) {
 }
 
 log_sink_t *log_plugin_create_sink(clogx_plugin_handle_t *h, const char *params_json) {
-    (void)h; (void)params_json;
+    (void)h;
+    (void)params_json;
     return NULL;
 }
 
@@ -42,13 +43,17 @@ const clogx_plugin_t *log_plugin_info(clogx_plugin_handle_t *h) {
 }
 
 int log_plugin_scan(const char *dir, clogx_plugin_handle_t **out, int max) {
-    (void)dir; (void)out; (void)max;
+    (void)dir;
+    (void)out;
+    (void)max;
     return 0;
 }
 
 int log_plugin_create_sinks_from_config(const log_config_t *cfg, log_sink_t **out_sinks,
                                         int max_out) {
-    (void)cfg; (void)out_sinks; (void)max_out;
+    (void)cfg;
+    (void)out_sinks;
+    (void)max_out;
     return 0;
 }
 
