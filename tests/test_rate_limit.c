@@ -17,7 +17,7 @@ static int write_config(void) {
             "  color: false\n"
             "  format: \"[%%level] %%msg\\n\"\n"
             "  rate_limit_enable: true\n"
-            "  rate_limit_max_per_sec: 100\n"
+            "  rate_limit_max_per_sec: 10\n"
             "  rate_limit_burst: 5\n"
             "  console_enable: false\n"
             "  file_enable: true\n"
