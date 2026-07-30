@@ -41,7 +41,7 @@ core/        config, formatting, dispatch, queue, async, rotation, rate limiter,
 sinks/       console / file / socket (with TLS support) / syslog
 fuzz/        AFL fuzzing harnesses (fuzz_config.c, fuzz_formatter.c, fuzz_pipeline.c)
 example/     example programs
-tests/       regression tests (31 test suites)
+tests/       regression tests (36 test suites)
 cmake/       CMake package config templates
 ```
 
@@ -132,6 +132,7 @@ Common CMake options:
 | `CLOG_USE_SYSTEM_YAML` | OFF | use system libyaml instead of auto-downloading |
 | `CLOG_ENABLE_TLS` | OFF | enable OpenSSL TLS support for socket sink |
 | `CLOG_ENABLE_CLANG_TIDY` | OFF | enable clang-tidy static analysis during compilation |
+| `CMAKE_EXPORT_COMPILE_COMMANDS` | ON | auto-generate `compile_commands.json` for clangd/LSP |
 
 Downstream projects:
 
@@ -299,6 +300,33 @@ LOG_WARN("...");
 LOG_ERROR("...");
 LOG_FATAL("...");
 LOG_TRACE("...");
+
+/* ── Multi-instance API (logger_t) ── */
+
+logger_t *logger_create(const char *yaml_path);
+logger_t *logger_create_from_config(const log_config_t *cfg);
+void     logger_destroy(logger_t *logger);
+void     logger_flush(logger_t *logger);
+clogx_errno_t logger_reload(logger_t *logger);
+void     logger_writevprintf_internal(logger_t *logger, log_level_t level,
+                                      const char *file, int line, const char *func,
+                                      const char *fmt, ...);
+int      logger_add_sink(logger_t *logger, log_sink_t *sink);
+int      logger_remove_sink(logger_t *logger, log_sink_t *sink);
+int      logger_set_level(logger_t *logger, log_level_t level);
+log_level_t logger_get_level(const logger_t *logger);
+void     logger_set_module(logger_t *logger, const char *module);
+void     logger_get_module(const logger_t *logger, char *buf, size_t n);
+clogx_errno_t logger_config_set(logger_t *logger, const log_config_t *cfg);
+log_config_t *logger_config_get(logger_t *logger);
+int      logger_get_stats(const logger_t *logger, clog_stats_t *stats);
+
+LOGGER_TRACE(logger, "...");
+LOGGER_DEBUG(logger, "...");
+LOGGER_INFO(logger, "...");
+LOGGER_WARN(logger, "...");
+LOGGER_ERROR(logger, "...");
+LOGGER_FATAL(logger, "...");
 ```
 
 *Note on Rate Limiter Performance*: When rate limiting is disabled (`rate_limit_enable: false`), a lock-free fast-path bypasses mutex overhead. When enabled, a mutex protects the token bucket calculations.

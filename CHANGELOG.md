@@ -5,6 +5,8 @@ All notable changes to this project will be documented in this file.
 ## [Unreleased]
 
 ### Added
+- Multi-Instance Logger (`logger_t`): independent `logger_create()` / `logger_destroy()` / `LOGGER_INFO()` etc. — each instance owns its own config, sinks, module, and async worker, isolated from the global default logger
+- Coverage Gap Test Suite (`tests/test_coverage_gaps.c`): 9 tests targeting untaken code paths (strerror codes, config parse failure, no-sinks init, async fallback, signal-in-write, thread context update, logger_reload, custom format/time_format)
 - Millisecond-Precision Token Bucket Rate Limiter (`core/rate_limit.c`): optimized token replenishment at millisecond granularity (`g_fill_rate = max_per_sec / 1000.0`), eliminating sub-millisecond floating-point arithmetic overhead on hot paths
 - POSIX Self-Pipe Signal Handler (`core/signal_handler.c` & `log_get_signal_fd()`): zero-lock signal safety implementation writing signal bytes to a non-blocking pipe (`O_NONBLOCK` | `FD_CLOEXEC`), eliminating all mutex/lock operations inside signal handlers and providing `log_get_signal_fd()` for event loop integration
 - POSIX Shell & AWK C-Source Branch Coverage Tool (`scripts/gcov_branch_summary.sh`): zero-dependency bash/awk script parsing `gcov -b` output, calculating true C-source AST branch execution rate (**96.80%** overall across core C files with 8 files at 100%), integrated into Makefile (`make coverage-gcov`), CMake (`coverage-gcov` target), and GitHub Actions CI workflow with threshold enforcement (75%)

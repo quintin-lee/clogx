@@ -22,18 +22,21 @@
    - [JSON Structured Logging](#53-json-structured-logging)
    - [Multi-Sink Setup](#54-multi-sink-setup)
    - [Asynchronous Logging](#55-asynchronous-logging)
-   - [Socket Sink with TLS](#56-socket-sink-with-tls)
+    - [Socket Sink with TLS](#56-socket-sink-with-tls)
+    - [Multi-Instance Logger](#57-multi-instance-logger)
 6. [Advanced Features](#6-advanced-features)
    - [Signal Handling and Graceful Shutdown](#61-signal-handling-and-graceful-shutdown)
    - [Fork Safety](#62-fork-safety)
    - [Hot Reload Configuration](#63-hot-reload-configuration)
    - [Rate Limiting](#64-rate-limiting)
    - [Per-Sink Level Filtering](#65-per-sink-level-filtering)
-   - [Async Fallback Callback](#66-async-fallback-callback)
+    - [Async Fallback Callback](#66-async-fallback-callback)
 7. [API Reference](#7-api-reference)
    - [Core Functions](#71-core-functions)
    - [Sink Management](#72-sink-management)
    - [Logging Macros](#73-logging-macros)
+   - [Multi-Instance Logger API](#74-multi-instance-logger-api)
+   - [Error Codes](#75-error-codes)
 8. [Custom Sinks](#8-custom-sinks)
 9. [Porting to Windows](#9-porting-to-windows)
 10. [Troubleshooting](#10-troubleshooting)
@@ -544,6 +547,42 @@ cmake -S . -B build -DCMAKE_EXPORT_COMPILE_COMMANDS=ON -DCLOG_ENABLE_TLS=ON
 cmake --build build
 ```
 
+### 57 Multi-Instance Logger
+
+Create and manage independent logger instances, each with its own config, sinks, and async worker:
+
+```c
+#include "log.h"
+#include "log_config.h"
+
+int main(void) {
+    /* Create a logger from YAML config */
+    logger_t *app_logger = logger_create("./config.yaml");
+
+    /* Or from programmatic config */
+    log_config_t cfg = {0};
+    cfg.level = LOG_LEVEL_DEBUG;
+    cfg.async = false;
+    cfg.console_enable = true;
+    logger_t *db_logger = logger_create_from_config(&cfg);
+
+    /* Use instance-specific macros */
+    LOGGER_INFO(app_logger, "Application event");
+    LOGGER_ERROR(db_logger, "Database timeout");
+
+    /* Instance-level control */
+    logger_set_level(db_logger, LOG_LEVEL_ERROR);
+    logger_flush(app_logger);
+
+    /* Cleanup */
+    logger_destroy(app_logger);
+    logger_destroy(db_logger);
+    return 0;
+}
+```
+
+The global default logger (`log_init()` / `LOG_INFO()` etc.) coexists with multiple `logger_t *` instances — all are fully isolated.
+
 ---
 
 ## 6. Advanced Features
@@ -722,6 +761,18 @@ The callback runs in the context of the calling thread (not async-signal-safe), 
 | `void (*log_get_async_fallback_cb(void))(void)` | Get currently registered fallback callback | Function pointer |
 | `void log_set_module(const char *module)` | Set process-wide module name (NULL resets to "main") | None |
 | `void log_get_module(char *buf, size_t n)` | Copy module name into caller-provided buffer | None |
+| `logger_t *logger_create(const char *yaml_path)` | Create a new logger instance from YAML config | Pointer, or NULL on failure |
+| `logger_t *logger_create_from_config(const log_config_t *cfg)` | Create a new logger instance from programmatic config | Pointer, or NULL on failure |
+| `void logger_destroy(logger_t *logger)` | Destroy a logger instance, freeing all resources | None |
+| `void logger_flush(logger_t *logger)` | Wait until async queue empty, flush all sinks on this instance | None |
+| `clogx_errno_t logger_reload(logger_t *logger)` | Re-read config for this instance, rebuild sinks | Error code on failure |
+| `int logger_set_level(logger_t *logger, log_level_t level)` | Set min log level for this instance | `CLOG_OK` on success |
+| `log_level_t logger_get_level(const logger_t *logger)` | Get current min log level for this instance | Level value |
+| `void logger_set_module(logger_t *logger, const char *module)` | Set module name for this instance (NULL resets to "main") | None |
+| `void logger_get_module(const logger_t *logger, char *buf, size_t n)` | Copy module name into caller-provided buffer | None |
+| `clogx_errno_t logger_config_set(logger_t *logger, const log_config_t *cfg)` | Apply config to this instance | `CLOG_OK` on success |
+| `log_config_t *logger_config_get(logger_t *logger)` | Get current config of this instance | Pointer to config |
+| `int logger_get_stats(const logger_t *logger, clog_stats_t *stats)` | Get runtime stats for this instance | 0 on success |
 
 ### 72 Sink Management
 
@@ -729,6 +780,8 @@ The callback runs in the context of the calling thread (not async-signal-safe), 
 |----------|-------------|--------|
 | `int log_add_sink(log_sink_t *sink)` | Append custom sink after `log_init()` | `CLOG_OK` on success, `-1` on NULL sink |
 | `int log_remove_sink(log_sink_t *sink)` | Remove sink without destroying it | `CLOG_OK` on success, `CLOG_ERR_INVALID_ARG` if sink is NULL |
+| `int logger_add_sink(logger_t *logger, log_sink_t *sink)` | Append custom sink to a specific logger instance | `CLOG_OK` on success, `-1` on NULL sink |
+| `int logger_remove_sink(logger_t *logger, log_sink_t *sink)` | Remove sink from a specific logger instance | `CLOG_OK` on success, `CLOG_ERR_INVALID_ARG` if sink is NULL |
 | `void log_sink_set_level(log_sink_t *sink, log_level_t level)` | Set minimum level for this sink only | None |
 | `log_level_t log_sink_get_level(const log_sink_t *sink)` | Get current minimum level for this sink | Level value |
 
@@ -750,14 +803,53 @@ LOG_WARN(fmt, ...)    /* WARN level — potential issues */
 LOG_ERROR(fmt, ...)   /* ERROR level — recoverable errors */
 LOG_FATAL(fmt, ...)   /* FATAL level — fatal error, program terminates */
 TRACE(fmt, ...)       /* Deprecated alias for LOG_TRACE */
+
+/* ── Instance-level macros ── */
+
+LOGGER_TRACE(logger, fmt, ...)   /* TRACE level on a specific logger instance */
+LOGGER_DEBUG(logger, fmt, ...)   /* DEBUG level on a specific logger instance */
+LOGGER_INFO(logger, fmt, ...)    /* INFO level on a specific logger instance */
+LOGGER_WARN(logger, fmt, ...)    /* WARN level on a specific logger instance */
+LOGGER_ERROR(logger, fmt, ...)   /* ERROR level on a specific logger instance */
+LOGGER_FATAL(logger, fmt, ...)   /* FATAL level on a specific logger instance */
 ```
 
-Each expands to a call to `log_writevprintf(level, file, line, func, fmt, ...)` with:
+Each expands to a call to `log_writevprintf()` or `logger_writevprintf_internal()` respectively, with:
 - Automatic source location injection (`__FILE__`, `__LINE__`, `__func__`)
 - Compile-time format string validation (GCC/Clang `format(printf, n, m)` attribute)
 - Thread-safe formatting with per-thread buffers
 
-### 74 Error Codes
+### 74 Multi-Instance Logger API
+
+```c
+logger_t *logger_create(const char *yaml_path);
+logger_t *logger_create_from_config(const log_config_t *cfg);
+void      logger_destroy(logger_t *logger);
+void      logger_flush(logger_t *logger);
+clogx_errno_t logger_reload(logger_t *logger);
+int       logger_add_sink(logger_t *logger, log_sink_t *sink);
+int       logger_remove_sink(logger_t *logger, log_sink_t *sink);
+int       logger_set_level(logger_t *logger, log_level_t level);
+log_level_t logger_get_level(const logger_t *logger);
+void      logger_set_module(logger_t *logger, const char *module);
+void      logger_get_module(const logger_t *logger, char *buf, size_t n);
+clogx_errno_t logger_config_set(logger_t *logger, const log_config_t *cfg);
+log_config_t *logger_config_get(logger_t *logger);
+int       logger_get_stats(const logger_t *logger, clog_stats_t *stats);
+```
+
+`logger_create()` reads a YAML config file and initializes the new instance. `logger_create_from_config()` applies a caller-provided `log_config_t` directly (useful when the caller has already parsed or constructed the config). Both return NULL on failure (see `log_strerror()` for details). `logger_destroy()` stops the async worker (if any), drains the queue, and frees all sinks and internal state.
+
+When creating multiple instances, each has its own:
+- **Config**: independent level, async mode, format, time format
+- **Sinks**: separate sink list (console, file, socket, custom)
+- **Module**: independent module name
+- **Async worker**: independent background thread and queue
+- **Stats**: independent counters
+
+Instance-level functions (`logger_add_sink()`, `logger_set_level()`, etc.) work exactly like their global counterparts but affect only the given instance.
+
+### 75 Error Codes
 
 ```c
 typedef enum {
