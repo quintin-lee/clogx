@@ -78,7 +78,12 @@ typedef SOCKET clog_socket_t;
 typedef int clog_sock_size_t;
 #define CLOG_INVALID_SOCKET INVALID_SOCKET
 #define clog_is_invalid_socket(s) ((s) == INVALID_SOCKET)
-#define clog_close_socket(s) closesocket(s)
+static inline void clog_close_socket(clog_socket_t s) {
+    if (s != INVALID_SOCKET) {
+        shutdown(s, SD_BOTH);
+        closesocket(s);
+    }
+}
 
 static inline int clog_net_init(void) {
     WSADATA wsa_data;
