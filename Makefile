@@ -127,7 +127,7 @@ $(BUILD_DIR)/plugin_dummy.so: tests/plugin_dummy.c include/clogx_plugin.h includ
 	$(CC) $(EXTRA_LDFLAGS) $(CFLAGS:-fvisibility=hidden=) -shared -fPIC -o $@ $< $(LDFLAGS)
 
 $(BUILD_DIR)/test_plugin_abi: tests/test_plugin_abi.c $(LIB_TARGET) $(BUILD_DIR)/plugin_dummy.so
-	$(CC) $(EXTRA_LDFLAGS) $(CFLAGS) -DTEST_PLUGIN_SO=\"build/plugin_dummy.so\" -o $@ $< $(LIB_TARGET) $(LDFLAGS)
+	$(CC) $(EXTRA_LDFLAGS) $(CFLAGS) -DTEST_PLUGIN_SO=\"build/plugin_dummy.so\" -DTEST_PLUGIN_DIR=\"build\" -o $@ $< $(LIB_TARGET) $(LDFLAGS)
 
 $(BUILD_DIR)/verify_config: tests/verify_config.c $(LIB_TARGET) | $(BUILD_DIR)
 	$(CC) $(EXTRA_LDFLAGS) $(CFLAGS) -o $@ $< $(LIB_TARGET) $(LDFLAGS)

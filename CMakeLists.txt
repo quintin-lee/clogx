@@ -238,7 +238,8 @@ if(CLOG_BUILD_TESTS)
     target_link_libraries(test_plugin_abi PRIVATE clogx)
     target_compile_definitions(test_plugin_abi PRIVATE
         _GNU_SOURCE
-        TEST_PLUGIN_SO="${PLUGIN_DUMMY_SO}")
+        TEST_PLUGIN_SO="${PLUGIN_DUMMY_SO}"
+        TEST_PLUGIN_DIR="${CMAKE_BINARY_DIR}/tests")
     add_dependencies(test_plugin_abi plugin_dummy)
     set_target_properties(test_plugin_abi PROPERTIES
         RUNTIME_OUTPUT_DIRECTORY ${CMAKE_BINARY_DIR}/tests

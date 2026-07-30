@@ -16,6 +16,11 @@
 #define TEST_PLUGIN_SO "./build/plugin_dummy.so"
 #endif
 
+/* Directory to scan for plugins — set at compile time via -DTEST_PLUGIN_DIR */
+#ifndef TEST_PLUGIN_DIR
+#define TEST_PLUGIN_DIR "./build"
+#endif
+
 /* ------------------------------------------------------------------ */
 /*  Helper: verify sink was dispatched a record via the public API     */
 /* ------------------------------------------------------------------ */
@@ -144,7 +149,7 @@ static void test_scan_valid_dir(void) {
     fprintf(stderr, "=== %s ===\n", __func__);
 
     clogx_plugin_handle_t *handles[8] = {0};
-    int n = log_plugin_scan("./build", handles, 8);
+    int n = log_plugin_scan(TEST_PLUGIN_DIR, handles, 8);
     assert(n >= 1 && "should find at least plugin_dummy.so");
 
     int found_dummy = 0;
