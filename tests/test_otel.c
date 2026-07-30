@@ -203,6 +203,139 @@ static void test_invalid_level_default(void) {
     printf("test_invalid_level_default passed\n");
 }
 
+static void test_format_json_ex_trace_id_span_id(void) {
+    log_formatter_init("json", NULL);
+    log_record_t rec = {0};
+    rec.level = LOG_LEVEL_INFO;
+    rec.timestamp = 1625000000000000ULL;
+    rec.module = "trace_mod";
+    rec.file = "trace.c";
+    rec.line = 10;
+    rec.func = "trace_func";
+    rec.message = "trace message";
+    memset(rec.trace_id, 0, 16);
+    memset(rec.span_id, 0, 8);
+    uint8_t tid[16] = {0x4b, 0xf9, 0x2f, 0x35, 0x77, 0xb3, 0x4d, 0xa6,
+                       0xa3, 0xce, 0x92, 0x9d, 0x0e, 0x0e, 0x47, 0x36};
+    uint8_t sid[8] = {0x00, 0xf0, 0x67, 0xaa, 0x0b, 0xa9, 0x02, 0xb7};
+    memcpy(rec.trace_id, tid, 16);
+    memcpy(rec.span_id, sid, 8);
+
+    char buf[512];
+    int len = log_formatter_format(&rec, buf, sizeof(buf));
+    assert(len > 0);
+    assert(strstr(buf, "\"trace_id\"") != NULL);
+    assert(strstr(buf, "\"span_id\"") != NULL);
+    log_formatter_reset();
+    printf("test_format_json_ex_trace_id_span_id passed\n");
+}
+
+static void test_format_json_ex_tiny_buffer(void) {
+    log_formatter_init("json", NULL);
+    log_record_t rec = {0};
+    rec.level = LOG_LEVEL_INFO;
+    rec.timestamp = 1625000000000000ULL;
+    rec.module = "test";
+    rec.file = "test.c";
+    rec.line = 1;
+    rec.func = "main";
+    rec.message = "x";
+
+    char buf[8];
+    int len = log_formatter_format(&rec, buf, sizeof(buf));
+    assert(len == -1);
+    log_formatter_reset();
+    printf("test_format_json_ex_tiny_buffer passed\n");
+}
+
+static void test_format_json_ex_null_time_format(void) {
+    log_formatter_init("json", NULL);
+    log_record_t rec = {0};
+    rec.level = LOG_LEVEL_INFO;
+    rec.timestamp = 1625000000000000ULL;
+    rec.message = "null time test";
+
+    char buf[256];
+    int len = log_formatter_format(&rec, buf, sizeof(buf));
+    assert(len > 0);
+    assert(strstr(buf, "{\"timestamp\":") != NULL);
+    log_formatter_reset();
+    printf("test_format_json_ex_null_time_format passed\n");
+}
+
+static void test_level_to_string_trace_debug(void) {
+    log_formatter_init("json", NULL);
+    log_record_t rec = {0};
+    rec.timestamp = 1625000000000000ULL;
+    rec.module = "trace_mod";
+    rec.file = "trace.c";
+    rec.line = 10;
+    rec.func = "trace_func";
+    rec.message = "trace debug level test";
+
+    rec.level = LOG_LEVEL_TRACE;
+    char buf[512];
+    log_set_level(LOG_LEVEL_TRACE);
+    int len = log_formatter_format(&rec, buf, sizeof(buf));
+    assert(len > 0);
+    assert(strstr(buf, "\"level\":\"TRACE\"") != NULL);
+
+    rec.level = LOG_LEVEL_DEBUG;
+    len = log_formatter_format(&rec, buf, sizeof(buf));
+    assert(len > 0);
+    assert(strstr(buf, "\"level\":\"DEBUG\"") != NULL);
+
+    log_set_level(LOG_LEVEL_INFO);
+    log_formatter_reset();
+    printf("test_level_to_string_trace_debug passed\n");
+}
+
+static void test_otlp_sink_stderr(void) {
+    log_sink_t *sink = otlp_sink_create("stderr", "stderr_svc");
+    assert(sink != NULL);
+    assert(sink->write != NULL);
+    assert(sink->flush != NULL);
+    assert(sink->destroy != NULL);
+    sink->destroy(sink);
+    printf("test_otlp_sink_stderr passed\n");
+}
+
+static void test_otlp_sink_file_endpoint(void) {
+    const char *path = "/tmp/clog_otlp_file_test.log";
+    remove(path);
+    log_sink_t *sink = otlp_sink_create(path, "file_svc");
+    assert(sink != NULL);
+    assert(sink->write != NULL);
+    int n = sink->write(sink, "{\"resourceLogs\":[]}", 19);
+    assert(n > 0);
+    sink->flush(sink);
+    sink->destroy(sink);
+    remove(path);
+    printf("test_otlp_sink_file_endpoint passed\n");
+}
+
+static void test_otlp_sink_null_and_empty_endpoint(void) {
+    log_sink_t *sink1 = otlp_sink_create(NULL, "null_svc");
+    assert(sink1 != NULL);
+    assert(sink1->write != NULL);
+    sink1->destroy(sink1);
+
+    log_sink_t *sink2 = otlp_sink_create("", "empty_svc");
+    assert(sink2 != NULL);
+    assert(sink2->write != NULL);
+    sink2->destroy(sink2);
+
+    printf("test_otlp_sink_null_and_empty_endpoint passed\n");
+}
+
+static void test_otlp_sink_empty_service_name(void) {
+    log_sink_t *sink = otlp_sink_create("stdout", NULL);
+    assert(sink != NULL);
+    assert(sink->destroy != NULL);
+    sink->destroy(sink);
+    printf("test_otlp_sink_empty_service_name passed\n");
+}
+
 int main(void) {
     test_trace_context_hex();
     test_pattern_trace_tokens();
@@ -212,7 +345,15 @@ int main(void) {
     test_log_formatter_get_format();
     test_tiny_buffer_truncation();
     test_invalid_level_default();
+    test_format_json_ex_trace_id_span_id();
+    test_format_json_ex_tiny_buffer();
+    test_format_json_ex_null_time_format();
+    test_level_to_string_trace_debug();
     test_otlp_sink();
+    test_otlp_sink_stderr();
+    test_otlp_sink_file_endpoint();
+    test_otlp_sink_null_and_empty_endpoint();
+    test_otlp_sink_empty_service_name();
     printf("all otel tests passed!\n");
     return 0;
 }
