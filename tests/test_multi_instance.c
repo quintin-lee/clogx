@@ -310,8 +310,6 @@ static void test_dispatcher_multi_instance_gaps(void) {
     assert(logger_add_sink(logger, s1) == CLOG_OK);
     assert(logger_add_sink(logger, s2) == CLOG_OK);
 
-    log_dispatcher_atfork_child_for(logger);
-
     assert(logger_remove_sink(logger, s1) == CLOG_OK);
     assert(logger_remove_sink(logger, s2) == CLOG_OK);
     s1->destroy(s1);
