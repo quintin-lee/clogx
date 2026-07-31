@@ -4,6 +4,13 @@ All notable changes to this project will be documented in this file.
 
 ## [Unreleased]
 
+### Added
+- Custom `clang-tidy` check `clogx-unused-includes` (`clang-tidy/clogx-unused-includes/`): detects unused `#include` directives by tracking symbol usage across the AST and macro expansions, with transitive include-closure matching and `IgnoreSystemHeaders` / `IgnoreMacros` config options
+- `make tidy-check` target: auto-compiles the check plugin directly with the C++ compiler (no CMake required) and runs it on all sources; integrated into `make check` alongside `check-tidy`
+
+### Fixed
+- Removed 12 unused includes across project headers and core sources (found by the new check), including `stdarg.h`, `stdbool.h`, `stddef.h`, `string.h`, `errno.h`, `stdint.h`, and redundant self-includes
+
 ## [0.2.0] - 2026-07-30
 
 ### Added
