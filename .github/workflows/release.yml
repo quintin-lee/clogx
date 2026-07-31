@@ -55,7 +55,7 @@ jobs:
 
       - name: CMake build
         if: matrix.build == 'cmake'
-        run: cmake --build build -j
+        run: cmake --build build -j --config Release
 
       - name: CMake test
         if: matrix.build == 'cmake'
@@ -142,7 +142,7 @@ jobs:
             -DCLOG_BUILD_EXAMPLES=OFF
 
       - name: CMake build
-        run: cmake --build build -j
+        run: cmake --build build -j --config Release
 
       # ── Package with CPack ──
       - name: Package (tar.gz + DEB + RPM)
