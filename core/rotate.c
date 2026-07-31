@@ -25,9 +25,7 @@
  * with the logging pipeline, so no additional synchronisation is needed.
  */
 #include <stdio.h>
-#include <string.h>
 #include "clog_port.h"
-#include "rotate.h"
 
 int file_rotate_file(const char *base_path, int max_backups) {
     if (!base_path || max_backups <= 0)

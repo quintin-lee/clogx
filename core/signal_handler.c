@@ -38,7 +38,6 @@
 
 #include "clog_port.h"
 #include "log.h"
-#include "log_signal.h"
 #include <signal.h>
 #include <stdbool.h>
 #include <stdio.h>

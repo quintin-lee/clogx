@@ -16,7 +16,6 @@
 
 #include <stdbool.h>
 #include <stdint.h>
-#include <string.h>
 #include "log_record.h"
 #include "log_limits.h"
 

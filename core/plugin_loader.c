@@ -60,7 +60,6 @@ void log_plugin_shutdown_all(void) {
 
 #include <dlfcn.h>
 #include <dirent.h>
-#include <errno.h>
 #include "clog_port.h"
 #include "clogx_plugin.h"
 #include "log.h"

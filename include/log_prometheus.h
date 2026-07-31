@@ -35,7 +35,6 @@
 
 #include <stddef.h>
 #include <stdbool.h>
-#include "log_record.h"
 
 #ifndef CLOGX_API
 #if defined(__GNUC__) || defined(__clang__)

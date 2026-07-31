@@ -24,7 +24,6 @@
 #define LOG_RECORD_H
 
 #include <stdint.h>
-#include <stdbool.h>
 
 /**
  * @enum log_level_t

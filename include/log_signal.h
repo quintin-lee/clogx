@@ -28,8 +28,6 @@
 #ifndef LOG_SIGNAL_H
 #define LOG_SIGNAL_H
 
-#include "log.h"
-
 /**
  * @brief Restore the previous signal handlers for SIGTERM/SIGINT.
  *

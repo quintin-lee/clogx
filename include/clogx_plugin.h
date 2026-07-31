@@ -48,7 +48,6 @@
 #define CLOGX_PLUGIN_H
 
 #include <stdint.h>
-#include <stddef.h>
 #include "log_sink.h"
 
 #ifdef __cplusplus

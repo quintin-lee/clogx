@@ -32,8 +32,6 @@
 #ifndef ROTATE_H
 #define ROTATE_H
 
-#include <stdint.h>
-
 /**
  * @brief Perform a logrotate-style rotation of the numbered backup chain.
  *

@@ -14,7 +14,6 @@
 #ifndef LOG_H
 #define LOG_H
 
-#include <stdarg.h>
 #include <string.h>
 #include "log_config.h"
 #include "log_record.h"
