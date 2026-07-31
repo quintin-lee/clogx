@@ -13,6 +13,7 @@ option(CLOG_BUILD_SHARED "Build shared library instead of static" OFF)
 option(CLOG_USE_SYSTEM_YAML "Use system libyaml instead of auto-downloading" OFF)
 option(CLOG_ENABLE_TLS "Enable OpenSSL TLS support for socket sink" OFF)
 option(CLOG_ENABLE_CLANG_TIDY "Enable clang-tidy static analysis during compilation" OFF)
+option(CLOG_BUILD_CLANG_TIDY_CHECKS "Build custom clang-tidy checks" OFF)
 
 if(CLOG_ENABLE_CLANG_TIDY)
     find_program(CLANG_TIDY_EXE NAMES "clang-tidy")
@@ -22,6 +23,10 @@ if(CLOG_ENABLE_CLANG_TIDY)
     else()
         message(WARNING "CLOG_ENABLE_CLANG_TIDY is ON but clang-tidy executable was not found")
     endif()
+endif()
+
+if(CLOG_BUILD_CLANG_TIDY_CHECKS)
+    add_subdirectory(clang-tidy/clogx-unused-includes)
 endif()
 
 find_package(Threads REQUIRED)

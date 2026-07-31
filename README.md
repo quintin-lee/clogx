@@ -111,6 +111,7 @@ make coverage     # generate gcov branch summary (>96%) + lcov HTML report
 make coverage-gcov# run gcov -b branch coverage gate via scripts/gcov_branch_summary.sh (CI-enforced, 75% threshold)
 make tidy         # run clang-tidy static analysis
 make check-tidy   # enforce clang-tidy warnings-as-errors
+make tidy-check   # run custom clang-tidy checks (requires CLOG_BUILD_CLANG_TIDY_CHECKS=ON)
 make check        # full quality gate: format check → clang-tidy → clean → build → test
 make test-valgrind  # all tests under Valgrind leak check (skipped if not installed)
 make fuzz-build   # builds AFL fuzzing binaries (fuzz_config, fuzz_formatter, fuzz_pipeline)
@@ -140,6 +141,7 @@ Common CMake options:
 | `CLOG_USE_SYSTEM_YAML` | OFF | use system libyaml instead of auto-downloading |
 | `CLOG_ENABLE_TLS` | OFF | enable OpenSSL TLS support for socket sink |
 | `CLOG_ENABLE_CLANG_TIDY` | OFF | enable clang-tidy static analysis during compilation |
+| `CLOG_BUILD_CLANG_TIDY_CHECKS` | OFF | build custom clang-tidy checks (unused-includes) |
 | `CMAKE_EXPORT_COMPILE_COMMANDS` | ON | auto-generate `compile_commands.json` for clangd/LSP |
 
 Downstream projects:
@@ -178,6 +180,38 @@ Install using `conanfile.py`:
 
 ```bash
 conan install . --build=missing -o clogx/*:with_tls=True
+```
+
+### Custom clang-tidy Checks
+
+The project includes a custom clang-tidy check `clogx-unused-includes` that detects unused `#include` directives.
+
+**Build with custom checks:**
+
+```bash
+cmake -S . -B build -DCLOG_BUILD_CLANG_TIDY_CHECKS=ON
+cmake --build build
+```
+
+**Run custom checks:**
+
+```bash
+make tidy-check
+# Or directly:
+clang-tidy -p build \
+    --load build/clang-tidy/libclogx-unused-includes.so \
+    --checks='-*,clogx-unused-includes' \
+    $(CLOG_SOURCES)
+```
+
+**Configuration options:**
+
+```yaml
+CheckOptions:
+  - key: clogx-unused-includes.IgnoreSystemHeaders
+    value: false  # Set to true to skip <system> headers
+  - key: clogx-unused-includes.IgnoreMacros
+    value: false  # Set to true to skip macro-expanded includes
 ```
 
 ## Configuration

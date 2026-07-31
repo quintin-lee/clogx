@@ -3,6 +3,7 @@
 
 Checks: >
   -*,
+  clogx-unused-includes,
   bugprone-*,
   clang-analyzer-*,
   performance-*,
@@ -23,4 +24,8 @@ FormatStyle: 'file'
 CheckOptions:
   - key:   clang-analyzer-optin.performance.Padding.Threshold
     value: '16'
+  - key:   clogx-unused-includes.IgnoreSystemHeaders
+    value: false
+  - key:   clogx-unused-includes.IgnoreMacros
+    value: false
 ...

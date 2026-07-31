@@ -263,6 +263,19 @@ check-tidy:
 	@command -v clang-tidy >/dev/null || { echo "clang-tidy not found; check-tidy skipped"; exit 0; }
 	clang-tidy $(CLOG_SRCS) -- -Iinclude -Icore -D_GNU_SOURCE
 
+# Run custom clang-tidy checks (requires building with CLOG_BUILD_CLANG_TIDY_CHECKS=ON)
+tidy-check:
+	@if [ ! -f build/clang-tidy/libclogx-unused-includes.so ]; then \
+		echo "Error: Custom clang-tidy checks not built. Run:"; \
+		echo "  cmake -S . -B build -DCLOG_BUILD_CLANG_TIDY_CHECKS=ON"; \
+		echo "  cmake --build build"; \
+		exit 1; \
+	fi
+	clang-tidy -p build \
+		--load build/clang-tidy/libclogx-unused-includes.so \
+		--checks='-*,clogx-unused-includes' \
+		$(CLOG_SRCS)
+
 install: $(LIB_TARGET) $(SO_TARGET)
 	install -d $(DESTDIR)$(LIBDIR)
 	install -m 644 $(LIB_TARGET) $(DESTDIR)$(LIBDIR)/
