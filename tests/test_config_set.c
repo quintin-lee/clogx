@@ -1,3 +1,8 @@
+/**
+ * @file test_config_set.c
+ * @brief Regression test: log_config_set programmatic reconfiguration.
+ */
+
 #include "clog_port.h"
 #include "log.h"
 #include "log_sink.h"

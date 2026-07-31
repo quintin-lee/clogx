@@ -1,3 +1,8 @@
+/**
+ * @file test_syslog_sink.c
+ * @brief Regression test: native POSIX syslog sink integration.
+ */
+
 #include "log.h"
 #include "log_sink.h"
 #include <stdio.h>

@@ -1,3 +1,8 @@
+/**
+ * @file test_queue_try_put.c
+ * @brief Regression test: MPSC queue try-put behavior under contention.
+ */
+
 #include "log_record.h"
 #include "queue.h"
 #include <stdio.h>

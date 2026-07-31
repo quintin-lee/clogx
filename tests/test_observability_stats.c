@@ -1,3 +1,8 @@
+/**
+ * @file test_observability_stats.c
+ * @brief Regression test: log_get_stats observability counters.
+ */
+
 #include "log.h"
 #include "log_rate_limit.h"
 #include <stdio.h>

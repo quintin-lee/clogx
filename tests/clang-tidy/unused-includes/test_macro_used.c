@@ -1,3 +1,8 @@
+/**
+ * @file test_macro_used.c
+ * @brief Clang-tidy test: header macros used — expect NO warnings.
+ */
+
 // Test: Macro from header is used - should produce NO warnings
 #include "log.h"
 #include <assert.h>

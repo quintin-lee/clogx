@@ -343,7 +343,8 @@ static int format_json_ex(log_record_t *restrict record,
 /*  W3C TraceContext parser                                            */
 /* ------------------------------------------------------------------ */
 
-/** @brief Convert a single hex character to its 4-bit integer value (0–15), or -1 on invalid input. */
+/** @brief Convert a single hex character to its 4-bit integer value (0–15), or -1 on invalid input.
+ */
 static int hex_nibble(char c)
 {
     if (c >= '0' && c <= '9') {

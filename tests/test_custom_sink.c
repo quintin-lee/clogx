@@ -1,3 +1,8 @@
+/**
+ * @file test_custom_sink.c
+ * @brief Regression test: custom sink API (log_sink_create_custom with callbacks).
+ */
+
 #include "log.h"
 #include "log_sink.h"
 #include <stdio.h>

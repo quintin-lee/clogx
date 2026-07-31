@@ -1,3 +1,8 @@
+/**
+ * @file test_double_init.c
+ * @brief Regression test: double log_init re-entry safety.
+ */
+
 #include "clog_port.h"
 #include "log.h"
 #include <stdio.h>

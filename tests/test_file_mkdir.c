@@ -1,3 +1,8 @@
+/**
+ * @file test_file_mkdir.c
+ * @brief Regression test: file sink auto-creates intermediate directories.
+ */
+
 #include "clog_port.h"
 #include "log_sink.h"
 #include <stdio.h>

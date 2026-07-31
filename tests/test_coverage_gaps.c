@@ -1,3 +1,8 @@
+/**
+ * @file test_coverage_gaps.c
+ * @brief Coverage-gap tests: signal handlers, fork safety, config validation, and error paths.
+ */
+
 #include <assert.h>
 #include <signal.h>
 #include <stdio.h>

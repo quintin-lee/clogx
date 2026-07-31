@@ -1,3 +1,8 @@
+/**
+ * @file test_multithread_sync.c
+ * @brief Regression test: concurrent logging from multiple threads (sync mode).
+ */
+
 #include "clog_port.h"
 #include "log.h"
 #include <stdio.h>

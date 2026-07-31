@@ -1,3 +1,8 @@
+/**
+ * @file test_rate_limit.c
+ * @brief Regression test: token-bucket rate limiter suppression and refill.
+ */
+
 #include "clog_port.h"
 #include "log.h"
 #include <stdio.h>

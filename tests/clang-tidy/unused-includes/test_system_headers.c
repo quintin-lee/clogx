@@ -1,3 +1,8 @@
+/**
+ * @file test_system_headers.c
+ * @brief Clang-tidy test: system header behavior under IgnoreSystemHeaders.
+ */
+
 // Test: System headers behavior with IgnoreSystemHeaders option
 // When IgnoreSystemHeaders=true, system headers should not produce warnings
 // When IgnoreSystemHeaders=false (default), system headers should produce warnings

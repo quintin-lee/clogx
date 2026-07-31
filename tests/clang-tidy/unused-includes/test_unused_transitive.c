@@ -1,3 +1,8 @@
+/**
+ * @file test_unused_transitive.c
+ * @brief Clang-tidy test: transitive unused include — expect warning for stdio.h.
+ */
+
 // Test: Transitive unused include - should produce warning for stdio.h
 // stdlib.h is used, but stdio.h is not (even though it's included)
 #include "log.h"

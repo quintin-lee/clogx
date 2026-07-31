@@ -1,3 +1,8 @@
+/**
+ * @file test_socket_sink.c
+ * @brief Regression test: TCP socket sink connection, write, and TLS options.
+ */
+
 #include "clog_port.h"
 #include "log.h"
 #include "log_sink.h"

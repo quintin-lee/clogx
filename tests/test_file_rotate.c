@@ -1,3 +1,8 @@
+/**
+ * @file test_file_rotate.c
+ * @brief Regression test: file sink size-based rotation and backup management.
+ */
+
 #include "clog_port.h"
 #include "log_sink.h"
 #include <stdio.h>

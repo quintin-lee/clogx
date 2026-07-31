@@ -1,3 +1,8 @@
+/**
+ * @file test_max_size.c
+ * @brief Regression test: max_size config parsing (KB/MB/GB suffixes).
+ */
+
 #include "clog_port.h"
 #include "log_config.h"
 #include <stdio.h>

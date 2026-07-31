@@ -1,3 +1,8 @@
+/**
+ * @file test_thread_context.c
+ * @brief Regression test: thread-local context (MDC) set/get/clear.
+ */
+
 #include "log.h"
 #include <stdio.h>
 #include <stdlib.h>

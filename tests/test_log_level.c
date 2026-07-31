@@ -1,3 +1,8 @@
+/**
+ * @file test_log_level.c
+ * @brief Regression test: log level filtering (TRACE through FATAL).
+ */
+
 #include "clog_port.h"
 #include "log.h"
 #include <stdio.h>

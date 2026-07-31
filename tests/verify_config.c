@@ -1,3 +1,8 @@
+/**
+ * @file verify_config.c
+ * @brief Config verification utility: parses YAML and dumps parsed config values.
+ */
+
 #include "clog_port.h"
 #include "log_config.h"
 #include <stdio.h>

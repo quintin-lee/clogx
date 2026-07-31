@@ -1,3 +1,8 @@
+/**
+ * @file test_dispatcher_lifecycle.c
+ * @brief Regression test: dispatcher init, dispatch, and destroy lifecycle.
+ */
+
 #include "clog_port.h"
 #include "log.h"
 #include <stdio.h>

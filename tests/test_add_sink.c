@@ -1,3 +1,8 @@
+/**
+ * @file test_add_sink.c
+ * @brief Regression test: dynamic log_add_sink / log_remove_sink at runtime.
+ */
+
 #include "clog_port.h"
 #include "log.h"
 #include <stdio.h>

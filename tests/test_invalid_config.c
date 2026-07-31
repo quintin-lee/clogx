@@ -1,3 +1,8 @@
+/**
+ * @file test_invalid_config.c
+ * @brief Regression test: invalid YAML config values are rejected with proper errors.
+ */
+
 #include "clog_port.h"
 #include "log.h"
 #include "log_config.h"

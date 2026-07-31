@@ -1,3 +1,8 @@
+/**
+ * @file test_async_reload.c
+ * @brief Regression test: hot-reload preserves async mode configuration.
+ */
+
 #include "clog_port.h"
 #include "log.h"
 #include "log_async.h"

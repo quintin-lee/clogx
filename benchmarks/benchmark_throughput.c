@@ -1,3 +1,11 @@
+/**
+ * @file benchmark_throughput.c
+ * @brief Raw logging throughput benchmark (500k messages).
+ *
+ * Logs 500,000 INFO-level messages in synchronous mode and reports
+ * messages/sec and µs/message.  Run via `make bench`.
+ */
+
 #include "log.h"
 #include <stdio.h>
 #include <time.h>

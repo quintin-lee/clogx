@@ -1,3 +1,8 @@
+/**
+ * @file test_console_stderr.c
+ * @brief Regression test: console sink stderr output mode (console_stderr: true).
+ */
+
 #include "clog_port.h"
 #include "log.h"
 #include "log_sink.h"

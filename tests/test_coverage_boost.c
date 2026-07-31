@@ -1,3 +1,8 @@
+/**
+ * @file test_coverage_boost.c
+ * @brief Coverage-boosting tests for async, formatter, and rate-limit edge cases.
+ */
+
 #include "clog_port.h"
 #include "log.h"
 #include "log_async.h"

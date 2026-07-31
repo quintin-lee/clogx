@@ -1,3 +1,11 @@
+/**
+ * @file benchmark_async_vs_sync.c
+ * @brief Async vs. sync logging throughput benchmark.
+ *
+ * Measures and compares log throughput in synchronous and asynchronous
+ * modes using a shared YAML config.  Run via `make bench` or directly.
+ */
+
 #include "log.h"
 #include <stdio.h>
 #include <string.h>

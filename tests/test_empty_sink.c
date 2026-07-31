@@ -1,3 +1,8 @@
+/**
+ * @file test_empty_sink.c
+ * @brief Regression test: logging with zero registered sinks (no-crash guarantee).
+ */
+
 #include "clog_port.h"
 #include "log.h"
 #include <stdio.h>

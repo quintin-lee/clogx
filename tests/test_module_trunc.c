@@ -1,3 +1,8 @@
+/**
+ * @file test_module_trunc.c
+ * @brief Regression test: module name truncation at 63-char boundary.
+ */
+
 #include "clog_port.h"
 #include "log.h"
 #include <stdio.h>

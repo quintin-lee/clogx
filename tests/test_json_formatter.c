@@ -1,3 +1,8 @@
+/**
+ * @file test_json_formatter.c
+ * @brief Regression test: JSON structured logging format output.
+ */
+
 #include "log.h"
 #include "log_formatter.h"
 #include <stdio.h>

@@ -1,3 +1,8 @@
+/**
+ * @file test_unused_direct.c
+ * @brief Clang-tidy test: direct unused include — expect warning for stdio.h.
+ */
+
 // Test: Direct unused include - should produce warning for stdio.h
 #include "log.h"
 #include <stdio.h>

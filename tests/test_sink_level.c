@@ -1,3 +1,8 @@
+/**
+ * @file test_sink_level.c
+ * @brief Regression test: per-sink level filtering (log_sink_set_level).
+ */
+
 #include "clog_port.h"
 #include "log.h"
 #include "log_sink.h"

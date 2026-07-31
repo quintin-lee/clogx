@@ -1,3 +1,8 @@
+/**
+ * @file test_used.c
+ * @brief Clang-tidy test: all includes used — expect NO warnings.
+ */
+
 // Test: All includes are used - should produce NO warnings
 #include "log.h"
 #include <stdio.h>

@@ -1,3 +1,8 @@
+/**
+ * @file test_boundary_config.c
+ * @brief Regression test: boundary and edge-case config values (empty, oversized, etc.).
+ */
+
 #include "clog_port.h"
 #include "log.h"
 #include "log_config.h"

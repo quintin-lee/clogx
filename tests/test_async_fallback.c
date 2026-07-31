@@ -1,3 +1,8 @@
+/**
+ * @file test_async_fallback.c
+ * @brief Regression test: async fallback callback invoked on queue full.
+ */
+
 #include "clog_port.h"
 #include "log.h"
 #include "log_async.h"
