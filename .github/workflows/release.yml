@@ -146,9 +146,14 @@ jobs:
 
       # ── Package with CPack ──
       - name: Package (tar.gz + DEB + RPM)
-        if: runner.os == 'Linux'
+        if: runner.os == 'Linux' && !matrix.cross
         run: |
           cd build && cpack -G TGZ -G DEB -G RPM
+
+      - name: Package (tar.gz only, cross-compiled)
+        if: runner.os == 'Linux' && matrix.cross
+        run: |
+          cd build && cpack -G TGZ
 
       - name: Package (tar.gz + ZIP)
         if: runner.os == 'macOS'
