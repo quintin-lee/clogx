@@ -1,3 +1,11 @@
+/**
+ * @file fuzz_pipeline.c
+ * @brief AFL / libFuzzer harness for the full logging pipeline.
+ *
+ * Initialises the logger with a fuzzed config string, then exercises
+ * log_writevprintf() with arbitrary messages to stress the init →
+ * format → dispatch → sink write path end-to-end.
+ */
 #include <stdio.h>
 #include <stdlib.h>
 #include <string.h>

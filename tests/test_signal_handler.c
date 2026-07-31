@@ -1,3 +1,7 @@
+/**
+ * @file test_signal_handler.c
+ * @brief Tests POSIX signal handler installation and safe log flush.
+ */
 #include <stdio.h>
 #include <stdlib.h>
 #include <string.h>

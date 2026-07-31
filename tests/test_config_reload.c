@@ -1,3 +1,7 @@
+/**
+ * @file test_config_reload.c
+ * @brief Tests hot-reload of logging configuration via log_reload().
+ */
 #include <stdio.h>
 #include <stdlib.h>
 #include <string.h>

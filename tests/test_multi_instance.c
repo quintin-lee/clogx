@@ -1,3 +1,7 @@
+/**
+ * @file test_multi_instance.c
+ * @brief Tests multi-instance logger_t API: create, write, destroy independence.
+ */
 #include <stdio.h>
 #include <stdlib.h>
 #include <string.h>

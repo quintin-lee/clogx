@@ -1,3 +1,11 @@
+/**
+ * @file fuzz_formatter.c
+ * @brief AFL / libFuzzer harness for the log formatter.
+ *
+ * Feeds arbitrary strings to log_formatter_compile() and
+ * log_formatter_format() to discover crashes, buffer overflows,
+ * and undefined behaviour in the format compiler and renderer.
+ */
 #include <stdio.h>
 #include <stdlib.h>
 #include <string.h>

@@ -1,3 +1,10 @@
+/**
+ * @file fuzz_config.c
+ * @brief AFL / libFuzzer harness for the YAML config parser.
+ *
+ * Feeds arbitrary file contents to log_parse_config_file() to
+ * discover parser crashes, assertion failures, and memory errors.
+ */
 #include <stdio.h>
 #include <stdlib.h>
 #include <unistd.h>

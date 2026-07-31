@@ -1,3 +1,11 @@
+/**
+ * @file main.c
+ * @brief Example program demonstrating clogx logging library usage.
+ *
+ * Shows both YAML-based and programmatic initialisation, including
+ * async mode, custom sinks, file rotation, structured logging,
+ * thread context (MDC), and Prometheus statistics.
+ */
 #include <stdio.h>
 #include <string.h>
 #include "log.h"

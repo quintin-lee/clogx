@@ -1,3 +1,7 @@
+/**
+ * @file test_fork_safety.c
+ * @brief Tests fork safety: pthread_atfork handlers and child-process recovery.
+ */
 #include <stdio.h>
 #include <stdlib.h>
 #include <string.h>

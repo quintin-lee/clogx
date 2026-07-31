@@ -1,3 +1,7 @@
+/**
+ * @file test_async_lifecycle.c
+ * @brief Tests async worker thread start, drain, and shutdown lifecycle.
+ */
 #include <stdio.h>
 #include <string.h>
 #include "clog_port.h"

@@ -1,3 +1,7 @@
+/**
+ * @file test_pipeline.c
+ * @brief End-to-end logging pipeline test: init → write → file output.
+ */
 #include <stdio.h>
 #include <string.h>
 #include "clog_port.h"
