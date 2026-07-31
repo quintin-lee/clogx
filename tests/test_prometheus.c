@@ -85,8 +85,8 @@ static void test_prometheus_http_socket(void) {
 
     char resp[4096];
     size_t total = 0;
-    int n;
-    while ((n = recv(fd, resp + total, (int)(sizeof(resp) - total - 1), 0)) > 0) {
+    ssize_t n;
+    while ((n = recv(fd, resp + total, sizeof(resp) - total - 1, 0)) > 0) {
         total += (size_t)n;
         if (total >= sizeof(resp) - 1)
             break;
