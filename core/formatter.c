@@ -59,6 +59,30 @@
 static char g_default_format[CLOG_MAX_FORMAT_SIZE] = "[%time] [%level] %msg";
 static char g_time_format_buf[64]                  = "%Y-%m-%d %H:%M:%S";
 
+typedef struct {
+    time_t sec;
+    char   time_format[64];
+    char   formatted[64];
+} clog_time_cache_t;
+
+static clog_thread_local clog_time_cache_t g_time_cache = {0, "", ""};
+
+static void format_sec_cached(time_t sec, const char *fmt, char *out_str, size_t out_str_size)
+{
+    if (!fmt) {
+        fmt = "%Y-%m-%d %H:%M:%S";
+    }
+    if (sec != g_time_cache.sec || strcmp(fmt, g_time_cache.time_format) != 0 ||
+        g_time_cache.formatted[0] == '\0') {
+        struct tm tm_buf;
+        clog_localtime_r(&sec, &tm_buf);
+        strftime(g_time_cache.formatted, sizeof(g_time_cache.formatted), fmt, &tm_buf);
+        snprintf(g_time_cache.time_format, sizeof(g_time_cache.time_format), "%s", fmt);
+        g_time_cache.sec = sec;
+    }
+    snprintf(out_str, out_str_size, "%s", g_time_cache.formatted);
+}
+
 /* Compiled opcode program (populated at init time). */
 
 #define TIME_BUF_SIZE 64
@@ -243,16 +267,11 @@ static int format_json_ex(log_record_t *restrict record,
                           size_t      buf_size,
                           const char *time_format)
 {
-    struct tm tm_buf;
-    time_t    sec  = (time_t)(record->timestamp / 1000000);
-    uint32_t  usec = (uint32_t)(record->timestamp % 1000000);
-    clog_localtime_r(&sec, &tm_buf);
+    time_t   sec  = (time_t)(record->timestamp / 1000000);
+    uint32_t usec = (uint32_t)(record->timestamp % 1000000);
 
     char time_buf[64];
-    if (!time_format) {
-        time_format = "%Y-%m-%d %H:%M:%S";
-    }
-    strftime(time_buf, sizeof(time_buf), time_format, &tm_buf);
+    format_sec_cached(sec, time_format, time_buf, sizeof(time_buf));
 
     char  *out       = buf;
     size_t remaining = buf_size;
@@ -458,13 +477,11 @@ static void parse_traceparent(uint8_t trace_id[16], uint8_t span_id[8])
  */
 static int format_otel_json(log_record_t *restrict record, char *restrict buf, size_t buf_size)
 {
-    struct tm tm_buf;
-    time_t    sec  = (time_t)(record->timestamp / 1000000);
-    uint32_t  usec = (uint32_t)(record->timestamp % 1000000);
-    clog_localtime_r(&sec, &tm_buf);
+    time_t   sec  = (time_t)(record->timestamp / 1000000);
+    uint32_t usec = (uint32_t)(record->timestamp % 1000000);
 
     char time_buf[64];
-    strftime(time_buf, sizeof(time_buf), g_time_format_buf, &tm_buf);
+    format_sec_cached(sec, g_time_format_buf, time_buf, sizeof(time_buf));
 
     char  *out       = buf;
     size_t remaining = buf_size;
@@ -706,8 +723,6 @@ static int format_impl(log_record_t *restrict record,
     char     *out       = buf;
     size_t    remaining = buf_size;
     int       total     = 0;
-    struct tm tm_buf;
-    int       tm_initialized = 0;
 
     for (int i = 0; i < op_count; i++) {
         switch (ops[i].op) {
@@ -718,12 +733,8 @@ static int format_impl(log_record_t *restrict record,
 
         case FMT_OP_TIME: {
             time_t sec = (time_t)(record->timestamp / 1000000);
-            if (!tm_initialized) {
-                clog_localtime_r(&sec, &tm_buf);
-                tm_initialized = 1;
-            }
             char time_buf[TIME_BUF_SIZE];
-            strftime(time_buf, sizeof(time_buf), tf, &tm_buf);
+            format_sec_cached(sec, tf, time_buf, sizeof(time_buf));
             total += append_token(&out, &remaining, time_buf, strlen(time_buf));
             break;
         }

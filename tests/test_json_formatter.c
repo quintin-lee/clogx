@@ -5,6 +5,7 @@
 
 #include "log.h"
 #include "log_formatter.h"
+#include "log_internal.h"
 #include <stdio.h>
 #include <stdlib.h>
 #include <string.h>
@@ -32,8 +33,39 @@ static int write_config(void)
     return 0;
 }
 
+#include <assert.h>
+
+static void test_timestamp_cache_formatting(void)
+{
+    log_record_t rec = {0};
+    rec.level     = LOG_LEVEL_INFO;
+    rec.timestamp = 1700000000000000ULL; /* fixed epoch time in microseconds */
+    rec.message   = "cache time test";
+    rec.module    = "main";
+    rec.file      = "test.c";
+    rec.line      = 10;
+    rec.func      = "test_fn";
+
+    char buf1[256];
+    char buf2[256];
+
+    logger_t logger = {0};
+    logger.config.level = LOG_LEVEL_DEBUG;
+    logger.config.format = "[%time] %msg";
+
+    int len1 = log_formatter_format_for(&logger, &rec, buf1, sizeof(buf1));
+    rec.timestamp += 500ULL; /* same second, +500 us */
+    int len2 = log_formatter_format_for(&logger, &rec, buf2, sizeof(buf2));
+
+    assert(len1 > 0 && len2 > 0);
+    assert(strncmp(buf1, buf2, 20) == 0); /* date and second portion must match */
+    printf("test_timestamp_cache_formatting PASSED\n");
+}
+
 int main(void)
 {
+    test_timestamp_cache_formatting();
+
     remove(LOG_PATH);
     if (write_config() != 0 || log_init(CONFIG_PATH) != 0) {
         fprintf(stderr, "json test log_init failed\n");
