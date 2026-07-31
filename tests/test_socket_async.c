@@ -338,6 +338,55 @@ static void test_writer_stop_null(void)
     printf("  test_writer_stop_null PASSED\n");
 }
 
+static void test_socket_async_boundary_cases(void)
+{
+    /* socket_ring_get_batch NULL/invalid args */
+    const char *lines[4];
+    size_t      lengths[4];
+    assert(socket_ring_get_batch(NULL, lines, lengths, 4) == -1);
+    socket_ring_buffer_t *ring = socket_ring_create(4);
+    assert(socket_ring_get_batch(ring, NULL, lengths, 4) == -1);
+    assert(socket_ring_get_batch(ring, lines, NULL, 4) == -1);
+    assert(socket_ring_get_batch(ring, lines, lengths, 0) == -1);
+
+    /* NULL checks for close, signal, destroy */
+    socket_ring_close(NULL);
+    socket_ring_signal(NULL);
+    socket_ring_destroy(NULL);
+
+    /* socket_writer_start NULL / invalid args */
+    assert(socket_writer_start(NULL) == NULL);
+    socket_writer_config_t cfg;
+    memset(&cfg, 0, sizeof(cfg));
+    assert(socket_writer_start(&cfg) == NULL);
+    cfg.host = "127.0.0.1";
+    cfg.port = -1;
+    assert(socket_writer_start(&cfg) == NULL);
+    cfg.port = 70000;
+    assert(socket_writer_start(&cfg) == NULL);
+
+    /* socket_writer_start with zero defaults and TLS requested */
+    cfg.port           = 9000;
+    cfg.use_tls        = true;
+    cfg.ring_capacity  = 0;
+    cfg.backoff_min_ms = 0;
+    cfg.backoff_max_ms = 0;
+    socket_writer_t *w  = socket_writer_start(&cfg);
+    assert(w != NULL);
+    assert(socket_writer_ring(w) != NULL);
+
+    usleep(20000);
+    socket_writer_stop(w);
+    free(w);
+
+    /* socket_writer_ring and dropped NULL checks */
+    assert(socket_writer_ring(NULL) == NULL);
+    assert(socket_writer_dropped(NULL) == 0);
+
+    socket_ring_destroy(ring);
+    printf("  test_socket_async_boundary_cases PASSED\n");
+}
+
 #endif /* !_WIN32 */
 
 int main(void)
@@ -361,6 +410,7 @@ int main(void)
     test_writer_connect_failure_backoff();
     test_writer_dropped_count();
     test_writer_stop_null();
+    test_socket_async_boundary_cases();
 #endif
 
     printf("=== all socket async tests PASSED ===\n");

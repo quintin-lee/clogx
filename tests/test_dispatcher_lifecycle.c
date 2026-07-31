@@ -4,6 +4,7 @@
  */
 
 #include "clog_port.h"
+#include "dispatcher.h"
 #include "log.h"
 #include <stdio.h>
 #include <stdlib.h>
@@ -83,5 +84,21 @@ int main(void)
         fprintf(stderr, "expected 3 lines after reload cycle, got %d\n", lines);
         return 1;
     }
+
+    /* Test dispatcher singleton functions & atfork child with active sink */
+    log_dispatcher_init();
+    log_dispatcher_flush();
+
+    log_sink_t *sock_sink = socket_sink_create("127.0.0.1", 9000);
+    if (sock_sink) {
+        log_dispatcher_add_sink(sock_sink);
+        log_dispatcher_atfork_prepare();
+        log_dispatcher_atfork_parent();
+        log_dispatcher_atfork_child();
+        log_dispatcher_remove_sink(sock_sink);
+        sock_sink->destroy(sock_sink);
+    }
+    log_dispatcher_destroy();
+
     return 0;
 }
