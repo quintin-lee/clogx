@@ -9,7 +9,6 @@
 #include <stdlib.h>
 #include <string.h>
 #include <sys/time.h>
-#include <unistd.h>
 
 /* ── Ring buffer unit tests ── */
 
@@ -371,7 +370,7 @@ static void test_socket_async_boundary_cases(void)
     cfg.ring_capacity  = 0;
     cfg.backoff_min_ms = 0;
     cfg.backoff_max_ms = 0;
-    socket_writer_t *w  = socket_writer_start(&cfg);
+    socket_writer_t *w = socket_writer_start(&cfg);
     assert(w != NULL);
     assert(socket_writer_ring(w) != NULL);
 

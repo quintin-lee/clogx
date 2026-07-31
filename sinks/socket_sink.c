@@ -249,7 +249,6 @@ static void socket_destroy(log_sink_t *sink)
         /* Stop async writer if running. */
         if (data->async_enabled && data->async_writer) {
             socket_writer_stop(data->async_writer);
-            socket_ring_destroy(data->async_ring);
             free(data->async_writer);
             data->async_writer = NULL;
             data->async_ring   = NULL;

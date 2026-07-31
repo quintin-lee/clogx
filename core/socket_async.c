@@ -13,13 +13,13 @@
 #include <stdio.h>
 #include <stdlib.h>
 #include <string.h>
-#include <unistd.h>
 
 #if !defined(_WIN32)
 #include <arpa/inet.h>
 #include <netinet/in.h>
 #include <sys/select.h>
 #include <sys/socket.h>
+#include <unistd.h>
 #endif
 
 #ifdef CLOG_USE_TLS
@@ -616,6 +616,8 @@ void socket_writer_stop(socket_writer_t *writer)
 
     /* Wait for writer thread to finish. */
     clog_thread_join(writer->thread);
+    socket_ring_destroy(writer->ring);
+    writer->ring = NULL;
 }
 
 uint64_t socket_writer_dropped(const socket_writer_t *writer)

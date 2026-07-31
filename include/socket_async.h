@@ -195,10 +195,10 @@ socket_writer_t *socket_writer_start(const socket_writer_config_t *config);
 socket_ring_buffer_t *socket_writer_ring(socket_writer_t *writer);
 
 /**
- * @brief Stop the writer thread and drain remaining lines.
+ * @brief Stop the writer thread, drain remaining lines, and destroy the ring.
  *
- * Signals the ring to close, waits for the writer to drain, then
- * joins the thread. Must be called before @ref socket_ring_destroy.
+ * Signals the ring to close, waits for the writer to drain, joins the thread,
+ * then destroys the ring buffer. After this call the writer must not be reused.
  *
  * @param writer  Writer instance (NULL-safe).
  */

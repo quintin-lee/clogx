@@ -182,7 +182,8 @@ int main(void)
     }
 
     /* Test socket_sink_create_async with default 0 options */
-    log_sink_t *async_sink = socket_sink_create_async("127.0.0.1", 9000, false, NULL, false, 0, 0, 0);
+    log_sink_t *async_sink =
+        socket_sink_create_async("127.0.0.1", 9000, false, NULL, false, 0, 0, 0);
     if (!async_sink) {
         fprintf(stderr, "socket_sink_create_async failed\n");
         return 1;
@@ -193,7 +194,8 @@ int main(void)
     async_sink->destroy(async_sink);
 
     /* Test socket_sink_create_async with explicit capacity and backoff, destroyed directly */
-    log_sink_t *async_sink2 = socket_sink_create_async("127.0.0.1", 9000, false, NULL, false, 1024, 100, 1000);
+    log_sink_t *async_sink2 =
+        socket_sink_create_async("127.0.0.1", 9000, false, NULL, false, 1024, 100, 1000);
     if (!async_sink2) {
         fprintf(stderr, "socket_sink_create_async explicit config failed\n");
         return 1;
@@ -209,7 +211,7 @@ int main(void)
     dummy_sink->atfork_child(&empty_sink_struct);
 
     /* Test connected socket atfork_child and destroy */
-    clog_socket_t sfd = socket(AF_INET, SOCK_STREAM, 0);
+    clog_socket_t      sfd = socket(AF_INET, SOCK_STREAM, 0);
     struct sockaddr_in saddr;
     memset(&saddr, 0, sizeof(saddr));
     saddr.sin_family      = AF_INET;
@@ -240,8 +242,12 @@ int main(void)
             /* Destroy while connected */
             conn_sink->destroy(conn_sink);
 
-            if (!clog_is_invalid_socket(cfd)) clog_close_socket(cfd);
-            if (!clog_is_invalid_socket(cfd2)) clog_close_socket(cfd2);
+            if (!clog_is_invalid_socket(cfd)) {
+                clog_close_socket(cfd);
+            }
+            if (!clog_is_invalid_socket(cfd2)) {
+                clog_close_socket(cfd2);
+            }
         }
         clog_close_socket(sfd);
     }
@@ -254,8 +260,8 @@ int main(void)
         int           connected;
     } dummy_socket_data_t;
     dummy_socket_data_t *ddata = (dummy_socket_data_t *)dummy_sink->private_data;
-    ddata->sockfd = CLOG_INVALID_SOCKET;
-    ddata->connected = 1;
+    ddata->sockfd              = CLOG_INVALID_SOCKET;
+    ddata->connected           = 1;
     if (dummy_sink->write(dummy_sink, "fail\n", 5) != -1) {
         fprintf(stderr, "write with invalid sockfd and connected=1 should return -1\n");
         return 1;
