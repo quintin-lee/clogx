@@ -162,35 +162,6 @@ int log_remove_sink(log_sink_t *sink)
     return CLOG_OK;
 }
 
-/** Wall-clock timestamp in microseconds since the Unix epoch. */
-static inline uint64_t get_timestamp(void)
-{
-#if defined(_WIN32) || defined(_WIN64)
-    FILETIME ft;
-    GetSystemTimeAsFileTime(&ft);
-    uint64_t t = ((uint64_t)ft.dwHighDateTime << 32) | ft.dwLowDateTime;
-    /* Convert 100ns intervals since Jan 1, 1601 to microseconds since Jan 1, 1970 */
-    return (t - 116444736000000000ULL) / 10;
-#else
-    struct timespec ts;
-    clock_gettime(CLOCK_REALTIME, &ts);
-    return (uint64_t)ts.tv_sec * 1000000 + (uint64_t)ts.tv_nsec / 1000;
-#endif
-}
-
-/** Truncated thread ID suitable for %thread formatting. */
-static inline uint32_t get_thread_id(void)
-{
-#if defined(_WIN32) || defined(_WIN64)
-    return (uint32_t)GetCurrentThreadId();
-#else
-    pthread_t self = pthread_self();
-    uint32_t  h    = (uint32_t)((uintptr_t)self >> 32);
-    uint32_t  l    = (uint32_t)(uintptr_t)self;
-    return (h ^ l ^ 0x9e3779b9u) + 1u;
-#endif
-}
-
 static int logger_init_internal(logger_t *logger, const char *yaml_path)
 {
     clog_rwlock_init(&logger->config_rwlock);
@@ -274,8 +245,8 @@ static void logger_writevprintf_internal(logger_t   *logger,
 
     log_record_t record;
     record.level     = level;
-    record.timestamp = get_timestamp();
-    record.tid       = get_thread_id();
+    record.timestamp = clog_get_timestamp_us();
+    record.tid       = clog_get_thread_id();
     record.pid       = clog_getpid();
     record.file      = file;
     record.func      = func;

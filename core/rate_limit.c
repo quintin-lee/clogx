@@ -40,16 +40,7 @@
 
 static uint64_t get_now_ms(void)
 {
-#if defined(_WIN32) || defined(_WIN64)
-    LARGE_INTEGER freq, count;
-    QueryPerformanceFrequency(&freq);
-    QueryPerformanceCounter(&count);
-    return (uint64_t)((count.QuadPart * 1000ULL) / freq.QuadPart);
-#else
-    struct timespec ts;
-    clock_gettime(CLOCK_MONOTONIC, &ts);
-    return (uint64_t)ts.tv_sec * 1000ULL + (uint64_t)ts.tv_nsec / 1000000ULL;
-#endif
+    return clog_get_now_ms();
 }
 
 /* ── Singleton wrappers ── */

@@ -402,4 +402,63 @@ static inline void clog_mutex_unlock_ptr(clog_mutex_t **m)
 #define clog_thread_local _Thread_local
 #endif
 
+/* ── Time & Thread utilities ── */
+
+static inline uint64_t clog_get_timestamp_us(void)
+{
+#if defined(_WIN32) || defined(_WIN64)
+    FILETIME ft;
+    GetSystemTimeAsFileTime(&ft);
+    uint64_t t = ((uint64_t)ft.dwHighDateTime << 32) | ft.dwLowDateTime;
+    return (t - 116444736000000000ULL) / 10;
+#else
+    struct timespec ts;
+    clock_gettime(CLOCK_REALTIME, &ts);
+    return (uint64_t)ts.tv_sec * 1000000 + (uint64_t)ts.tv_nsec / 1000;
+#endif
+}
+
+static inline uint32_t clog_get_thread_id(void)
+{
+#if defined(_WIN32) || defined(_WIN64)
+    return (uint32_t)GetCurrentThreadId();
+#else
+    pthread_t self = pthread_self();
+    uint32_t  h    = (uint32_t)((uintptr_t)self >> 32);
+    uint32_t  l    = (uint32_t)(uintptr_t)self;
+    return (h ^ l ^ 0x9e3779b9u) + 1u;
+#endif
+}
+
+static inline uint64_t clog_get_now_ms(void)
+{
+#if defined(_WIN32) || defined(_WIN64)
+    LARGE_INTEGER freq, count;
+    QueryPerformanceFrequency(&freq);
+    QueryPerformanceCounter(&count);
+    return (uint64_t)((count.QuadPart * 1000ULL) / freq.QuadPart);
+#else
+    struct timespec ts;
+    clock_gettime(CLOCK_MONOTONIC, &ts);
+    return (uint64_t)ts.tv_sec * 1000ULL + (uint64_t)ts.tv_nsec / 1000000ULL;
+#endif
+}
+
+/* ── Console VT mode (ANSI escape support) ── */
+
+static inline void clog_console_enable_vt_mode(FILE *stream)
+{
+    (void)stream;
+#if defined(_WIN32) || defined(_WIN64)
+    HANDLE hOut = GetStdHandle(stream == stderr ? STD_ERROR_HANDLE : STD_OUTPUT_HANDLE);
+    if (hOut != INVALID_HANDLE_VALUE && hOut != NULL) {
+        DWORD dwMode = 0;
+        if (GetConsoleMode(hOut, &dwMode)) {
+            dwMode |= ENABLE_VIRTUAL_TERMINAL_PROCESSING;
+            SetConsoleMode(hOut, dwMode);
+        }
+    }
+#endif
+}
+
 #endif /* CLOG_PORT_H */

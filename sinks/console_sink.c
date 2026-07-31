@@ -44,20 +44,6 @@ typedef struct {
     int   use_color;
 } console_sink_data_t;
 
-#if defined(_WIN32) || defined(_WIN64)
-static void enable_windows_vt_mode(FILE *stream)
-{
-    HANDLE hOut = GetStdHandle(stream == stderr ? STD_ERROR_HANDLE : STD_OUTPUT_HANDLE);
-    if (hOut != INVALID_HANDLE_VALUE && hOut != NULL) {
-        DWORD dwMode = 0;
-        if (GetConsoleMode(hOut, &dwMode)) {
-            dwMode |= ENABLE_VIRTUAL_TERMINAL_PROCESSING;
-            SetConsoleMode(hOut, dwMode);
-        }
-    }
-}
-#endif
-
 static int console_write(log_sink_t *sink, const char *buf, size_t len)
 {
     console_sink_data_t *data = (console_sink_data_t *)sink->private_data;
@@ -116,11 +102,7 @@ static log_sink_t *console_sink_create_for(FILE *stream, bool use_color)
     data->stream    = stream;
     data->use_color = use_color;
 
-#if defined(_WIN32) || defined(_WIN64)
-    if (use_color) {
-        enable_windows_vt_mode(data->stream);
-    }
-#endif
+    clog_console_enable_vt_mode(data->stream);
 
     sink->abi_version  = CLOGX_PLUGIN_ABI_VERSION;
     sink->write        = console_write;

@@ -15,6 +15,7 @@
 /* Plugin ABI is not supported on Windows.
  * Stubs are provided so the library links and the rest of the
  * sink/logger pipeline works without dynamic-load support.          */
+#include "clog_port.h"
 #include "clogx_plugin.h"
 #include "log_config.h"
 

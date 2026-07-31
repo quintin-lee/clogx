@@ -51,16 +51,6 @@
 #include <stdlib.h>
 #include <string.h>
 
-#if defined(_WIN32) || defined(_WIN64)
-#include <winsock2.h>
-#include <ws2tcpip.h>
-#else
-#include <arpa/inet.h>
-#include <netinet/in.h>
-#include <sys/socket.h>
-#include <unistd.h>
-#endif
-
 /* Global level counters accessed by log.c and prometheus renderer */
 extern volatile uint64_t g_prometheus_level_counts[6];
 
@@ -212,10 +202,7 @@ int clog_prometheus_exporter_start(int port)
         return CLOG_OK;
     }
 
-#if defined(_WIN32) || defined(_WIN64)
-    WSADATA wsa_data;
-    WSAStartup(MAKEWORD(2, 2), &wsa_data);
-#endif
+    clog_net_init();
 
     g_prom_server_fd = socket(AF_INET, SOCK_STREAM, 0);
     if (g_prom_server_fd == CLOG_INVALID_SOCKET) {
