@@ -167,5 +167,101 @@ int main(void)
         return 1;
     }
 
+    /* Test socket_sink_create_tls with ca_file */
+    log_sink_t *ca_sink = socket_sink_create_tls("127.0.0.1", 9000, false, "dummy_ca.pem", false);
+    if (!ca_sink) {
+        fprintf(stderr, "socket_sink_create_tls with ca_file failed\n");
+        return 1;
+    }
+    ca_sink->destroy(ca_sink);
+
+    /* Test socket_sink_create_async boundary checks */
+    if (socket_sink_create_async(NULL, 9000, false, NULL, false, 0, 0, 0) != NULL) {
+        fprintf(stderr, "socket_sink_create_async with NULL host should fail\n");
+        return 1;
+    }
+
+    /* Test socket_sink_create_async with default 0 options */
+    log_sink_t *async_sink = socket_sink_create_async("127.0.0.1", 9000, false, NULL, false, 0, 0, 0);
+    if (!async_sink) {
+        fprintf(stderr, "socket_sink_create_async failed\n");
+        return 1;
+    }
+    async_sink->write(async_sink, "async msg\n", 10);
+    async_sink->flush(async_sink);
+    async_sink->atfork_child(async_sink);
+    async_sink->destroy(async_sink);
+
+    /* Test socket_sink_create_async with explicit capacity and backoff, destroyed directly */
+    log_sink_t *async_sink2 = socket_sink_create_async("127.0.0.1", 9000, false, NULL, false, 1024, 100, 1000);
+    if (!async_sink2) {
+        fprintf(stderr, "socket_sink_create_async explicit config failed\n");
+        return 1;
+    }
+    async_sink2->write(async_sink2, "async msg 2\n", 12);
+    async_sink2->destroy(async_sink2);
+
+    /* Test atfork_child NULL checks */
+    log_sink_t *dummy_sink = socket_sink_create("127.0.0.1", 9000);
+    dummy_sink->atfork_child(NULL);
+    log_sink_t empty_sink_struct;
+    memset(&empty_sink_struct, 0, sizeof(empty_sink_struct));
+    dummy_sink->atfork_child(&empty_sink_struct);
+
+    /* Test connected socket atfork_child and destroy */
+    clog_socket_t sfd = socket(AF_INET, SOCK_STREAM, 0);
+    struct sockaddr_in saddr;
+    memset(&saddr, 0, sizeof(saddr));
+    saddr.sin_family      = AF_INET;
+    saddr.sin_addr.s_addr = htonl(INADDR_LOOPBACK);
+    saddr.sin_port        = 0;
+    if (bind(sfd, (struct sockaddr *)&saddr, sizeof(saddr)) == 0) {
+#if defined(_WIN32) || defined(_WIN64)
+        int slen = sizeof(saddr);
+#else
+        socklen_t slen = sizeof(saddr);
+#endif
+        getsockname(sfd, (struct sockaddr *)&saddr, &slen);
+        listen(sfd, 2);
+        int test_port = ntohs(saddr.sin_port);
+
+        log_sink_t *conn_sink = socket_sink_create("127.0.0.1", test_port);
+        if (conn_sink) {
+            conn_sink->write(conn_sink, "test\n", 5);
+            clog_socket_t cfd = accept(sfd, NULL, NULL);
+
+            /* Test atfork_child on connected socket */
+            conn_sink->atfork_child(conn_sink);
+
+            /* Re-connect by writing again */
+            conn_sink->write(conn_sink, "test2\n", 6);
+            clog_socket_t cfd2 = accept(sfd, NULL, NULL);
+
+            /* Destroy while connected */
+            conn_sink->destroy(conn_sink);
+
+            if (!clog_is_invalid_socket(cfd)) clog_close_socket(cfd);
+            if (!clog_is_invalid_socket(cfd2)) clog_close_socket(cfd2);
+        }
+        clog_close_socket(sfd);
+    }
+
+    /* Test socket_connect / socket_write when sockfd is invalid but connected flag is set */
+    typedef struct {
+        clog_socket_t sockfd;
+        const char   *host;
+        int           port;
+        int           connected;
+    } dummy_socket_data_t;
+    dummy_socket_data_t *ddata = (dummy_socket_data_t *)dummy_sink->private_data;
+    ddata->sockfd = CLOG_INVALID_SOCKET;
+    ddata->connected = 1;
+    if (dummy_sink->write(dummy_sink, "fail\n", 5) != -1) {
+        fprintf(stderr, "write with invalid sockfd and connected=1 should return -1\n");
+        return 1;
+    }
+    ddata->connected = 0;
+    dummy_sink->destroy(dummy_sink);
+
     return 0;
 }
