@@ -123,6 +123,16 @@ static int alloc_slot_locked(void)
 /*  Public API                                                        */
 /* ------------------------------------------------------------------ */
 
+/**
+ * @brief Load a plugin .so via dlopen, caching the handle for reuse.
+ *
+ * Performs ABI version validation and resolves the descriptor and
+ * optional factory symbols. If the same .so_path was already loaded,
+ * returns the existing handle (deduplication).
+ *
+ * @param so_path  Path to the shared library. Must be non-NULL and non-empty.
+ * @return Plugin handle, or NULL on dlopen/dlsym failure or ABI mismatch.
+ */
 clogx_plugin_handle_t *log_plugin_load(const char *so_path)
 {
     if (!so_path || !*so_path) {
@@ -219,6 +229,13 @@ clogx_plugin_handle_t *log_plugin_load(const char *so_path)
     return h;
 }
 
+/**
+ * @brief Unload a previously loaded plugin, closing its dlopen handle.
+ *
+ * Safe to call with NULL or already-unloaded handles.
+ *
+ * @param h  Plugin handle from log_plugin_load(), or NULL.
+ */
 void log_plugin_unload(clogx_plugin_handle_t *h)
 {
     if (!h) {
@@ -241,6 +258,13 @@ void log_plugin_unload(clogx_plugin_handle_t *h)
     clog_mutex_unlock(&g_plugin_mutex);
 }
 
+/**
+ * @brief Create a sink via a loaded plugin's factory function.
+ *
+ * @param h            Plugin handle with a valid create_fn.
+ * @param params_json  JSON string passed to the factory. May be NULL.
+ * @return New sink, or NULL if handle is invalid or factory fails.
+ */
 log_sink_t *log_plugin_create_sink(clogx_plugin_handle_t *h, const char *params_json)
 {
     if (!h || !h->used || !h->create_fn) {
@@ -250,6 +274,12 @@ log_sink_t *log_plugin_create_sink(clogx_plugin_handle_t *h, const char *params_
     return h->create_fn(params_json);
 }
 
+/**
+ * @brief Return the descriptor for a loaded plugin.
+ *
+ * @param h  Plugin handle from log_plugin_load().
+ * @return Descriptor, or NULL if handle is invalid.
+ */
 const clogx_plugin_t *log_plugin_info(clogx_plugin_handle_t *h)
 {
     if (!h || !h->used || !h->desc) {
@@ -258,6 +288,17 @@ const clogx_plugin_t *log_plugin_info(clogx_plugin_handle_t *h)
     return h->desc;
 }
 
+/**
+ * @brief Scan a directory for .so plugin files and load each one.
+ *
+ * Only files ending in ".so" are considered. Each found plugin is
+ * loaded via log_plugin_load() and its handle stored in @p out.
+ *
+ * @param dir  Directory to scan. NULL returns -1.
+ * @param out  Array of handles to fill (may be NULL to just count).
+ * @param max  Capacity of @p out.
+ * @return Number of successfully loaded plugins, or -1 on error.
+ */
 int log_plugin_scan(const char *dir, clogx_plugin_handle_t **out, int max)
 {
     if (!dir) {

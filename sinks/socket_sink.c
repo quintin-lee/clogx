@@ -253,6 +253,19 @@ static void socket_atfork_child(log_sink_t *sink)
     data->connected = 0;
 }
 
+/**
+ * @brief Create a TCP/TLS socket sink with lazy connect.
+ *
+ * The connection is not established until the first write. On send
+ * failure, the socket is closed and reconnected automatically.
+ *
+ * @param host         Remote host. Non-NULL, non-empty, port 1–65535.
+ * @param port         Remote port.
+ * @param use_tls      Enable OpenSSL TLS transport (requires CLOG_USE_TLS).
+ * @param ca_file      CA certificate path for TLS verification, or NULL.
+ * @param skip_verify  Skip server certificate verification when true.
+ * @return New sink, or NULL on error.
+ */
 log_sink_t *socket_sink_create_tls(
     const char *host, int port, bool use_tls, const char *ca_file, bool skip_verify)
 {
@@ -297,6 +310,15 @@ log_sink_t *socket_sink_create_tls(
     return sink;
 }
 
+/**
+ * @brief Create a plain TCP socket sink (no TLS).
+ *
+ * Convenience wrapper around socket_sink_create_tls() with TLS disabled.
+ *
+ * @param host  Remote host. Non-NULL, non-empty, port 1–65535.
+ * @param port  Remote port.
+ * @return New sink, or NULL on error.
+ */
 log_sink_t *socket_sink_create(const char *host, int port)
 {
     return socket_sink_create_tls(host, port, false, NULL, false);

@@ -91,6 +91,15 @@ static void custom_destroy(log_sink_t *sink)
     free(sink);
 }
 
+/**
+ * @brief Create a custom sink backed by user-supplied callbacks.
+ *
+ * @param write_fn     Required write callback.
+ * @param flush_fn     Optional flush callback (may be NULL).
+ * @param destroy_fn   Optional destroy callback (may be NULL).
+ * @param private_data Opaque pointer stored in sink->private_data.
+ * @return New sink, or NULL if write_fn is NULL or on allocation failure.
+ */
 log_sink_t *custom_sink_create(int (*write_fn)(log_sink_t *sink, const char *buf, size_t len),
                                void (*flush_fn)(log_sink_t *sink),
                                void (*destroy_fn)(log_sink_t *sink),
@@ -127,6 +136,12 @@ log_sink_t *custom_sink_create(int (*write_fn)(log_sink_t *sink, const char *buf
     return sink;
 }
 
+/**
+ * @brief Retrieve the user private data pointer from a custom sink.
+ *
+ * @param sink  Custom sink (verified by write function pointer).
+ * @return Private data pointer, or NULL if sink is not a custom sink.
+ */
 void *custom_sink_get_private_data(log_sink_t *sink)
 {
     if (!sink || sink->write != custom_write) {

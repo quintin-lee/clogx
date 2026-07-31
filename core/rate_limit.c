@@ -67,6 +67,18 @@ uint64_t log_rate_limit_get_total_suppressed(void)
 
 /* ── Instance variants ── */
 
+/**
+ * @brief Initialise the token-bucket rate limiter for a logger instance.
+ *
+ * Computes the fill rate as max_per_sec / 1000 (tokens per millisecond)
+ * and sets the initial burst capacity. If enable is false or the
+ * parameters are invalid, rate limiting is disabled (all messages pass).
+ *
+ * @param logger       Logger instance.
+ * @param enable       Enable rate limiting (false disables it).
+ * @param max_per_sec  Sustained throughput (messages/second).
+ * @param burst        Maximum burst size (bucket capacity).
+ */
 void log_rate_limit_init_for(logger_t *logger, bool enable, int max_per_sec, int burst)
 {
     clog_mutex_lock(&logger->rl_mutex);
@@ -83,6 +95,22 @@ void log_rate_limit_init_for(logger_t *logger, bool enable, int max_per_sec, int
     clog_mutex_unlock(&logger->rl_mutex);
 }
 
+/**
+ * @brief Check whether the current log call should be allowed by the rate limiter.
+ *
+ * Implements the token-bucket algorithm:
+ * 1. Refill tokens based on elapsed time since last update.
+ * 2. If tokens >= 1.0, consume one token and allow the call.
+ * 3. Otherwise, suppress the call and increment the suppressed counter.
+ *
+ * When a burst of messages is suppressed and then a message IS allowed,
+ * the suppressed count is returned via @p out_suppressed_count so the
+ * caller can emit a "suppressed N messages" warning.
+ *
+ * @param logger                Logger instance.
+ * @param out_suppressed_count  Output: count of messages suppressed since last allow.
+ * @return true if the message is allowed, false if suppressed.
+ */
 bool log_rate_limit_allow_for(logger_t *logger, uint64_t *out_suppressed_count)
 {
     if (out_suppressed_count) {

@@ -108,6 +108,16 @@ static void otlp_sink_atfork_child(log_sink_t *sink)
     (void)sink;
 }
 
+/**
+ * @brief Create an OTLP JSON log sink.
+ *
+ * Renders log records as OTLP/JSON payloads. The endpoint can be
+ * "stdout", "stderr", or a file path. If NULL/empty, defaults to stdout.
+ *
+ * @param endpoint     Output destination (NULL → stdout).
+ * @param service_name Service name for OTLP resource (NULL → "clogx_service").
+ * @return New sink, or NULL on allocation failure.
+ */
 log_sink_t *otlp_sink_create(const char *endpoint, const char *service_name)
 {
     log_sink_t *sink = (log_sink_t *)calloc(1, sizeof(log_sink_t));

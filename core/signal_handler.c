@@ -167,6 +167,16 @@ int log_get_signal_fd(void)
     return g_signal_pipe[0];
 }
 
+/**
+ * @brief POSIX signal handler: async-signal-safe flag set + self-pipe write.
+ *
+ * This function is called directly by the kernel in signal context.
+ * Only two operations are performed:
+ * 1. Set g_signal_pending to the signal number.
+ * 2. Write one byte to the self-pipe (non-blocking, async-signal-safe).
+ *
+ * No locks, no malloc, no stdio — strictly async-signal-safe.
+ */
 void log_signal_handler(int sig)
 {
     /* Pure Async-Signal-Safe handler: set flag and write to non-blocking self-pipe (zero locks) */
@@ -183,6 +193,18 @@ int log_get_pending_signal(void)
     return (int)g_signal_pending;
 }
 
+/**
+ * @brief Process a pending signal in the main execution context.
+ *
+ * Reads the signal number from the self-pipe (POSIX) or from the
+ * volatile flag (Windows), drains any remaining pipe bytes, then:
+ * 1. Calls log_flush() to flush all pending log records.
+ * 2. Restores the previous signal handler (SIG_DFL or original).
+ * 3. Re-raises the signal for default handler processing (core dump / exit).
+ *
+ * Must be called from a normal (non-signal) execution context, typically
+ * from logger_writevprintf_internal() or the signal monitor thread.
+ */
 void log_process_pending_signals(void)
 {
     int sig = (int)g_signal_pending;
@@ -222,6 +244,16 @@ void log_process_pending_signals(void)
     raise(sig);
 }
 
+/**
+ * @brief Install signal handlers for SIGTERM and SIGINT via sigaction.
+ *
+ * Creates the self-pipe, then installs log_signal_handler() with
+ * SA_RESETHAND (auto-restores to default after first invocation).
+ * Old handlers are saved in g_old_sigterm / g_old_sigint for later
+ * restoration by log_restore_signal_handlers().
+ *
+ * @return CLOG_OK on success, CLOG_ERR_INVALID_ARG if sigaction fails.
+ */
 clogx_errno_t log_install_signal_handlers(void)
 {
     if (g_installed) {

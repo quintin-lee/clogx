@@ -105,6 +105,16 @@ static void syslog_atfork_child(log_sink_t *sink)
     openlog(data->ident, LOG_PID | LOG_NDELAY, data->facility);
 }
 
+/**
+ * @brief Create a POSIX syslog sink.
+ *
+ * Opens the syslog connection with the given ident and facility.
+ * On Windows, returns NULL since POSIX syslog is unavailable.
+ *
+ * @param ident     Syslog ident string (NULL defaults to "clogx").
+ * @param facility  Syslog facility (e.g. LOG_USER, LOG_LOCAL0).
+ * @return New sink, or NULL on Windows or allocation failure.
+ */
 log_sink_t *syslog_sink_create(const char *ident, int facility)
 {
     log_sink_t *sink = malloc(sizeof(log_sink_t));

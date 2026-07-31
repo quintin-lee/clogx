@@ -27,6 +27,17 @@
 #include "clog_port.h"
 #include <stdio.h>
 
+/**
+ * @brief Rotate a log file using a numbered backup chain.
+ *
+ * Shifts existing backups: .N-1 → .N, ..., .1 → .2, then renames
+ * the active file to .1. The oldest backup (.N) is deleted first
+ * to stay within the max_backups window.
+ *
+ * @param base_path    Path to the active log file (e.g. "logs/app.log").
+ * @param max_backups  Maximum number of backup files to retain.
+ * @return 0 always (filesystem errors are silently ignored).
+ */
 int file_rotate_file(const char *base_path, int max_backups)
 {
     if (!base_path || max_backups <= 0) {

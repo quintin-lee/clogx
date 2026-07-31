@@ -79,6 +79,19 @@ static const char *level_name(int idx)
     }
 }
 
+/**
+ * @brief Render all clogx metrics in Prometheus text exposition format.
+ *
+ * Writes HELP/TYPE headers and metric values for:
+ * - clogx_log_events_total (per-level counter)
+ * - clogx_log_dropped_events_total (queue-full drops)
+ * - clogx_log_suppressed_events_total (rate limiter suppressions)
+ * - clogx_async_queue_depth (current queue depth gauge)
+ *
+ * @param[out] buf       Output buffer for the text format.
+ * @param[in]  buf_size  Capacity of @p buf.
+ * @return Bytes written, or -1 on truncation or NULL inputs.
+ */
 int clog_prometheus_render_metrics(char *buf, size_t buf_size)
 {
     if (!buf || buf_size == 0) {
@@ -190,6 +203,15 @@ static void *prometheus_worker_thread(void *arg)
     return NULL;
 }
 
+/**
+ * @brief Start the Prometheus HTTP metrics server on a background thread.
+ *
+ * Binds to 127.0.0.1:port and accepts one request at a time.
+ * The server is non-blocking (accept timeout 50ms via the worker loop).
+ *
+ * @param port  TCP port (1–65535).
+ * @return CLOG_OK on success, or a clogx_errno_t error code.
+ */
 int clog_prometheus_exporter_start(int port)
 {
     if (port <= 0 || port > 65535) {
@@ -246,6 +268,12 @@ int clog_prometheus_exporter_start(int port)
     return CLOG_OK;
 }
 
+/**
+ * @brief Stop the Prometheus HTTP metrics server and release resources.
+ *
+ * Safe to call even if the server is not running (no-op).
+ * Shuts down the server socket to unblock the accept() call.
+ */
 void clog_prometheus_exporter_stop(void)
 {
     clog_mutex_lock(&g_prom_mutex);

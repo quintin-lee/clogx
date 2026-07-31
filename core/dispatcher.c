@@ -56,6 +56,17 @@ int log_dispatcher_add_sink(log_sink_t *restrict sink)
     return log_dispatcher_add_sink_for(&g_default_logger, sink);
 }
 
+/**
+ * @brief Add a sink to the dispatcher's live sink array.
+ *
+ * Thread-safe: acquires dispatcher_mutex, reallocs the sink pointer
+ * array, and appends @p sink. The sink is immediately available for
+ * subsequent dispatch calls.
+ *
+ * @param logger  Logger instance.
+ * @param sink    Sink to add (ownership not transferred).
+ * @return 0 on success, -1 on realloc failure.
+ */
 int log_dispatcher_add_sink_for(logger_t *logger, log_sink_t *restrict sink)
 {
     if (!sink) {
@@ -83,6 +94,16 @@ int log_dispatcher_remove_sink(log_sink_t *restrict sink)
     return log_dispatcher_remove_sink_for(&g_default_logger, sink);
 }
 
+/**
+ * @brief Remove a sink from the dispatcher's live sink array.
+ *
+ * Thread-safe: acquires dispatcher_mutex, finds the sink by pointer
+ * identity, shifts remaining elements, and shrinks the array via realloc.
+ *
+ * @param logger  Logger instance.
+ * @param sink    Sink to remove (caller retains ownership).
+ * @return 0 always (sink-not-found is a silent no-op).
+ */
 int log_dispatcher_remove_sink_for(logger_t *logger, log_sink_t *restrict sink)
 {
     if (!logger || !sink) {
@@ -120,6 +141,19 @@ int log_dispatcher_dispatch(log_record_t *record)
     return log_dispatcher_dispatch_for(&g_default_logger, record);
 }
 
+/**
+ * @brief Synchronous dispatch: format the record and write to all sinks.
+ *
+ * This is the core sync-mode write path. Steps:
+ * 1. Level filter (skip if below logger threshold).
+ * 2. Format via log_formatter_format_for() into stack buffer.
+ * 3. If color is enabled, wrap the formatted line in ANSI escape codes.
+ * 4. Write the (possibly colorized) line to every registered sink.
+ *
+ * @param logger  Logger instance.
+ * @param record  Log record to dispatch (not modified).
+ * @return 0 on success, -1 on NULL inputs or format failure.
+ */
 int log_dispatcher_dispatch_for(logger_t *logger, log_record_t *record)
 {
     if (!logger || !record) {

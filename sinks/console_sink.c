@@ -86,6 +86,12 @@ static void console_atfork_child(log_sink_t *sink)
     (void)sink;
 }
 
+/**
+ * @brief Create a console sink writing to stdout.
+ *
+ * @param use_color  Enable ANSI colour escape sequences.
+ * @return New sink, or NULL on allocation failure.
+ */
 static log_sink_t *console_sink_create_for(FILE *stream, bool use_color)
 {
     log_sink_t *sink = malloc(sizeof(log_sink_t));
@@ -115,6 +121,12 @@ static log_sink_t *console_sink_create_for(FILE *stream, bool use_color)
     return sink;
 }
 
+/**
+ * @brief Create a console sink writing to stderr.
+ *
+ * @param use_color  Enable ANSI colour escape sequences.
+ * @return New sink, or NULL on allocation failure.
+ */
 log_sink_t *console_sink_create(bool use_color)
 {
     return console_sink_create_for(stdout, use_color);

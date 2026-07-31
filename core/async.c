@@ -66,6 +66,19 @@ static void log_record_free_owned(log_record_t *record)
     record->tag     = NULL;
 }
 
+/**
+ * @brief Deep-copy a log record, allocating independent heap strings.
+ *
+ * A naive memcpy would create dangling pointers when the original
+ * record's stack-allocated strings go out of scope. This function
+ * allocates a single contiguous block for message + module + tag,
+ * copies them, and points the destination fields into that block.
+ * file and func are compile-time constants (no copy needed).
+ *
+ * @param[out] dst  Destination record (must not be NULL).
+ * @param[in]  src  Source record to clone (must not be NULL).
+ * @return 0 on success, -1 on NULL inputs or malloc failure.
+ */
 static int log_record_clone(log_record_t *restrict dst, const log_record_t *restrict src)
 {
     if (!dst || !src) {
@@ -121,7 +134,18 @@ static int log_record_clone(log_record_t *restrict dst, const log_record_t *rest
 
 #define ASYNC_BATCH_SIZE 64
 
-/* Worker that dispatches to a logger_t instance (used by _for variants). */
+/**
+ * @brief Background worker thread: dequeue batches and dispatch to sinks.
+ *
+ * Runs in a loop calling mpsc_queue_get_batch() (up to 64 records
+ * per batch). For each batch, dispatches every record via
+ * log_dispatcher_dispatch_for(), frees owned strings, then flushes
+ * the dispatcher once per batch (not per record) for throughput.
+ * Exits when the queue is closed and drained.
+ *
+ * @param arg  Pointer to the logger_t instance.
+ * @return NULL always.
+ */
 static void *async_worker_for(void *arg)
 {
     logger_t    *logger = (logger_t *)arg;
@@ -144,6 +168,16 @@ static void *async_worker_for(void *arg)
 
 /* ── Instance variants ── */
 
+/**
+ * @brief Start the async worker thread and create the queue.
+ *
+ * Creates a bounded queue of @p queue_size capacity, then spawns a
+ * detached POSIX thread (or Windows thread) running async_worker_for().
+ *
+ * @param logger      Logger instance.
+ * @param queue_size  Maximum number of records in the async queue.
+ * @return 0 on success, -1 on queue/thread creation failure.
+ */
 int log_async_init_for(logger_t *logger, int queue_size)
 {
     if (!logger || queue_size <= 0) {

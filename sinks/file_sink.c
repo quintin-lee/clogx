@@ -172,6 +172,17 @@ static void file_atfork_child(log_sink_t *sink)
     }
 }
 
+/**
+ * @brief Create a file sink with size-based rotation.
+ *
+ * Creates the parent directory recursively if it does not exist.
+ * Opens the file in append mode and records current file size.
+ *
+ * @param path      File path. Non-NULL and non-empty required.
+ * @param max_size  Rotation threshold in bytes (0 = no rotation).
+ * @param backups   Number of backup files to retain.
+ * @return New sink, or NULL on error.
+ */
 log_sink_t *file_sink_create(const char *path, uint64_t max_size, int backups)
 {
     if (!path || strlen(path) == 0) {

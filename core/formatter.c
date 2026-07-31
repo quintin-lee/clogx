@@ -105,6 +105,17 @@ static int append_token(char **out, size_t *remaining, const char *token, size_t
 /*  JSON escaping & rendering                                         */
 /* ------------------------------------------------------------------ */
 
+/**
+ * @brief RFC 8259 JSON string escaping for log field values.
+ *
+ * Writes @p str to @p out with proper JSON escapes: `\"`, `\\`,
+ * `\b`, `\f`, `\n`, `\r`, `\t`, and `\u00XX` for control bytes
+ * below 0x20. Output is always null-terminated within @p remaining.
+ *
+ * @param[in,out] out        Output pointer (advanced past written bytes).
+ * @param[in,out] remaining  Bytes remaining in buffer (decremented).
+ * @param[in]     str        Input string (NULL treated as empty).
+ */
 static void append_json_escaped_string(char **out, size_t *remaining, const char *str)
 {
     if (!str) {
@@ -204,6 +215,19 @@ static int is_zero_id(const uint8_t *id, int len)
     return 1;
 }
 
+/**
+ * @brief Format a log record as a single-line RFC 8259 JSON object.
+ *
+ * Renders fields: timestamp (ISO 8601 + µs), level, module, file, line,
+ * func, thread, pid, tag, message. All string values are JSON-escaped.
+ * trace_id and span_id are included only when non-zero.
+ *
+ * @param[in]  record    Log record to format.
+ * @param[out] buf       Output buffer.
+ * @param[in]  buf_size  Capacity of @p buf.
+ * @param[in]  time_format  strftime template (NULL → default).
+ * @return Bytes written, or -1 on truncation.
+ */
 static int format_json_ex(log_record_t *restrict record,
                           char *restrict buf,
                           size_t      buf_size,
@@ -617,7 +641,21 @@ static int fmt_compile(const char *fmt_str, fmt_op_t *ops, int max_ops)
     return n;
 }
 
-/** Internal: format a record with given format and time_format strings (no copy). */
+/**
+ * @brief Internal format dispatch: routes to JSON, OTel, or token-based renderer.
+ *
+ * If @p fmt is "json"/"JSON", delegates to format_json_ex().
+ * If @p fmt is "otlp"/"OTLP"/"otel"/"OTEL", delegates to format_otel_json().
+ * Otherwise, compiles the format string into opcodes via fmt_compile()
+ * and renders by walking the opcode array.
+ *
+ * @param[in]  record       Log record to format.
+ * @param[out] buf          Output buffer.
+ * @param[in]  buf_size     Capacity of @p buf.
+ * @param[in]  fmt          Format string or mode keyword.
+ * @param[in]  time_format  strftime template for %time token.
+ * @return Bytes written, or -1 on error.
+ */
 static int format_impl(log_record_t *restrict record,
                        char *restrict buf,
                        size_t      buf_size,
@@ -757,6 +795,14 @@ static int format_impl(log_record_t *restrict record,
     return total;
 }
 
+/**
+ * @brief Format a record as OTLP-compatible JSON (public API for otlp_sink).
+ *
+ * @param[in]  record    Log record to format.
+ * @param[out] buf       Output buffer.
+ * @param[in]  buf_size  Capacity of @p buf.
+ * @return Bytes written, or -1 on truncation or invalid input.
+ */
 int log_formatter_format_otlp(log_record_t *restrict record, char *restrict buf, size_t buf_size)
 {
     if (!record || !buf || buf_size == 0) {
@@ -767,6 +813,18 @@ int log_formatter_format_otlp(log_record_t *restrict record, char *restrict buf,
 
 /* ── Singleton wrappers ── */
 
+/**
+ * @brief Format a log record using the global logger's format settings.
+ *
+ * Delegates to log_formatter_format_for() with the singleton logger.
+ * The format and time_format strings are read from the logger's config
+ * (protected by fmt_mutex for concurrent safety).
+ *
+ * @param[in]  record    Log record to format.
+ * @param[out] buf       Output buffer.
+ * @param[in]  buf_size  Capacity of @p buf.
+ * @return Bytes written, or -1 on truncation or NULL inputs.
+ */
 int log_formatter_format(log_record_t *restrict record, char *restrict buf, size_t buf_size)
 {
     return log_formatter_format_for(&g_default_logger, record, buf, buf_size);
@@ -789,6 +847,15 @@ const char *log_formatter_get_format(void)
 
 /* ── Instance variants ── */
 
+/**
+ * @brief Format a log record using a specific logger instance's format settings.
+ *
+ * @param[in]  logger    Logger instance whose format_str/time_format_str to use.
+ * @param[in]  record    Log record to format.
+ * @param[out] buf       Output buffer.
+ * @param[in]  buf_size  Capacity of @p buf.
+ * @return Bytes written, or -1 on truncation or NULL inputs.
+ */
 int log_formatter_format_for(logger_t *logger,
                              log_record_t *restrict record,
                              char *restrict buf,
@@ -802,6 +869,18 @@ int log_formatter_format_for(logger_t *logger,
     return format_impl(record, buf, buf_size, fmt, tf);
 }
 
+/**
+ * @brief Initialise the format strings for a logger instance.
+ *
+ * Copies @p format and @p time_format into the logger's internal buffers.
+ * Pass NULL or empty strings to reset to defaults ("%msg" and
+ * "%Y-%m-%d %H:%M:%S").
+ *
+ * @param logger      Logger instance.
+ * @param format      Format string (e.g. "[%time] [%level] %msg") or "json".
+ * @param time_format strftime template for %time, or NULL for default.
+ * @return Always 0 (success).
+ */
 int log_formatter_init_for(logger_t *logger, const char *format, const char *time_format)
 {
     clog_mutex_lock(&logger->fmt_mutex);

@@ -35,6 +35,16 @@
 #include <stdlib.h>
 #include <string.h>
 
+/**
+ * @brief Create a bounded ring buffer for async log records.
+ *
+ * Allocates the queue struct, the ring buffer, and initialises three
+ * condition variables: not_full (producer waits), not_empty (consumer
+ * waits), drained (flush waits).
+ *
+ * @param capacity  Maximum number of records the queue can hold.
+ * @return Pointer to the new queue, or NULL on allocation failure.
+ */
 mpsc_queue_t *mpsc_queue_create(size_t capacity)
 {
     mpsc_queue_t *q = malloc(sizeof(mpsc_queue_t));
@@ -62,6 +72,17 @@ mpsc_queue_t *mpsc_queue_create(size_t capacity)
     return q;
 }
 
+/**
+ * @brief Blocking enqueue: wait for space if the queue is full.
+ *
+ * Blocks the calling thread on the not_full condition variable until
+ * a slot is available or the queue is closed. This is the primary
+ * enqueue path for the LOG_* macros in async mode.
+ *
+ * @param q        Queue instance (must not be NULL).
+ * @param record   Log record to enqueue (deep-copied into the ring).
+ * @return 0 on success, -1 if queue is NULL, closed, or record is NULL.
+ */
 int mpsc_queue_put(mpsc_queue_t *restrict q, log_record_t *restrict record)
 {
     if (!q || !record) {
@@ -85,6 +106,17 @@ int mpsc_queue_put(mpsc_queue_t *restrict q, log_record_t *restrict record)
     return ret;
 }
 
+/**
+ * @brief Non-blocking enqueue: return immediately if the queue is full.
+ *
+ * Unlike mpsc_queue_put(), never blocks. Returns -1 if no space is
+ * available, which triggers the async fallback path (drop or sync
+ * degradation depending on configuration).
+ *
+ * @param q        Queue instance (must not be NULL).
+ * @param record   Log record to enqueue.
+ * @return 0 on success, -1 if full, closed, or NULL inputs.
+ */
 int mpsc_queue_try_put(mpsc_queue_t *restrict q, log_record_t *restrict record)
 {
     if (!q || !record) {
@@ -109,6 +141,19 @@ int mpsc_queue_get(mpsc_queue_t *restrict q, log_record_t *restrict record)
     return mpsc_queue_get_batch(q, record, 1) == 1 ? 0 : -1;
 }
 
+/**
+ * @brief Batch dequeue: drain up to @p max_records in a single lock acquisition.
+ *
+ * The async worker calls this to dequeue multiple records per iteration,
+ * reducing mutex contention. Blocks on the not_empty condition when the
+ * queue is empty, unless the queue is closed (returns remaining records).
+ *
+ * @param q            Queue instance (must not be NULL).
+ * @param records      Output array for dequeued records.
+ * @param max_records  Maximum records to dequeue in this call.
+ * @return Number of records actually dequeued (0 if closed and empty),
+ *         or -1 on NULL inputs.
+ */
 int mpsc_queue_get_batch(mpsc_queue_t *restrict q,
                          log_record_t *restrict records,
                          size_t max_records)
@@ -144,6 +189,13 @@ int mpsc_queue_get_batch(mpsc_queue_t *restrict q,
     return count_to_get;
 }
 
+/**
+ * @brief Close the queue, waking all blocked producers and consumers.
+ *
+ * After closing, mpsc_queue_put() returns -1 immediately and
+ * mpsc_queue_get_batch() drains remaining records then returns 0.
+ * Used during logger shutdown to signal the async worker to exit.
+ */
 void mpsc_queue_close(mpsc_queue_t *q)
 {
     if (!q) {
@@ -158,6 +210,12 @@ void mpsc_queue_close(mpsc_queue_t *q)
     });
 }
 
+/**
+ * @brief Block until the queue is empty (all records drained by consumer).
+ *
+ * Used by log_flush() to wait for the async worker to finish processing
+ * all queued records. Blocks on the drained condition variable.
+ */
 void mpsc_queue_wait_empty(mpsc_queue_t *q)
 {
     if (!q) {
@@ -171,6 +229,14 @@ void mpsc_queue_wait_empty(mpsc_queue_t *q)
     });
 }
 
+/**
+ * @brief Free all resources associated with the queue.
+ *
+ * Broadcasts all condition variables to wake any blocked threads,
+ * destroys mutex and conditions, then frees the ring buffer and
+ * queue struct. Caller must ensure no other thread is accessing
+ * the queue (typically after mpsc_queue_close() + thread join).
+ */
 void mpsc_queue_destroy(mpsc_queue_t *q)
 {
     if (!q) {

@@ -163,6 +163,20 @@ int log_remove_sink(log_sink_t *sink)
     return CLOG_OK;
 }
 
+/**
+ * @brief Internal initialisation shared by global and multi-instance loggers.
+ *
+ * Loads config from YAML, initialises rate limiter, dispatcher (creates
+ * sinks from config), and optionally starts the async worker thread.
+ * On failure, partially-initialised resources are cleaned up by the caller.
+ *
+ * @param logger  Logger instance to initialise (must be zero-initialized).
+ * @param yaml_path  Path to YAML config file, or NULL for defaults.
+ * @return CLOG_OK on success, or a negative clogx_errno_t code.
+ *
+ * @pre  Caller holds no locks on @p logger.
+ * @post On success, `logger->initialized == true`.
+ */
 static int logger_init_internal(logger_t *logger, const char *yaml_path)
 {
     clog_rwlock_init(&logger->config_rwlock);
@@ -198,6 +212,32 @@ static int logger_init_internal(logger_t *logger, const char *yaml_path)
  *  Internal write path (shared by log_writevprintf / logger_writevprintf)
  * ════════════════════════════════════════════════════════════════════════ */
 
+/**
+ * @brief Core write path: format message, apply rate limits, dispatch or enqueue.
+ *
+ * This is the hot path for every LOG_* macro. It runs on the caller's thread
+ * and must be as fast as possible. Steps:
+ *
+ * 1. Check pending signals (default logger only).
+ * 2. Level filter — skip if below threshold.
+ * 3. Increment Prometheus counters (atomic).
+ * 4. Format message via `vsnprintf` into stack buffer.
+ * 5. Copy module name under lock.
+ * 6. Populate `log_record_t` with all metadata (timestamp, TID, PID, etc.).
+ * 7. Rate limit check — suppress if bucket exhausted.
+ * 8. Deep-copy into async queue (async mode) or dispatch to sinks (sync mode).
+ *
+ * @param logger  Logger instance.
+ * @param level   Log level of this message.
+ * @param file    Source file (__FILE__).
+ * @param line    Source line (__LINE__).
+ * @param func    Function name (__func__).
+ * @param fmt     printf-style format string.
+ * @param args_orig  Variadic argument list.
+ *
+ * @note Thread-safe: no locks held across the entire path. Module name is
+ *       briefly locked; Prometheus counters use atomic increments.
+ */
 static void logger_writevprintf_internal(logger_t   *logger,
                                          log_level_t level,
                                          const char *file,
@@ -349,6 +389,21 @@ typedef struct {
 static clog_thread_local thread_context_pair_t g_thread_context[MAX_THREAD_CONTEXT_PAIRS];
 static clog_thread_local size_t                g_thread_context_count = 0;
 
+/**
+ * @brief Set a key-value pair in the calling thread's MDC context.
+ *
+ * Mapped Diagnostic Context (MDC) allows attaching structured metadata
+ * (e.g. request_id, user_id) to all log lines from the current thread
+ * without passing them through every function call. The context is
+ * thread-local and survives across log calls.
+ *
+ * @param key    Context key (must not be empty; max 31 chars).
+ * @param value  Context value (empty string or NULL removes the key).
+ * @return CLOG_OK on success, CLOG_ERR_INVALID_ARG on bad input or
+ *         if the context is full (max 16 pairs).
+ *
+ * @note Thread-local: each thread has its own independent context.
+ */
 clogx_errno_t log_set_thread_context(const char *key, const char *value)
 {
     if (!key || strlen(key) == 0) {
@@ -455,6 +510,18 @@ static int parse_hex_nibble(char c)
     return -1;
 }
 
+/**
+ * @brief Set W3C Trace Context identifiers from hex-encoded strings.
+ *
+ * Parses a 32-char lowercase hex trace_id and 16-char lowercase hex span_id
+ * (as used in the `traceparent` header: `00-{trace_id}-{span_id}-{flags}`).
+ * Invalid hex characters or short strings return CLOG_ERR_INVALID_ARG.
+ *
+ * @param trace_id_hex  32-character hex string (W3C trace-id).
+ * @param span_id_hex   16-character hex string (W3C parent-id).
+ * @return CLOG_OK on success or if both strings are empty (clears context),
+ *         CLOG_ERR_INVALID_ARG on invalid input.
+ */
 clogx_errno_t clog_set_trace_context_hex(const char *trace_id_hex, const char *span_id_hex)
 {
     if (!trace_id_hex || !span_id_hex) {
@@ -495,6 +562,13 @@ clogx_errno_t clog_set_trace_context_hex(const char *trace_id_hex, const char *s
 #ifndef _WIN32
 static pthread_once_t g_atfork_once = PTHREAD_ONCE_INIT;
 
+/**
+ * @brief POSIX atfork prepare handler: acquire all locks before fork().
+ *
+ * Called in the parent process before fork(). Acquires g_init_mutex,
+ * module_mutex, and dispatcher lock in a consistent order to prevent
+ * deadlock if the child inherits locked mutexes.
+ */
 static void log_atfork_prepare(void)
 {
     clog_mutex_lock(&g_init_mutex);
@@ -502,6 +576,12 @@ static void log_atfork_prepare(void)
     log_dispatcher_atfork_prepare_for(&g_default_logger);
 }
 
+/**
+ * @brief POSIX atfork parent handler: release locks after fork() in parent.
+ *
+ * Called in the parent process after fork(). Releases dispatcher lock,
+ * module_mutex, and g_init_mutex in reverse order of acquisition.
+ */
 static void log_atfork_parent(void)
 {
     log_dispatcher_atfork_parent_for(&g_default_logger);
@@ -509,6 +589,13 @@ static void log_atfork_parent(void)
     clog_mutex_unlock(&g_init_mutex);
 }
 
+/**
+ * @brief POSIX atfork child handler: release locks and restart async worker.
+ *
+ * Called in the child process after fork(). Releases all locks held by
+ * the parent at fork time, then restarts the async worker thread which
+ * was not inherited across fork().
+ */
 static void log_atfork_child(void)
 {
     log_dispatcher_atfork_child_for(&g_default_logger);
@@ -523,6 +610,22 @@ static void register_atfork(void)
 }
 #endif
 
+/**
+ * @brief Initialise the global singleton logger from a YAML config file.
+ *
+ * Must be called before any LOG_* macros. Calling a second time without
+ * intervening log_destroy() returns CLOG_ERR_INIT_REENTRANT.
+ *
+ * On POSIX, registers pthread_atfork handlers to maintain lock consistency
+ * across fork() and restart the async worker in the child process.
+ *
+ * @param yaml_path  Path to YAML config file. Pass NULL for built-in defaults
+ *                   (console sink, INFO level, sync mode).
+ * @return CLOG_OK on success, or a negative clogx_errno_t code.
+ *
+ * @pre  No other thread is calling LOG_* yet.
+ * @post Logger is fully initialised; log_destroy() must be called before exit.
+ */
 int log_init(const char *yaml_path)
 {
 #ifndef _WIN32
@@ -552,6 +655,16 @@ int log_init(const char *yaml_path)
     return CLOG_OK;
 }
 
+/**
+ * @brief Tear down the global singleton logger and release all resources.
+ *
+ * Flushes the async worker (if running), destroys all sinks, resets the
+ * rate limiter, and unloads plugin handles. Safe to call even if the
+ * logger was never initialised (no-op in that case).
+ *
+ * @note After log_destroy(), log_init() may be called again to reinitialise.
+ *       Not thread-safe with concurrent LOG_* calls — stop all logging first.
+ */
 void log_destroy(void)
 {
     bool was_initialized = false;
@@ -573,6 +686,15 @@ void log_destroy(void)
     }
 }
 
+/**
+ * @brief Flush all pending log output to sinks.
+ *
+ * In async mode, blocks until the async worker has drained all queued
+ * records. In sync mode, flushes each sink's underlying FILE* handle.
+ *
+ * @note Safe to call from signal handler context (POSIX) as it delegates
+ *       to the signal-safe flush path. Timeout: 2000 ms.
+ */
 void log_flush(void)
 {
     if (g_default_logger.config.async) {
@@ -582,6 +704,17 @@ void log_flush(void)
     }
 }
 
+/**
+ * @brief Hot-reload the logger configuration without full restart.
+ *
+ * Re-reads the YAML config file, rebuilds the rate limiter, takes a
+ * new sink snapshot, shuts down the old async worker, commits the new
+ * snapshot, and restarts the async worker if needed. Existing log calls
+ * in-flight during reload use the old sink set until the commit.
+ *
+ * @return CLOG_OK on success, or CLOG_ERR_RELOAD if the logger is not
+ *         initialised, or CLOG_ERR_NO_SINKS if the new config has no sinks.
+ */
 int log_reload(void)
 {
     clog_mutex_lock(&g_init_mutex);
@@ -624,6 +757,18 @@ int log_reload(void)
  *  Multi-instance API (Phase 2)
  * ════════════════════════════════════════════════════════════════════════ */
 
+/**
+ * @brief Create an independent logger instance from a YAML config file.
+ *
+ * Allocates and initialises a new `logger_t` that operates independently
+ * of the global singleton. Useful for multi-component applications where
+ * different subsystems need separate log levels, sinks, or formats.
+ *
+ * @param yaml_path  Path to YAML config file (must not be NULL).
+ * @return Pointer to the new logger, or NULL on allocation/init failure.
+ *
+ * @note The returned logger must be freed with logger_destroy().
+ */
 logger_t *logger_create(const char *yaml_path)
 {
     logger_t *logger = (logger_t *)calloc(1, sizeof(logger_t));
@@ -648,6 +793,17 @@ logger_t *logger_create(const char *yaml_path)
     return logger;
 }
 
+/**
+ * @brief Create an independent logger instance from an in-memory config.
+ *
+ * Unlike logger_create(), this does not touch the filesystem — the
+ * config is provided directly as a struct. Format and time_format strings
+ * are copied into the logger's internal buffers to ensure lifetime safety.
+ *
+ * @param cfg  Non-NULL config struct. Internal pointers (format, time_format)
+ *             are copied; the caller retains ownership.
+ * @return Pointer to the new logger, or NULL on failure.
+ */
 logger_t *logger_create_from_config(const log_config_t *cfg)
 {
     if (!cfg) {

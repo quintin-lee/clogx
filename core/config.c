@@ -573,6 +573,17 @@ static int parse_config_file(const char *filepath, log_config_t *cfg)
 
 /* ── Instance API ── */
 
+/**
+ * @brief Load YAML config into a specific logger instance.
+ *
+ * Applies safe defaults, then parses the YAML file if it exists.
+ * Format and time_format are copied into the logger's owned buffers
+ * to ensure lifetime safety (no dangling pointers to YAML storage).
+ *
+ * @param logger    Logger instance whose config field is overwritten.
+ * @param yaml_path Path to YAML file, or NULL/empty for defaults only.
+ * @return 0 on success, or a negative error code from the YAML parser.
+ */
 int log_config_load_into(logger_t *logger, const char *yaml_path)
 {
     char local_format[CLOG_MAX_FORMAT_SIZE] = "";
@@ -642,6 +653,16 @@ log_config_t *log_config_get(void)
     return &g_default_logger.config;
 }
 
+/**
+ * @brief Apply a config struct to the global singleton logger.
+ *
+ * Copies all scalar fields from @p cfg into g_default_logger.config,
+ * including format/time_format strings (which are copied into the
+ * logger's owned buffers). Plugin paths and params are also copied.
+ *
+ * @param cfg  Non-NULL config struct.
+ * @return 0 always.
+ */
 static int apply_config(const log_config_t *cfg)
 {
     g_default_logger.config.level          = cfg->level;
