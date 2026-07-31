@@ -81,7 +81,7 @@ void log_plugin_shutdown_all(void)
 #define CLOGX_MAX_LOADED_PLUGINS 16
 
 struct clogx_plugin_handle {
-    void                  *dl_handle;                   /**< Result from dlopen(3).          */
+    clog_dl_handle_t       dl_handle;                   /**< Result from clog_dlopen.        */
     clogx_plugin_create_fn create_fn;                   /**< Resolved clogx_plugin_create.   */
     const clogx_plugin_t  *desc;                        /**< Cached descriptor pointer.      */
     char                   so_path[CLOG_MAX_PATH_SIZE]; /**< Canonicalised .so path.         */
@@ -162,24 +162,24 @@ clogx_plugin_handle_t *log_plugin_load(const char *so_path)
     struct clogx_plugin_handle *h = &g_handles[slot];
     memset(h, 0, sizeof(*h));
 
-    /* dlopen with RTLD_NOW | RTLD_LOCAL — resolve all symbols immediately,
-     * don't leak symbols into the global namespace. */
-    h->dl_handle = dlopen(so_path, RTLD_NOW | RTLD_LOCAL);
+    /* clog_dlopen — resolve symbols immediately. */
+    h->dl_handle = clog_dlopen(so_path);
     if (!h->dl_handle) {
-        fprintf(stderr, "[clogx] dlopen(%s) failed: %s\n", so_path, dlerror());
+        fprintf(stderr, "[clogx] clog_dlopen(%s) failed: %s\n", so_path, clog_dlerror());
         clog_mutex_unlock(&g_plugin_mutex);
         return NULL;
     }
 
     /* Resolve the descriptor symbol. */
-    clogx_plugin_desc_fn desc_fn = (clogx_plugin_desc_fn)dlsym(h->dl_handle, CLOGX_PLUGIN_DESC_SYM);
+    clogx_plugin_desc_fn desc_fn =
+        (clogx_plugin_desc_fn)clog_dlsym(h->dl_handle, CLOGX_PLUGIN_DESC_SYM);
     if (!desc_fn) {
         fprintf(stderr,
-                "[clogx] dlsym(%s, %s) failed: %s\n",
+                "[clogx] clog_dlsym(%s, %s) failed: %s\n",
                 so_path,
                 CLOGX_PLUGIN_DESC_SYM,
-                dlerror());
-        dlclose(h->dl_handle);
+                clog_dlerror());
+        clog_dlclose(h->dl_handle);
         memset(h, 0, sizeof(*h));
         clog_mutex_unlock(&g_plugin_mutex);
         return NULL;
@@ -194,7 +194,7 @@ clogx_plugin_handle_t *log_plugin_load(const char *so_path)
                 so_path,
                 CLOGX_PLUGIN_ABI_VERSION,
                 h->desc ? (unsigned)h->desc->abi_version : 0U);
-        dlclose(h->dl_handle);
+        clog_dlclose(h->dl_handle);
         memset(h, 0, sizeof(*h));
         clog_mutex_unlock(&g_plugin_mutex);
         return NULL;
@@ -202,7 +202,7 @@ clogx_plugin_handle_t *log_plugin_load(const char *so_path)
 
     /* Resolve the factory symbol.  (Optional — a plugin might be
      * descriptor-only for capability discovery.) */
-    h->create_fn = (clogx_plugin_create_fn)dlsym(h->dl_handle, CLOGX_PLUGIN_CREATE_SYM);
+    h->create_fn = (clogx_plugin_create_fn)clog_dlsym(h->dl_handle, CLOGX_PLUGIN_CREATE_SYM);
     if (!h->create_fn) {
         /* Not an error — some plugins may only export desc for
          * capability advertisement without sink creation. */
@@ -250,7 +250,7 @@ void log_plugin_unload(clogx_plugin_handle_t *h)
     }
 
     if (h->dl_handle) {
-        dlclose(h->dl_handle);
+        clog_dlclose(h->dl_handle);
     }
     memset(h, 0, sizeof(*h));
     g_handle_count--;
@@ -422,7 +422,7 @@ void log_plugin_shutdown_all(void)
     for (int i = 0; i < CLOGX_MAX_LOADED_PLUGINS; i++) {
         if (g_handles[i].used) {
             if (g_handles[i].dl_handle) {
-                dlclose(g_handles[i].dl_handle);
+                clog_dlclose(g_handles[i].dl_handle);
             }
             memset(&g_handles[i], 0, sizeof(g_handles[i]));
         }

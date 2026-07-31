@@ -544,4 +544,45 @@ static inline void clog_console_enable_vt_mode(FILE *stream)
 #endif
 }
 
+/* ── Dynamic Library Abstractions (dlopen / LoadLibrary) ── */
+
+#if defined(_WIN32) || defined(_WIN64)
+typedef HMODULE                clog_dl_handle_t;
+static inline clog_dl_handle_t clog_dlopen(const char *filename)
+{
+    return LoadLibraryA(filename);
+}
+static inline void *clog_dlsym(clog_dl_handle_t handle, const char *symbol)
+{
+    return (void *)GetProcAddress(handle, symbol);
+}
+static inline int clog_dlclose(clog_dl_handle_t handle)
+{
+    return FreeLibrary(handle) ? 0 : -1;
+}
+static inline const char *clog_dlerror(void)
+{
+    return "Win32 LoadLibrary error";
+}
+#else
+#include <dlfcn.h>
+typedef void                  *clog_dl_handle_t;
+static inline clog_dl_handle_t clog_dlopen(const char *filename)
+{
+    return dlopen(filename, RTLD_NOW | RTLD_LOCAL);
+}
+static inline void *clog_dlsym(clog_dl_handle_t handle, const char *symbol)
+{
+    return dlsym(handle, symbol);
+}
+static inline int clog_dlclose(clog_dl_handle_t handle)
+{
+    return dlclose(handle);
+}
+static inline const char *clog_dlerror(void)
+{
+    return dlerror();
+}
+#endif
+
 #endif /* CLOG_PORT_H */
