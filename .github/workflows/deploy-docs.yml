@@ -2,7 +2,7 @@ name: Deploy Documentation
 
 on:
   push:
-    branches: [main]
+    branches: [main, master]
   workflow_dispatch:
 
 permissions:
@@ -17,7 +17,7 @@ jobs:
       - uses: actions/checkout@v7
 
       - name: Install doxygen
-        run: sudo apt-get update && sudo apt-get install -y doxygen
+        run: sudo apt-get update && sudo apt-get install -y doxygen graphviz
 
       - name: Generate docs
         run: doxygen Doxyfile
