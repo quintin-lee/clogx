@@ -56,7 +56,7 @@
 /*  Global state                                                      */
 /* ------------------------------------------------------------------ */
 
-static char g_default_format[CLOG_MAX_FORMAT_SIZE] = "%msg";
+static char g_default_format[CLOG_MAX_FORMAT_SIZE] = "[%time] [%level] %msg";
 static char g_time_format_buf[64]                  = "%Y-%m-%d %H:%M:%S";
 
 /* Compiled opcode program (populated at init time). */
