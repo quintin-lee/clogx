@@ -38,6 +38,11 @@
 #include "log_internal.h"
 #include "log_rate_limit.h"
 
+/**
+ * @brief Get current time in milliseconds via platform abstraction.
+ *
+ * @return Monotonic timestamp in milliseconds.
+ */
 static uint64_t get_now_ms(void)
 {
     return clog_get_now_ms();

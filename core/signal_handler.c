@@ -129,6 +129,12 @@ static struct sigaction g_old_sigterm;
 static struct sigaction g_old_sigint;
 static int              g_signal_pipe[2] = {-1, -1};
 
+/**
+ * @brief Create the self-pipe used to wake the event loop on signal receipt.
+ *
+ * The self-pipe trick: signal handlers write a byte into g_signal_pipe[1];
+ * the main thread blocks on g_signal_pipe[0] and wakes up when a signal arrives.
+ */
 static void setup_self_pipe(void)
 {
     if (g_signal_pipe[0] >= 0) {
@@ -152,6 +158,11 @@ static void setup_self_pipe(void)
 #endif
 }
 
+/**
+ * @brief Close both ends of the self-pipe file descriptors.
+ *
+ * Safe to call when the pipe is not yet opened (fd == -1).
+ */
 static void close_self_pipe(void)
 {
     for (int i = 0; i < 2; i++) {

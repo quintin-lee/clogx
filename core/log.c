@@ -496,6 +496,12 @@ void clog_clear_trace_context(void)
     g_has_thread_trace_context = false;
 }
 
+/**
+ * @brief Convert a hex character to its numeric value.
+ *
+ * @param c  Hex character (`'0'–'9'`, `'a'–'f'`, or `'A'–'F'`).
+ * @return 0–15 on valid input, -1 otherwise.
+ */
 static int parse_hex_nibble(char c)
 {
     if (c >= '0' && c <= '9') {
@@ -604,6 +610,12 @@ static void log_atfork_child(void)
     log_async_atfork_child_for(&g_default_logger);
 }
 
+/**
+ * @brief Register pthread_atfork handlers for fork safety.
+ *
+ * Ensures the async worker, mutexes, and thread-local trace context
+ * are properly cleaned up after fork.  Called once at first init.
+ */
 static void register_atfork(void)
 {
     pthread_atfork(log_atfork_prepare, log_atfork_parent, log_atfork_child);
