@@ -1,6 +1,44 @@
 /**
  * @file otlp_sink.c
  * @brief OpenTelemetry OTLP JSON log sink implementation.
+ *
+ * ## Design
+ *
+ * Forwards log records to an OpenTelemetry-compatible collector via
+ * the OTLP/HTTP JSON protocol. Each log record is rendered as a
+ * single JSON payload matching the `LogsService` schema.
+ *
+ * ## Output Format
+ *
+ * The sink emits a JSON object per log call (not newline-delimited;
+ * each call is a complete HTTP request body):
+ *
+ * ```json
+ * {
+ *   "resourceLogs": [{
+ *     "resource": { "attributes": [{"key":"service.name","value":{"stringValue":"myapp"}}] },
+ *     "scopeLogs": [{
+ *       "logRecords": [{
+ *         "timeUnixNano": "1234567890000000000",
+ *         "severityNumber": 9,
+ *         "severityText": "INFO",
+ *         "body": { "stringValue": "Server started" },
+ *         "attributes": [...]
+ *       }]
+ *     }]
+ *   }]
+ * }
+ * ```
+ *
+ * ## Transport
+ *
+ * The sink writes to a `FILE*` handle (stdout by default). For actual
+ * HTTP transport, pair with a sidecar collector (e.g. otel-collector
+ * reading from stdin) or use the socket sink with a collector proxy.
+ *
+ * ## Plugin Interface
+ *
+ * Implements the `clogx_plugin_v1` ABI.
  */
 
 #include <stdio.h>

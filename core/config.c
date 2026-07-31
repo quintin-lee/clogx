@@ -1,6 +1,51 @@
 /**
  * @file config.c
- * @brief YAML config parser via libyaml event API, with defaults, rwlock, and reload path memory.
+ * @brief YAML configuration parser and lifecycle manager.
+ *
+ * ## Design
+ *
+ * Configuration is loaded from a YAML file via libyaml's event-based
+ * parser. The parser is a recursive-descent state machine driven by
+ * `config_handler_t` dispatch tables.
+ *
+ * ## Parse Flow
+ *
+ * ```
+ * log_parse_config_file(path)
+ *   └─► yaml_parser_parse() loop
+ *         ├─ YAML_STREAM_START_EVENT
+ *         ├─ YAML_DOCUMENT_START_EVENT
+ *         ├─ YAML_MAPPING_START_EVENT  → enter key dispatch
+ *         ├─ YAML_SCALAR_EVENT         → dispatch via config_handlers[]
+ *         └─ YAML_DOCUMENT_END_EVENT   → post-parse validation
+ * ```
+ *
+ * ## Dispatch Table Pattern
+ *
+ * Each config section has a `config_handler_t` array mapping scalar
+ * keys to handler functions:
+ * ```c
+ * static const config_handler_t log_handlers[] = {
+ *     { "level",     handle_log_level     },
+ *     { "file",      handle_log_file      },
+ *     { "format",    handle_log_format    },
+ *     ...
+ * };
+ * ```
+ * The parser looks up the key in the table and invokes the matching
+ * handler. Unknown keys are silently ignored (forward compatibility).
+ *
+ * ## Configuration Reload
+ *
+ * `log_apply_config` creates a new `log_config_t`, applies changes
+ * atomically via `log_config_swap`, and signals the dispatcher to
+ * reload sinks. The old config is freed after all in-flight writes
+ * complete.
+ *
+ * ## Thread Safety
+ *
+ * `g_config_mutex` serialises config reads and writes. The hot path
+ * (`log_config_get`) takes a read lock; reload takes a write lock.
  */
 #include <stdio.h>
 #include <stdlib.h>

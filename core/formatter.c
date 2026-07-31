@@ -2,9 +2,43 @@
  * @file formatter.c
  * @brief Token formatter and JSON renderer for log lines.
  *
+ * ## Two-Stage Design
+ *
  * The format string is compiled into an opcode sequence at init time
- * (fmt_compile), so the hot path (log_formatter_format) dispatches
+ * (`fmt_compile`), so the hot path (`log_formatter_format`) dispatches
  * through a flat switch statement with zero format-string re-parsing.
+ *
+ * 1. **Compile** (`log_formatter_compile`): Parse format string like
+ *    `"[%time] [%level] %msg"` into an array of `fmt_token_t` opcodes.
+ *    Literal text becomes `FMT_LITERAL` tokens; `%xxx` placeholders
+ *    become `FMT_VAR` tokens with the variable type encoded.
+ *    Runs once at logger init — cost is irrelevant.
+ *
+ * 2. **Render** (`log_formatter_format`): Walk the opcode array and
+ *    write output to a `strbuf_t`. Each opcode is a case in a flat
+ *    switch — no format-string parsing, no `printf` overhead.
+ *    Runs on every log call — must be as fast as possible.
+ *
+ * ## Supported Tokens
+ *
+ * | Token     | Source                      | Output example               |
+ * |-----------|-----------------------------|------------------------------|
+ * | `%time`   | local wall-clock + µs       | `2026-07-31 10:30:45.123456` |
+ * | `%level`  | log_level_t enum → string   | `INFO`                       |
+ * | `%msg`    | caller-supplied fmt string  | `Server started`             |
+ * | `%file`   | `__FILE__`                  | `app.c`                      |
+ * | `%line`   | `__LINE__`                  | `42`                         |
+ * | `%func`   | `__func__`                  | `main`                       |
+ * | `%module` | `log_set_module()`          | `net.http`                   |
+ * | `%tag`    | per-record tag              | `auth`                       |
+ * | `%thread` | `pthread_self()` / TID      | `12345`                      |
+ * | `%pid`    | `getpid()`                  | `678`                        |
+ *
+ * ## JSON Renderer (`log_formatter_format_otlp_json`)
+ *
+ * Renders a `log_record_t` as a single-line OTLP-compatible JSON object.
+ * All string values are RFC 8259 escaped (`"`, `\`, `\n`, `\r`, `\t`,
+ * control bytes). Used exclusively by `otlp_sink.c`.
  */
 #include <ctype.h>
 #include <stdio.h>

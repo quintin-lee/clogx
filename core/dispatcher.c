@@ -1,6 +1,42 @@
 /**
  * @file dispatcher.c
- * @brief Format once, then fan-out to configured sinks (color only on console).
+ * @brief Sink fan-out dispatcher: formats once, writes to all sinks.
+ *
+ * ## Design
+ *
+ * The dispatcher is the central hub that bridges the write path with sinks.
+ * On each log call:
+ *
+ * 1. A **snapshot** of the current sinks is read under a reader-writer lock.
+ * 2. The message is formatted **once** using `log_formatter_format`.
+ * 3. The formatted string is written to every sink in the snapshot.
+ * 4. For async mode, the deep-copied record is queued instead of dispatching.
+ *
+ * ## Snapshot Reload
+ *
+ * When `log_reload` is called, the new config is applied atomically:
+ * the dispatcher lock is held while the old sink list is freed and replaced.
+ * `log_snapshot_get` returns the snapshot without locking; the caller is
+ * responsible for calling `log_snapshot_release` when done.
+ *
+ * ## Plugin Sink Initialisation
+ *
+ * During reload, the dispatcher scans the config for `plugins` entries,
+ * dlopen-loads each shared library, and invokes its `create_sink` entry
+ * point. Plugin sink handles are cached to avoid redundant loads.
+ *
+ * ## Thread Safety
+ *
+ * - `dispatcher_lock` (recursive mutex): serialises reload and dispatch.
+ * - `dispatcher_cond` / `dispatcher_waiters`: synchronises shutdown with
+ *   in-flight dispatch calls.
+ * - The Prometheus counter `clogx_sink_writes_total` is updated atomically.
+ *
+ * ## Flush
+ *
+ * `log_flush` waits for all in-flight dispatch calls to complete by
+ * counting waiters and blocking on `dispatcher_cond` until the count
+ * reaches zero. Timeout defaults to 2000 ms.
  */
 #include <stdio.h>
 #include <stdlib.h>

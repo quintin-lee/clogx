@@ -1,6 +1,34 @@
 /**
  * @file file_sink.c
  * @brief File sink with size-based rotation and parent-directory creation.
+ *
+ * ## Design
+ *
+ * Writes formatted log lines to a file. On creation, the parent
+ * directory is recursively created if it does not exist. When the file
+ * exceeds `max_size` bytes, rotation is triggered via `log_rotate()`.
+ *
+ * ## Rotation Flow
+ *
+ * ```
+ * file_write()
+ *   ├─ fwrite() to current file
+ *   ├─ current_size += len
+ *   └─ if current_size >= max_size:
+ *         log_rotate(path, backups)
+ *         reopen file (truncate or append depending on config)
+ * ```
+ *
+ * ## Flush Strategy
+ *
+ * `file_flush()` calls `fflush()` on the underlying `FILE*` handle.
+ * The kernel will coalesce writes and flush to disk periodically; for
+ * durability-critical logs, the caller should set `fsync_on_write`.
+ *
+ * ## Plugin Interface
+ *
+ * Implements the `clogx_plugin_v1` ABI so the file sink can be loaded
+ * as a shared library plugin via `log_plugin_loader`.
  */
 #include <stdio.h>
 #include <stdlib.h>

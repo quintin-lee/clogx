@@ -1,6 +1,47 @@
 /**
  * @file prometheus_exporter.c
  * @brief Prometheus metrics renderer and HTTP /metrics server.
+ *
+ * ## Design
+ *
+ * This module exposes clogx operational metrics in Prometheus text
+ * exposition format via an embedded HTTP server. The server listens
+ * on a configurable port and serves a single endpoint:
+ *
+ * ```
+ * GET /metrics   →  Prometheus text exposition format
+ * GET /healthz   →  "ok" (liveness probe)
+ * ```
+ *
+ * ## Rendered Metrics
+ *
+ * | Metric                              | Type    | Description                        |
+ * |-------------------------------------|---------|------------------------------------|
+ * | `clogx_total_logs_total`            | counter | Total log messages emitted         |
+ * | `clogx_dropped_total`               | counter | Messages dropped (queue full)      |
+ * | `clogx_rate_limited_total`          | counter | Messages suppressed by rate limiter|
+ * | `clogx_queue_depth`                 | gauge   | Current async queue depth          |
+ * | `clogx_sink_writes_total{sink=...}` | counter | Per-sink write count               |
+ * | `clogx_sink_errors_total{sink=...}` | counter | Per-sink error count               |
+ *
+ * ## HTTP Server
+ *
+ * The server is a minimal blocking socket implementation:
+ * 1. `bind()` + `listen()` on the configured port
+ * 2. Accept one connection at a time (single-threaded)
+ * 3. Read HTTP request, parse method and path
+ * 4. Render metrics into a `strbuf_t` and write HTTP response
+ * 5. Close connection
+ *
+ * This is intentionally simple — no fork, no epoll, no libevent.
+ * For production, reverse-proxy through nginx/Envoy and scrape
+ * the internal port.
+ *
+ * ## Thread Safety
+ *
+ * `prometheus_start_server` spawns a detached thread that owns
+ * the server socket. Metrics are read atomically (Prometheus
+ * counters are `_Atomic`); no locks needed for rendering.
  */
 
 #include <stdio.h>

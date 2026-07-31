@@ -1,6 +1,39 @@
 /**
  * @file signal_handler.c
- * @brief Graceful shutdown signal handler implementation with POSIX self-pipe trick.
+ * @brief POSIX signal handler with self-pipe trick for safe log flush.
+ *
+ * ## Problem
+ *
+ * Signal handlers have severe restrictions: only async-signal-safe
+ * functions (no malloc, no locks, no stdio) may be called. Yet a robust
+ * logger must flush buffered data before process termination.
+ *
+ * ## Solution: Self-Pipe Trick
+ *
+ * 1. At init, create a pipe (`signal_pipe_fd[2]`).
+ * 2. The signal handler writes a single byte to `signal_pipe_fd[1]`
+ *    (async-signal-safe `write()`).
+ * 3. A dedicated thread (`signal_monitor_thread`) blocks on `read()`
+ *    from `signal_pipe_fd[0]`.
+ * 4. When a byte arrives, the monitor thread performs the safe cleanup:
+ *    flush logs, restore default handler, re-raise the signal.
+ *
+ * ## Signals Handled
+ *
+ * | Signal        | Default Action     | Notes                     |
+ * |---------------|--------------------|---------------------------|
+ * | `SIGINT`      | Flush + re-raise   | Ctrl+C                    |
+ * | `SIGTERM`     | Flush + re-raise   | `kill` / systemd stop     |
+ * | `SIGHUP`      | Flush + re-raise   | Config reload hint        |
+ * | `SIGUSR1`     | Flush + re-raise   | User-defined (e.g. rotate)|
+ * | `SIGUSR2`     | Flush + re-raise   | User-defined              |
+ * | `SIGPIPE`     | Ignore             | Broken pipe (common in network sinks) |
+ *
+ * ## Windows Fallback
+ *
+ * On Windows, `signal()` is used instead of `sigaction`. The self-pipe
+ * trick is unavailable; the handler calls `log_flush()` directly (which
+ * is technically unsafe but acceptable for Windows console apps).
  */
 
 #include "clog_port.h"

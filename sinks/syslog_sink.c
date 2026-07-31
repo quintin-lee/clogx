@@ -1,6 +1,41 @@
 /**
  * @file syslog_sink.c
  * @brief POSIX syslog sink implementation.
+ *
+ * ## Design
+ *
+ * Forwards formatted log lines to the system syslog daemon via the
+ * POSIX `syslog()` API. Log levels are mapped to syslog priorities:
+ *
+ * | clogx Level | syslog Priority |
+ * |-------------|-----------------|
+ * | TRACE       | LOG_DEBUG       |
+ * | DEBUG       | LOG_DEBUG       |
+ * | INFO        | LOG_INFO        |
+ * | WARN        | LOG_WARNING     |
+ * | ERROR       | LOG_ERR         |
+ * | FATAL       | LOG_CRIT        |
+ *
+ * ## Facility
+ *
+ * The syslog facility (e.g. `LOG_USER`, `LOG_LOCAL0`) is configurable
+ * at sink creation time and defaults to `LOG_USER`.
+ *
+ * ## Thread Safety
+ *
+ * The POSIX `syslog()` function is required to be thread-safe by the
+ * specification. The sink passes the ident string pointer to `openlog()`
+ * which must remain valid for the lifetime of the sink.
+ *
+ * ## Windows
+ *
+ * On Windows, `syslog_sink_create` returns `NULL` since POSIX syslog
+ * is not available. Callers should fall back to `file_sink` or
+ * `socket_sink` on Windows.
+ *
+ * ## Plugin Interface
+ *
+ * Implements the `clogx_plugin_v1` ABI.
  */
 
 #include <stdio.h>

@@ -1,6 +1,35 @@
 /**
  * @file console_sink.c
  * @brief Console sinks (stdout/stderr); color preference queried by dispatcher.
+ *
+ * ## Design
+ *
+ * The console sink writes formatted log lines to stdout (default) or
+ * stderr. It supports optional ANSI colour escape sequences that are
+ * automatically stripped when the output stream is not a TTY.
+ *
+ * ## Colour Mapping
+ *
+ * | Level    | Default    | Bright variant            |
+ * |----------|------------|---------------------------|
+ * | TRACE    | dim white  | bright white              |
+ * | DEBUG    | cyan       | bright cyan               |
+ * | INFO     | green      | bright green              |
+ * | WARN     | yellow     | bright yellow             |
+ * | ERROR    | red        | bright red                |
+ * | FATAL    | bold red   | bold bright red           |
+ *
+ * ## Windows VT Processing
+ *
+ * On Windows, the sink enables `ENABLE_VIRTUAL_TERMINAL_PROCESSING`
+ * on the console handle so that ANSI escape sequences render correctly.
+ * If the handle does not support VT processing (e.g. redirected to a
+ * file), the escape sequences are silently dropped.
+ *
+ * ## Plugin Interface
+ *
+ * Implements the `clogx_plugin_v1` ABI so the console sink can be
+ * loaded as a shared library plugin.
  */
 #include <stdio.h>
 #include <stdlib.h>

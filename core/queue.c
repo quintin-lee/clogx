@@ -1,6 +1,34 @@
 /**
  * @file queue.c
- * @brief Mutex-protected bounded ring buffer used by the async logger.
+ * @brief Bounded ring buffer for async logging.
+ *
+ * ## Design
+ *
+ * This is a mutex-protected bounded queue backed by a dynamically-allocated
+ * ring buffer (`log_record_t`). The implementation is intentionally simple:
+ * lock → push/pop → unlock. This avoids lock-free complexity while still
+ * delivering high throughput via the mutex hot path.
+ *
+ * ## State Diagram
+ *
+ * ```
+ * [EMPTY] ──push()──► [PARTIAL] ──push()──► [FULL]
+ *                        │                     │
+ *                     pop()                 pop()
+ *                        │                     │
+ *                        ▼                     ▼
+ * [EMPTY] ◄────────── [PARTIAL] ◄────────── [EMPTY]
+ * ```
+ *
+ * - `head` is the index of the next slot to write to (producer).
+ * - `tail` is the index of the next slot to read from (consumer).
+ * - `head == tail` → empty; `next(head) == tail` → full.
+ *
+ * ## Thread Safety
+ *
+ * All operations are serialised by `queue->mutex`. In async logging mode,
+ * only the producer thread (main thread calling `LOG_*`) pushes, while
+ * the consumer thread (worker thread) pops.
  */
 #include <stdlib.h>
 #include <string.h>

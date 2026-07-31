@@ -1,6 +1,41 @@
 /**
  * @file async.c
- * @brief Async logger: single-allocation record cloning into a queue consumed by one worker.
+ * @brief Async logging worker thread and record deep-copy logic.
+ *
+ * ## Design
+ *
+ * When `log_config_t.async_mode` is enabled, the write path does not
+ * dispatch to sinks directly. Instead, it deep-copies the `log_record_t`
+ * into the async queue and returns immediately. A dedicated background
+ * thread (`async_worker_loop`) drains the queue and dispatches records
+ * synchronously.
+ *
+ * ## Deep-Copy (`log_record_clone`)
+ *
+ * A `log_record_t` contains several heap-allocated strings (message,
+ * file, function, formatted_message, plugin_json, extra_json). A naive
+ * `memcpy` would create dangling pointers. `log_record_clone` allocates
+ * a fresh `log_record_t`, duplicates every heap string via `strdup`, and
+ * returns the independent copy.
+ *
+ * ## Worker Thread Lifecycle
+ *
+ * ```
+ * log_start_async_worker()
+ *   ├─ allocate queue (capacity from config)
+ *   ├─ create worker thread (async_worker_loop)
+ *   └─ thread enters drain loop
+ *
+ * log_stop_async_worker()
+ *   ├─ set shutdown flag
+ *   ├─ wake worker via condition variable
+ *   ├─ pthread_join (wait for drain)
+ *   └─ free queue
+ * ```
+ *
+ * The worker loop blocks on a condition variable when the queue is empty.
+ * When records are enqueued, the producer signals the condition variable
+ * to wake the worker.
  */
 #include <stdio.h>
 #include <stdlib.h>

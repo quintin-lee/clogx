@@ -1,6 +1,28 @@
 /**
  * @file rotate.c
- * @brief Size-based log file rotation (shift numbered backups, rename active).
+ * @brief Log file rotation with numbered backup chain.
+ *
+ * ## Rotation Strategy
+ *
+ * When the active log file exceeds `max_file_size` bytes, the logger
+ * rotates the file using a numbered backup chain:
+ *
+ * ```
+ * app.log       → app.log.1
+ * app.log.1     → app.log.2
+ * app.log.2     → app.log.3
+ * ...
+ * app.log.N-1   → app.log.N   (deleted if N == max_files)
+ * ```
+ *
+ * This is the standard "logrotate" style rotation used by most logging
+ * frameworks (rsyslog, syslog-ng, etc.).
+ *
+ * ## Thread Safety
+ *
+ * Rotation is triggered from the sink's write path (under sink lock).
+ * The rotation itself only touches the file system and does not interact
+ * with the logging pipeline, so no additional synchronisation is needed.
  */
 #include <stdio.h>
 #include <string.h>

@@ -1,6 +1,37 @@
 /**
  * @file rate_limit.c
- * @brief Token bucket rate limiter implementation using millisecond monotonic clock.
+ * @brief Token-bucket rate limiter for log messages.
+ *
+ * ## Algorithm: Token Bucket
+ *
+ * Each rate limiter instance maintains:
+ * - `tokens`: current available tokens (float, updated lazily)
+ * - `last_refill_ms`: timestamp of last token replenishment
+ * - `capacity`: maximum tokens (burst size)
+ * - `rate`: tokens per millisecond (sustained throughput)
+ *
+ * On each call to `log_rate_limit_should_allow`:
+ * 1. Compute elapsed time since `last_refill_ms`.
+ * 2. Refill tokens: `tokens += elapsed * rate` (capped at `capacity`).
+ * 3. If `tokens >= 1.0`, consume one token and allow the log call.
+ * 4. Otherwise, suppress the log call and return false.
+ *
+ * ## Configuration
+ *
+ * Rate limits are defined per module in `log_config_t.rate_limits[]`:
+ * ```yaml
+ * rate_limits:
+ *   - module: "net.http"
+ *     rate: 100      # 100 messages per second
+ *     burst: 200     # allow bursts up to 200
+ * ```
+ *
+ * ## Thread Safety
+ *
+ * The rate limiter uses atomic operations for token counting. Multiple
+ * threads may call `log_rate_limit_should_allow` concurrently; the
+ * implementation uses CAS (compare-and-swap) to safely update the token
+ * count without locks.
  */
 
 #include "clog_port.h"

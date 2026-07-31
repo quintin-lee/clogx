@@ -1,6 +1,43 @@
 /**
  * @file socket_sink.c
  * @brief TCP / TLS socket sink with lazy connect and reconnect-on-send-failure.
+ *
+ * ## Design
+ *
+ * Sends formatted log lines over a TCP socket to a remote receiver
+ * (e.g. logstash, rsyslog, a custom collector). The connection is
+ * established lazily on the first write and automatically reconnected
+ * on send failure.
+ *
+ * ## Connection Lifecycle
+ *
+ * ```
+ * socket_create()
+ *   ├─ store host/port (no connect yet)
+ *   └─ sink->write = socket_write
+ *
+ * socket_write()
+ *   ├─ if sockfd == INVALID: socket_connect()
+ *   ├─ send(buf, len)
+ *   └─ on failure: close + reconnect + retry once
+ * ```
+ *
+ * ## TLS Support (compile-time)
+ *
+ * When built with `CLOG_USE_TLS` (OpenSSL), the socket wraps the TCP
+ * connection in an SSL context. TLS is negotiated during the lazy
+ * connect phase. Certificate verification can be skipped via
+ * `skip_verify` for development environments.
+ *
+ * ## Reconnect Backoff
+ *
+ * After a failed reconnect, the sink sleeps for 1 second before
+ * retrying. This prevents tight reconnect loops when the receiver
+ * is down. Future versions may add exponential backoff.
+ *
+ * ## Plugin Interface
+ *
+ * Implements the `clogx_plugin_v1` ABI.
  */
 #include <stdio.h>
 #include <stdlib.h>

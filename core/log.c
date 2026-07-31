@@ -1,6 +1,42 @@
 /**
  * @file log.c
  * @brief Public logging entry points: init/destroy/reload/flush and write path.
+ *
+ * ## Architecture
+ *
+ * This file implements the singleton logger API (global `g_default_logger`)
+ * and the multi-instance `logger_t` API. Both paths share the same internal
+ * write path (`logger_writevprintf_internal`) and initialisation logic
+ * (`logger_init_internal`).
+ *
+ * ## Write Path Flow
+ *
+ * ```
+ * LOG_INFO(...)
+ *   └─► log_writevprintf()
+ *         └─► logger_writevprintf_internal()
+ *               ├─ level filter (skip if below threshold)
+ *               ├─ rate limit check (drop if suppressed)
+ *               ├─ format message via vsnprintf
+ *               ├─ populate log_record_t
+ *               ├─ deep-copy into async queue  (if async mode)
+ *               │     or
+ *               └─ dispatch to all sinks      (if sync mode)
+ * ```
+ *
+ * ## Thread Safety
+ *
+ * - `log_init` / `log_destroy`: serialised by `g_init_mutex`.
+ * - `log_reload`: acquires `g_init_mutex` then uses atomic snapshot swap.
+ * - `logger_writevprintf_internal`: safe for concurrent calls (no shared
+ *   mutable state except atomics for Prometheus counters).
+ * - Module name is protected by `module_mutex`.
+ *
+ * ## Fork Safety
+ *
+ * `pthread_atfork` handlers (POSIX only) acquire `g_init_mutex` and the
+ * dispatcher lock before fork, then release them in child and parent
+ * separately. The child re-creates the async worker thread.
  */
 #include <stdio.h>
 #include <stdlib.h>
