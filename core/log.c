@@ -40,6 +40,7 @@
  */
 #include "log.h"
 #include "clog_port.h"
+#include "clogx_version.h"
 #include "dispatcher.h"
 #include "log_async.h"
 #include "log_config.h"
@@ -188,6 +189,8 @@ static int logger_init_internal(logger_t *logger, const char *yaml_path)
 
     logger_set_module_internal(logger, "main");
     logger->initialized = true;
+
+    fprintf(stderr, "[clogx] version " CLOGX_VERSION_STRING "\n");
     return CLOG_OK;
 }
 
