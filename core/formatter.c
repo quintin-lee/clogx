@@ -67,6 +67,7 @@ static char g_time_format_buf[64]                  = "%Y-%m-%d %H:%M:%S";
 /*  Helpers                                                           */
 /* ------------------------------------------------------------------ */
 
+/** @brief Convert a log level enum to its string name. */
 static const char *level_to_string(log_level_t level)
 {
     switch (level) {
@@ -87,6 +88,12 @@ static const char *level_to_string(log_level_t level)
     }
 }
 
+/**
+ * @brief Append a token's literal text to the output buffer.
+ *
+ * Advances @p out and decrements @p remaining by the token length.
+ * Returns -1 if the token doesn't fit; 0 on success.
+ */
 static int append_token(char **out, size_t *remaining, const char *token, size_t token_len)
 {
     if (token_len >= *remaining) {
@@ -191,6 +198,7 @@ static void append_json_escaped_string(char **out, size_t *remaining, const char
     **out = '\0';
 }
 
+/** @brief Encode a 16-byte trace ID as a 32-char hex string (no null terminator in output). */
 static void trace_id_hex(const uint8_t trace_id[16], char *out)
 {
     for (int i = 0; i < 16; i++) {
@@ -198,6 +206,7 @@ static void trace_id_hex(const uint8_t trace_id[16], char *out)
     }
 }
 
+/** @brief Encode an 8-byte span ID as a 16-char hex string (no null terminator in output). */
 static void span_id_hex(const uint8_t span_id[8], char *out)
 {
     for (int i = 0; i < 8; i++) {
@@ -205,6 +214,7 @@ static void span_id_hex(const uint8_t span_id[8], char *out)
     }
 }
 
+/** @brief Check if an ID byte array is all zeros (no active trace/span). */
 static int is_zero_id(const uint8_t *id, int len)
 {
     for (int i = 0; i < len; i++) {
@@ -333,6 +343,7 @@ static int format_json_ex(log_record_t *restrict record,
 /*  W3C TraceContext parser                                            */
 /* ------------------------------------------------------------------ */
 
+/** @brief Convert a single hex character to its 4-bit integer value (0–15), or -1 on invalid input. */
 static int hex_nibble(char c)
 {
     if (c >= '0' && c <= '9') {
@@ -347,6 +358,14 @@ static int hex_nibble(char c)
     return -1;
 }
 
+/**
+ * @brief Decode a hex string into a byte array.
+ *
+ * @param hex   Input hex string (2×@p n characters).
+ * @param out   Output byte array (must have at least @p n bytes).
+ * @param n     Number of bytes to decode.
+ * @return 0 on success, -1 on invalid hex input.
+ */
 static int hex_decode(const char *hex, uint8_t *out, int n)
 {
     for (int i = 0; i < n; i++) {
@@ -426,6 +445,15 @@ static void parse_traceparent(uint8_t trace_id[16], uint8_t span_id[8])
  * The `trace_id` and `span_id` fields are omitted when unset.
  *
  * @return Bytes written, or -1 on truncation.
+ */
+/**
+ * @brief Render a log record as OpenTelemetry-compatible JSON.
+ *
+ * Produces a single JSON object with OTLP resource attributes,
+ * severity number/text, optional W3C TraceContext fields, and
+ * thread-local MDC context.
+ *
+ * @return Bytes written, or -1 on buffer overflow.
  */
 static int format_otel_json(log_record_t *restrict record, char *restrict buf, size_t buf_size)
 {
