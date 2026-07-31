@@ -100,7 +100,7 @@ static void console_atfork_child(log_sink_t *sink)
     (void)sink;
 }
 
-log_sink_t *console_sink_create(bool use_color)
+static log_sink_t *console_sink_create_for(FILE *stream, bool use_color)
 {
     log_sink_t *sink = malloc(sizeof(log_sink_t));
     if (!sink) {
@@ -113,7 +113,7 @@ log_sink_t *console_sink_create(bool use_color)
         return NULL;
     }
 
-    data->stream    = stdout;
+    data->stream    = stream;
     data->use_color = use_color;
 
 #if defined(_WIN32) || defined(_WIN64)
@@ -133,37 +133,14 @@ log_sink_t *console_sink_create(bool use_color)
     return sink;
 }
 
+log_sink_t *console_sink_create(bool use_color)
+{
+    return console_sink_create_for(stdout, use_color);
+}
+
 log_sink_t *console_sink_create_stderr(bool use_color)
 {
-    log_sink_t *sink = malloc(sizeof(log_sink_t));
-    if (!sink) {
-        return NULL;
-    }
-
-    console_sink_data_t *data = malloc(sizeof(console_sink_data_t));
-    if (!data) {
-        free(sink);
-        return NULL;
-    }
-
-    data->stream    = stderr;
-    data->use_color = use_color;
-
-#if defined(_WIN32) || defined(_WIN64)
-    if (use_color) {
-        enable_windows_vt_mode(data->stream);
-    }
-#endif
-
-    sink->abi_version  = CLOGX_PLUGIN_ABI_VERSION;
-    sink->write        = console_write;
-    sink->flush        = console_flush;
-    sink->destroy      = console_destroy;
-    sink->atfork_child = console_atfork_child;
-    sink->private_data = data;
-    sink->min_level    = LOG_LEVEL_TRACE;
-
-    return sink;
+    return console_sink_create_for(stderr, use_color);
 }
 
 bool console_sink_is_color_enabled(log_sink_t *sink)
