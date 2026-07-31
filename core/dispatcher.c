@@ -154,12 +154,13 @@ int log_dispatcher_dispatch_for(logger_t *logger, log_record_t *record)
         log_color_t color      = get_log_color(record->level);
         size_t      ansi_count = sizeof(ansi_codes) / sizeof(ansi_codes[0]);
         int         color_idx  = (size_t)color < ansi_count ? (int)color : 0;
-        int         ret        = snprintf(colored_buf,
-                                          sizeof(colored_buf),
-                                          "%s%s%s",
-                                          ansi_codes[color_idx],
-                                          formatted_buf,
-                                          reset_code);
+
+        int ret = snprintf(colored_buf,
+                           sizeof(colored_buf),
+                           "%s%s%s",
+                           ansi_codes[color_idx],
+                           formatted_buf,
+                           reset_code);
         if (ret > 0 && ret < (int)sizeof(colored_buf)) {
             colored_len = ret;
         }
