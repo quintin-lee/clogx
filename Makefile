@@ -224,6 +224,14 @@ coverage-gcov:
 check:
 	$(MAKE) check-format
 	@if command -v clang-tidy >/dev/null 2>&1; then $(MAKE) check-tidy; fi
+	@if command -v clang-tidy >/dev/null 2>&1; then \
+		if [ ! -f build/clang-tidy/libclogx-unused-includes.so ]; then \
+			echo "==> Building custom clang-tidy checks"; \
+			cmake -S . -B build -DCLOG_BUILD_CLANG_TIDY_CHECKS=ON; \
+			cmake --build build --target clogx-unused-includes -j"$$(nproc)"; \
+		fi; \
+		$(MAKE) tidy-check; \
+	fi
 	$(MAKE) clean
 	$(MAKE) all
 	$(MAKE) test
