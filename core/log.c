@@ -259,9 +259,9 @@ static void logger_writevprintf_internal(logger_t   *logger,
         return;
     }
 
-    logger->total_logged++;
+    clog_atomic_inc64(&logger->total_logged);
     if ((int)level >= 0 && (int)level < 6) {
-        g_prometheus_level_counts[(int)level]++;
+        clog_atomic_inc64(&g_prometheus_level_counts[(int)level]);
     }
 
     char message[CLOG_MAX_MESSAGE_SIZE];
@@ -334,7 +334,7 @@ static void logger_writevprintf_internal(logger_t   *logger,
     if (logger->config.async) {
         int ar = log_async_write_for(logger, &record);
         if (ar != 0) {
-            logger->dropped_queue_full++;
+            clog_atomic_inc64(&logger->dropped_queue_full);
             void (*cb)(void) = logger->async_fallback_cb;
             if (cb) {
                 cb();
@@ -373,8 +373,8 @@ void log_get_stats(log_stats_t *stats)
     if (!stats) {
         return;
     }
-    stats->total_logged_count       = g_default_logger.total_logged;
-    stats->dropped_queue_full_count = g_default_logger.dropped_queue_full;
+    stats->total_logged_count       = clog_atomic_get64(&g_default_logger.total_logged);
+    stats->dropped_queue_full_count = clog_atomic_get64(&g_default_logger.dropped_queue_full);
     stats->suppressed_rate_count    = log_rate_limit_get_total_suppressed_for(&g_default_logger);
     stats->current_queue_depth      = log_async_get_queue_depth_for(&g_default_logger);
 }

@@ -442,6 +442,31 @@ static inline void clog_mutex_unlock_ptr(clog_mutex_t **m)
 #define clog_thread_local _Thread_local
 #endif
 
+/* ── Atomic 64-bit operations ── */
+
+static inline uint64_t clog_atomic_inc64(volatile uint64_t *ptr)
+{
+#if defined(__GNUC__) || defined(__clang__)
+    return __atomic_fetch_add(ptr, 1ULL, __ATOMIC_RELAXED) + 1ULL;
+#elif defined(_WIN32) || defined(_WIN64)
+    return (uint64_t)InterlockedIncrement64((volatile LONG64 *)ptr);
+#else
+    uint64_t val = ++(*ptr);
+    return val;
+#endif
+}
+
+static inline uint64_t clog_atomic_get64(volatile uint64_t *ptr)
+{
+#if defined(__GNUC__) || defined(__clang__)
+    return __atomic_load_n(ptr, __ATOMIC_RELAXED);
+#elif defined(_WIN32) || defined(_WIN64)
+    return (uint64_t)InterlockedCompareExchange64((volatile LONG64 *)ptr, 0, 0);
+#else
+    return *ptr;
+#endif
+}
+
 /* ── Time & Thread utilities ── */
 
 /**
