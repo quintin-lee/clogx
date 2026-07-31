@@ -77,9 +77,6 @@ jobs:
             os: ubuntu-latest
             arch: aarch64
             cross: true
-          - name: macos-x64
-            os: macos-13
-            arch: x86_64
           - name: macos-arm64
             os: macos-latest
             arch: aarch64
