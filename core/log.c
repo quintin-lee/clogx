@@ -497,10 +497,10 @@ void clog_clear_trace_context(void)
 }
 
 /**
- * @brief Convert a hex character to its numeric value.
+ * @brief Convert a hex character to its 4-bit numeric value.
  *
- * @param c  Hex character (`'0'–'9'`, `'a'–'f'`, or `'A'–'F'`).
- * @return 0–15 on valid input, -1 otherwise.
+ * @param c  Hex character ('0'-'9', 'a'-'f', or 'A'-'F').
+ * @return 0-15 on valid input, -1 otherwise.
  */
 static int parse_hex_nibble(char c)
 {
