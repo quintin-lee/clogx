@@ -115,7 +115,8 @@ static inline void clog_net_cleanup(void)
     WSACleanup();
 }
 
-/* Mutex via SRWLOCK */
+/* ── Mutex via SRWLOCK ── */
+
 typedef SRWLOCK clog_mutex_t;
 #define CLOG_MUTEX_INITIALIZER SRWLOCK_INIT
 
@@ -137,7 +138,8 @@ static inline void clog_mutex_unlock(clog_mutex_t *m)
     ReleaseSRWLockExclusive(m);
 }
 
-/* RWLock via SRWLOCK */
+/* ── RWLock via SRWLOCK ── */
+
 typedef SRWLOCK clog_rwlock_t;
 #define CLOG_RWLOCK_INITIALIZER SRWLOCK_INIT
 
@@ -167,7 +169,8 @@ static inline void clog_rwlock_wrunlock(clog_rwlock_t *rw)
     ReleaseSRWLockExclusive(rw);
 }
 
-/* Condition Variable via CONDITION_VARIABLE */
+/* ── Condition Variable via CONDITION_VARIABLE ── */
+
 typedef CONDITION_VARIABLE clog_cond_t;
 #define CLOG_COND_INITIALIZER CONDITION_VARIABLE_INIT
 
@@ -193,7 +196,8 @@ static inline void clog_cond_broadcast(clog_cond_t *c)
     WakeAllConditionVariable(c);
 }
 
-/* Threads */
+/* ── Threads via Win32 CreateThread ── */
+
 typedef HANDLE clog_thread_t;
 
 typedef struct {
@@ -278,6 +282,8 @@ static inline void clog_net_cleanup(void)
 {
 }
 
+/* ── Mutex via pthread_mutex_t ── */
+
 typedef pthread_mutex_t clog_mutex_t;
 #define CLOG_MUTEX_INITIALIZER PTHREAD_MUTEX_INITIALIZER
 
@@ -297,6 +303,8 @@ static inline void clog_mutex_unlock(clog_mutex_t *m)
 {
     pthread_mutex_unlock(m);
 }
+
+/* ── RWLock via pthread_rwlock_t ── */
 
 typedef pthread_rwlock_t clog_rwlock_t;
 #define CLOG_RWLOCK_INITIALIZER PTHREAD_RWLOCK_INITIALIZER
@@ -326,6 +334,8 @@ static inline void clog_rwlock_wrunlock(clog_rwlock_t *rw)
     pthread_rwlock_unlock(rw);
 }
 
+/* ── Condition Variable via pthread_cond_t ── */
+
 typedef pthread_cond_t clog_cond_t;
 #define CLOG_COND_INITIALIZER PTHREAD_COND_INITIALIZER
 
@@ -349,6 +359,8 @@ static inline void clog_cond_broadcast(clog_cond_t *c)
 {
     pthread_cond_broadcast(c);
 }
+
+/* ── Threads via pthreads ── */
 
 typedef pthread_t clog_thread_t;
 static inline int clog_thread_create(clog_thread_t *t, void *(*func)(void *), void *arg)
