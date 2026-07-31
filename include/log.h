@@ -9,6 +9,64 @@
  *   log_flush();
  *   log_destroy();
  * @endcode
+ *
+ * @dot "clogx Architecture"
+ * digraph clogx {
+ *     rankdir=TB;
+ *     node [shape=box, style=filled, fillcolor="#E8F4FD", fontname="Helvetica"];
+ *     edge [color="#666666", fontname="Helvetica", fontsize=9];
+ *
+ *     subgraph cluster_user {
+ *         label="User API";
+ *         style=dashed;
+ *         color="#999999";
+ *         log_init [label="log_init()\nlogger_create()"];
+ *         LOG_INFO [label="LOG_INFO()\nLOGGER_INFO()"];
+ *         log_flush [label="log_flush()\nlogger_flush()"];
+ *         log_destroy [label="log_destroy()\nlogger_destroy()"];
+ *     }
+ *
+ *     subgraph cluster_core {
+ *         label="Core Engine";
+ *         style=filled;
+ *         fillcolor="#FFF3E0";
+ *         color="#FF9800";
+ *         config [label="Config\n(YAML Parser)" shape=component];
+ *         formatter [label="Formatter\n(Token Engine)" shape=component];
+ *         dispatcher [label="Dispatcher\n(Sink Router)" shape=component];
+ *         queue [label="MPSC Queue\n(Async Buffer)" shape=component];
+ *         async [label="Async Worker\n(Batch Consumer)" shape=component];
+ *         rate_limit [label="Rate Limiter\n(Token Bucket)" shape=component];
+ *         rotate [label="Rotation\n(Size-based)" shape=component];
+ *     }
+ *
+ *     subgraph cluster_sinks {
+ *         label="Sinks";
+ *         style=filled;
+ *         fillcolor="#E8F5E9";
+ *         color="#4CAF50";
+ *         console [label="Console\nSink" shape=box];
+ *         file [label="File\nSink" shape=box];
+ *         socket [label="Socket\nSink (TLS)" shape=box];
+ *         syslog [label="Syslog\nSink" shape=box];
+ *         otlp [label="OTLP\nSink" shape=box];
+ *         custom [label="Custom\nSink" shape=box];
+ *     }
+ *
+ *     log_init -> config;
+ *     LOG_INFO -> formatter -> dispatcher;
+ *     dispatcher -> rate_limit;
+ *     dispatcher -> queue [label="async"];
+ *     queue -> async -> dispatcher;
+ *     dispatcher -> console;
+ *     dispatcher -> file;
+ *     dispatcher -> socket;
+ *     dispatcher -> syslog;
+ *     dispatcher -> otlp;
+ *     dispatcher -> custom;
+ *     file -> rotate [label="auto\nrotate"];
+ * }
+ * @enddot
  */
 
 #ifndef LOG_H

@@ -18,6 +18,29 @@
  *   - log_record_t is designed to fit on the stack with minimal overhead (64 bytes on 64-bit).
  *     String pointers (8 bytes each) avoid copying the actual message until formatting.
  *   - The fixed-size trace_id/span_id arrays support W3C TraceContext without heap allocation.
+ *
+ * @dot "Log Record Lifecycle"
+ * digraph record_lifecycle {
+ *     rankdir=LR;
+ *     node [shape=box, style=filled, fontname="Helvetica", fontsize=10];
+ *     edge [color="#666666", fontname="Helvetica", fontsize=9];
+ *
+ *     caller [label="Caller Thread\n(LOG_INFO)" fillcolor="#E3F2FD"];
+ *     record [label="log_record_t\n(stack or heap)" fillcolor="#FFF9C4"];
+ *     sync_path [label="Sync Path\n(direct dispatch)" fillcolor="#E8F5E9"];
+ *     async_queue [label="MPSC Queue\n(deep-copy)" fillcolor="#FCE4EC"];
+ *     worker [label="Async Worker\n(batch dequeue)" fillcolor="#F3E5F5"];
+ *     dispatcher [label="Dispatcher\n(route to sinks)" fillcolor="#FFF3E0"];
+ *     sinks [label="Sinks\n(console/file/socket/etc)" fillcolor="#E0F2F1"];
+ *
+ *     caller -> record [label="populate"];
+ *     record -> sync_path [label="sync\n(borrowed ptrs)"];
+ *     record -> async_queue [label="async\n(deep-copy)"];
+ *     sync_path -> dispatcher;
+ *     async_queue -> worker -> dispatcher;
+ *     dispatcher -> sinks;
+ * }
+ * @enddot
  */
 
 #ifndef LOG_RECORD_H

@@ -18,8 +18,48 @@
  * Lifecycle:
  *   1. Create sink via one of the factory functions.
  *   2. Add sink to logger/logger instance (must happen after init).
- *   3. Sinks are automatically flushed on shutdown/reload.
- *   4. Destroy is called by log_destroy when the sink is removed/destroyed.
+ *   3. Sinks receive formatted log lines via the write callback.
+ *   4. Destroy via log_sink_destroy() or logger_destroy().
+ *
+ * @dot "Sink Polymorphism (Vtable Pattern)"
+ * digraph sink_vtable {
+ *     rankdir=TB;
+ *     node [shape=box, style=filled, fontname="Helvetica", fontsize=10];
+ *     edge [color="#666666", fontname="Helvetica", fontsize=9];
+ *
+ *     subgraph cluster_interface {
+ *         label="log_sink_t (interface)";
+ *         style=filled;
+ *         fillcolor="#E3F2FD";
+ *         color="#1976D2";
+ *         vtable [label="vtable callbacks\n• write(buf, len)\n• flush()\n• destroy()\n•
+ * atfork_child()" shape=record]; state [label="level, private_data" shape=record];
+ *     }
+ *
+ *     subgraph cluster_impl {
+ *         label="Concrete Sinks";
+ *         style=filled;
+ *         fillcolor="#E8F5E9";
+ *         color="#388E3C";
+ *         console [label="console_sink\ncolor, stream"];
+ *         file [label="file_sink\nfp, rotation"];
+ *         socket [label="socket_sink\nfd, tls_ctx"];
+ *         syslog [label="syslog_sink\nident"];
+ *         otlp [label="otlp_sink\nfile_out"];
+ *         custom [label="custom_sink\nuser_cb"];
+ *     }
+ *
+ *     dispatcher [label="Dispatcher\n(forEach sink)" shape=ellipse, fillcolor="#FFF3E0"];
+ *
+ *     dispatcher -> vtable [label="call write/flush"];
+ *     console -> vtable [style=dashed, label="implements"];
+ *     file -> vtable [style=dashed, label="implements"];
+ *     socket -> vtable [style=dashed, label="implements"];
+ *     syslog -> vtable [style=dashed, label="implements"];
+ *     otlp -> vtable [style=dashed, label="implements"];
+ *     custom -> vtable [style=dashed, label="implements"];
+ * }
+ * @enddot
  */
 
 #ifndef LOG_SINK_H
@@ -38,8 +78,8 @@
 #endif
 #endif
 
-/** @brief Forward declaration used by @ref clogx_plugin_t. */
-struct clogx_plugin_t;
+    /** @brief Forward declaration used by @ref clogx_plugin_t. */
+    struct clogx_plugin_t;
 
 /**
  * @struct log_sink

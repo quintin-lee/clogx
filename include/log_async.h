@@ -23,19 +23,36 @@
  *
  * - @ref log_async_write is safe for multiple concurrent producers
  *   (delegates to the queue's mutex-protected put).
- * - The worker thread is the sole consumer; it does not race with itself.
- * - @ref log_async_shutdown must be called after all producers have stopped
- *   or the queue will be closed under active producers (safe, but the
- *   records in flight are lost).
  *
- * ## Fork Safety
+ * @dot "Async Logging Pipeline"
+ * digraph async_pipeline {
+ *     rankdir=LR;
+ *     node [shape=box, style=filled, fontname="Helvetica", fontsize=10];
+ *     edge [color="#666666", fontname="Helvetica", fontsize=9];
  *
- * @ref log_async_atfork_child re-creates the worker thread in the child
- * process after fork(2). The parent's worker is stopped before fork via
- * @ref pthread_atfork.
+ *     prod1 [label="Thread 1\nLOG_INFO()" fillcolor="#E3F2FD"];
+ *     prod2 [label="Thread 2\nLOG_WARN()" fillcolor="#E3F2FD"];
+ *     prodN [label="Thread N\n..." fillcolor="#E3F2FD"];
  *
- * @see queue.h for the underlying bounded ring buffer.
- * @see dispatcher.h for the sink fan-out that the worker drives.
+ *     queue [label="MPSC Queue\n(lock-free put)\nring buffer" fillcolor="#FFF9C4" shape=cylinder];
+ *
+ *     worker [label="Worker Thread\nbatch dequeue (≤64)\ncondvar wait" fillcolor="#F3E5F5"];
+ *
+ *     batch [label="Batch Array\nlog_record_t[64]" fillcolor="#FFF3E0"];
+ *
+ *     dispatch [label="Dispatcher\nlevel filter → sinks" fillcolor="#E8F5E9"];
+ *
+ *     sinks [label="Sinks\n(console/file/socket/...)" fillcolor="#E0F2F1"];
+ *
+ *     prod1 -> queue [label="deep-copy\nput"];
+ *     prod2 -> queue [label="deep-copy\nput"];
+ *     prodN -> queue [label="deep-copy\nput"];
+ *     queue -> worker [label="get_batch\n(≤64)"];
+ *     worker -> batch;
+ *     batch -> dispatch [label="for each\nrecord"];
+ *     dispatch -> sinks;
+ * }
+ * @enddot
  */
 
 #ifndef LOG_ASYNC_H
