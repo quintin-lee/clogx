@@ -23,14 +23,15 @@
    - [Multi-Sink Setup](#54-multi-sink-setup)
    - [Asynchronous Logging](#55-asynchronous-logging)
     - [Socket Sink with TLS](#56-socket-sink-with-tls)
-    - [Multi-Instance Logger](#57-multi-instance-logger)
-6. [Advanced Features](#6-advanced-features)
-   - [Signal Handling and Graceful Shutdown](#61-signal-handling-and-graceful-shutdown)
-   - [Fork Safety](#62-fork-safety)
-   - [Hot Reload Configuration](#63-hot-reload-configuration)
-   - [Rate Limiting](#64-rate-limiting)
-   - [Per-Sink Level Filtering](#65-per-sink-level-filtering)
-    - [Async Fallback Callback](#66-async-fallback-callback)
+    - [Async Non-Blocking Socket Sink](#57-async-non-blocking-socket-sink)
+    - [Multi-Instance Logger](#58-multi-instance-logger)
+ 6. [Advanced Features](#6-advanced-features)
+    - [Async Fallback Callback](#59-async-fallback-callback)
+    - [Per-Sink Level Filtering](#60-per-sink-level-filtering)
+    - [Rate Limiting](#61-rate-limiting)
+    - [Hot Reload Configuration](#62-hot-reload-configuration)
+    - [Fork Safety](#63-fork-safety)
+    - [Signal Handling and Graceful Shutdown](#64-signal-handling-and-graceful-shutdown)
 7. [API Reference](#7-api-reference)
    - [Core Functions](#71-core-functions)
    - [Sink Management](#72-sink-management)
@@ -297,6 +298,10 @@ Both formats are fully supported. New users should prefer the nested `log:` form
 | `socket_tls` | bool | `false` | Enable TLS encryption for socket sink |
 | `socket_tls_ca_file` | string | `""` | Path to CA certificate file (for verification) |
 | `socket_tls_skip_verify` | bool | `false` | Skip server certificate verification |
+| `socket_async` | bool | `false` | Enable async non-blocking socket with ring buffer and exponential backoff |
+| `socket_ring_capacity` | int | `8192` | Ring buffer capacity for async socket (number of lines) |
+| `socket_backoff_min_ms` | int | `1000` | Initial reconnect backoff delay in milliseconds |
+| `socket_backoff_max_ms` | int | `60000` | Maximum reconnect backoff delay in milliseconds |
 
 #### Rate Limiter Settings (token bucket algorithm)
 
@@ -547,7 +552,59 @@ cmake -S . -B build -DCMAKE_EXPORT_COMPILE_COMMANDS=ON -DCLOG_ENABLE_TLS=ON
 cmake --build build
 ```
 
-### 57 Multi-Instance Logger
+### 57 Async Non-Blocking Socket Sink
+
+For high-throughput logging where the application must never block on network I/O, use `socket_sink_create_async`. Log lines are enqueued into a lock-free ring buffer (lossy on overflow) and sent by a background writer thread over a non-blocking TCP/TLS socket. Reconnection uses exponential backoff with jitter to avoid tight reconnect loops when the receiver is down.
+
+```c
+#include "log.h"
+#include "log_sink.h"
+
+int main(void) {
+    /* Async socket: ring capacity 16384, backoff 500ms–30s */
+    log_sink_t *sink = socket_sink_create_async(
+        "logs.example.com",      /* host */
+        5000,                    /* port */
+        false,                   /* use_tls */
+        NULL,                    /* ca_file (NULL for plain TCP) */
+        false,                   /* skip_verify */
+        16384,                   /* ring_capacity (0 = default 8192) */
+        500,                     /* backoff_min_ms (0 = default 1000) */
+        30000                    /* backoff_max_ms (0 = default 60000) */
+    );
+
+    log_add_sink(sink);
+    LOG_INFO("This enqueue returns immediately (non-blocking)");
+
+    log_flush();
+    sink->destroy(sink);
+    log_destroy();
+    return 0;
+}
+```
+
+Or via YAML config:
+
+```yaml
+log:
+  socket_enable: true
+  socket_host: "logs.example.com"
+  socket_port: 5000
+  socket_async: true
+  socket_ring_capacity: 16384
+  socket_backoff_min_ms: 500
+  socket_backoff_max_ms: 30000
+```
+
+**Behavior:**
+- Log lines are copied into the ring buffer and returned immediately (non-blocking).
+- If the ring is full, the oldest entry is dropped (lossy backpressure — logging must never block the application).
+- The writer thread connects in non-blocking mode with a 1-second select timeout.
+- On send/connect failure, the writer sleeps with exponential backoff (doubles each failure, capped at `socket_backoff_max_ms`, ±10% jitter).
+- On successful send, backoff resets to `socket_backoff_min_ms`.
+- On shutdown (`socket_sink_destroy`), the writer drains remaining entries before exiting.
+
+### 58 Multi-Instance Logger
 
 Create and manage independent logger instances, each with its own config, sinks, and async worker:
 
@@ -587,7 +644,7 @@ The global default logger (`log_init()` / `LOG_INFO()` etc.) coexists with multi
 
 ## 6. Advanced Features
 
-### 61 Signal Handling and Graceful Shutdown
+### 64 Signal Handling and Graceful Shutdown
 
 Install POSIX `sigaction` handlers for `SIGTERM` and `SIGINT` to flush pending logs before process exit:
 
@@ -618,7 +675,7 @@ log:
 
 The handler sets a global pending signal flag; the main loop calls `log_process_pending_signals()` to flush logs before raising the original signal for normal termination.
 
-### 62 Fork Safety
+### 63 Fork Safety
 
 When using async mode in multi-process applications, `pthread_atfork` handlers ensure safe fork behavior:
 
@@ -648,7 +705,7 @@ int main(void) {
 }
 ```
 
-### 63 Hot Reload Configuration
+### 62 Hot Reload Configuration
 
 Dynamically reload configuration without restarting the application:
 
@@ -670,7 +727,7 @@ int main(void) {
 
 `log_reload()` shuts down the async worker (draining pending records), re-reads the YAML config, atomically rebuilds sinks, and restarts the async worker if enabled. This allows adjusting log levels, enabling/disabling sinks, or changing file paths at runtime.
 
-### 64 Rate Limiting
+### 61 Rate Limiting
 
 Token bucket rate limiter prevents log flood attacks or runaway applications:
 
@@ -683,7 +740,7 @@ log:
 
 When rate limiting is **disabled**, a lock-free fast-path bypasses mutex overhead for maximum performance. When enabled, a mutex protects the token bucket calculations. The first message exceeding the limit triggers a suppression notice (logged once every minute).
 
-### 65 Per-Sink Level Filtering
+### 60 Per-Sink Level Filtering
 
 Different sinks can have different minimum levels:
 
@@ -715,7 +772,7 @@ int main(void) {
 
 Get a sink's current level with `log_sink_get_level()`.
 
-### 66 Async Fallback Callback
+### 59 Async Fallback Callback
 
 When the async queue is full (producer faster than consumer), the library falls back to synchronous logging. Register a callback to be notified:
 
@@ -790,6 +847,7 @@ Sink factory functions (return `log_sink_t*` or `NULL` on failure):
 - `log_file_sink_create(const char *path, log_level_t level, uint64_t max_size, int backups)` — File sink with rotation
 - `log_socket_sink_create(const char *host, int port)` — Plain TCP socket sink
 - `socket_sink_create_tls(const char *host, int port, bool use_tls, const char *ca_file, bool skip_verify)` — TLS-encrypted socket sink (requires TLS build)
+- `socket_sink_create_async(const char *host, int port, bool use_tls, const char *ca_file, bool skip_verify, size_t ring_capacity, uint32_t backoff_min_ms, uint32_t backoff_max_ms)` — Async non-blocking socket sink with ring buffer and exponential backoff
 
 Each sink has a `destroy(log_sink_t *sink)` function — **call it after removing or reloading**.
 

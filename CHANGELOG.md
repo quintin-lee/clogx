@@ -9,6 +9,7 @@ All notable changes to this project will be documented in this file.
 - Version banner: clogx prints `[clogx] version X.Y.Z` to stderr on each successful `log_init()` / `logger_create()` instance creation
 - `clog_console_enable_vt_mode()` utility in `clog_port.h` for Windows ANSI VT processing
 - `clog_get_timestamp_us()`, `clog_get_thread_id()`, `clog_get_now_ms()` platform-portable time/thread helpers in `clog_port.h`
+- Async non-blocking socket sink: `socket_sink_create_async()` with ring buffer, background writer thread, non-blocking TCP/TLS I/O, and exponential backoff with jitter for reconnection (`socket_async`, `socket_ring_capacity`, `socket_backoff_min_ms`, `socket_backoff_max_ms` config keys)
 
 ### Changed
 - Centralized platform adaptation code: `get_timestamp()` / `get_thread_id()` from `core/log.c`, `get_now_ms()` from `core/rate_limit.c`, and Windows VT mode helper from `sinks/console_sink.c` now live in `include/clog_port.h`

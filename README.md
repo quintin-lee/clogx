@@ -11,7 +11,7 @@ Lightweight C99 logging library: config-driven, multi-sink output, optional asyn
 ## Features
 
 - Macro API: `LOG_INFO` / `LOG_DEBUG` / `LOG_WARN` / `LOG_ERROR` / `LOG_FATAL` / `LOG_TRACE` (`TRACE` kept as alias)
-- Multi-sink: console (optional ANSI color), file (auto-create directories + rotation), TCP socket (optional OpenSSL TLS encryption), native POSIX syslog sink (`syslog_sink_create`), OpenTelemetry OTLP JSON log sink (`otlp_sink`), custom sink API
+- Multi-sink: console (optional ANSI color), file (auto-create directories + rotation), TCP socket (optional OpenSSL TLS encryption, async non-blocking mode with ring buffer and exponential backoff), native POSIX syslog sink (`syslog_sink_create`), OpenTelemetry OTLP JSON log sink (`otlp_sink`), custom sink API
 - Plugin ABI: runtime dlopen-based plugin system with ABI versioning, directory scanning (`log_plugin_scan`), and handle caching for dynamically-loadable sink modules
 - Multi-Instance Logger API: independent `logger_t` instances via `logger_create()` / `LOGGER_INFO()` / `logger_destroy()` — each with isolated config, sinks, module, and async worker
 - Prometheus Metrics Exporter: built-in HTTP /metrics server (`clog_prometheus_exporter_start`) exposing per-level counters, async queue depth, and suppressed/dropped event gauges in Prometheus Text Format
@@ -42,8 +42,8 @@ Lightweight C99 logging library: config-driven, multi-sink output, optional asyn
 
 ```
 include/     public headers (log.h, log_config.h, log_limits.h, log_record.h, log_sink.h, log_prometheus.h, clogx_plugin.h, clog_port.h, clogx_version.h)
-core/        config, formatting, dispatch, queue, async, rotation, rate limiter, signal handler, plugin loader, Prometheus exporter
-sinks/       console / file / socket (TLS) / syslog / OTLP / custom
+core/        config, formatting, dispatch, queue, async, rotation, rate limiter, signal handler, plugin loader, Prometheus exporter, async socket writer
+sinks/       console / file / socket (TLS / async) / syslog / OTLP / custom
 fuzz/        AFL fuzzing harnesses (fuzz_config.c, fuzz_formatter.c, fuzz_pipeline.c)
 example/     example programs
 tests/       regression tests
@@ -244,6 +244,10 @@ log:
   socket_tls: true
   socket_tls_ca_file: "certs/ca.crt"
   socket_tls_skip_verify: false
+  socket_async: true
+  socket_ring_capacity: 8192
+  socket_backoff_min_ms: 1000
+  socket_backoff_max_ms: 60000
   rate_limit_enable: true
   rate_limit_max_per_sec: 1000
   rate_limit_burst: 100
@@ -271,6 +275,10 @@ log:
 | `socket_tls` | enable OpenSSL TLS encryption for socket sink (`socket_tls: true`) |
 | `socket_tls_ca_file` / `tls_ca_file` | path to CA certificate file (optional) |
 | `socket_tls_skip_verify` / `tls_skip_verify` | skip server certificate verification (`true`/`false`) |
+| `socket_async` | enable async non-blocking socket with ring buffer (`true`/`false`) |
+| `socket_ring_capacity` | ring buffer capacity for async socket (default: `8192`) |
+| `socket_backoff_min_ms` | initial reconnect backoff in ms (default: `1000`) |
+| `socket_backoff_max_ms` | max reconnect backoff in ms (default: `60000`) |
 | `rate_limit_enable` | enable global token bucket rate limiting (`true`/`false`) |
 | `rate_limit_max_per_sec` | max allowed log messages per second (e.g. `1000`) |
 | `rate_limit_burst` | maximum burst capacity (e.g. `100`) |
@@ -346,6 +354,10 @@ log_config_t  *log_config_get(void);
 int            log_config_set(const log_config_t *cfg);
 log_sink_t    *socket_sink_create_tls(const char *host, int port, bool use_tls,
                                       const char *ca_file, bool skip_verify);
+log_sink_t    *socket_sink_create_async(const char *host, int port, bool use_tls,
+                                        const char *ca_file, bool skip_verify,
+                                        size_t ring_capacity, uint32_t backoff_min_ms,
+                                        uint32_t backoff_max_ms);
 
 LOG_INFO("...");
 LOG_DEBUG("...");
