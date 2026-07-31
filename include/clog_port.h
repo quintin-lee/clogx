@@ -1,6 +1,26 @@
 /**
  * @file clog_port.h
- * @brief Cross-platform OS abstraction header (POSIX / Windows).
+ * @brief Cross-platform OS abstraction layer (POSIX / Windows).
+ *
+ * Provides unified APIs for threading, synchronization, sockets, file I/O,
+ * time, and console control that hide platform differences between POSIX
+ * (pthreads) and Windows (Win32 / Winsock).
+ *
+ * ## Abstraction Categories
+ *
+ * | Category     | Types / Functions                                      |
+ * |-------------|--------------------------------------------------------|
+ * | Mutex       | clog_mutex_t, clog_mutex_{init,destroy,lock,unlock}   |
+ * | RWLock      | clog_rwlock_t, clog_rwlock_{rd,wr}{lock,unlock}       |
+ * | Cond Var    | clog_cond_t, clog_cond_{init,destroy,wait,signal,broadcast} |
+ * | Thread      | clog_thread_t, clog_thread_{create,join}              |
+ * | Socket      | clog_socket_t, clog_{net_init,close_socket,is_invalid_socket} |
+ * | File/Proc   | clog_{getpid,sleep_ms,access,unlink,mkdir,fstat}      |
+ * | Time        | clog_{get_timestamp_us,get_now_ms,localtime_r,gmtime_r} |
+ * | Thread ID   | clog_get_thread_id                                     |
+ * | RAII Mutex  | CLOG_MUTEXGUARDED(m, code)                             |
+ * | Thread-Loc  | clog_thread_local                                      |
+ * | Console     | clog_console_enable_vt_mode (Windows VT processing)    |
  */
 
 #ifndef CLOG_PORT_H
@@ -355,8 +375,16 @@ static inline struct tm *clog_gmtime_r(const time_t *timep, struct tm *result)
 #define F_OK 0
 #endif
 
+/**
+ * @def CLOG_MUTEXGUARDED(m, code)
+ * @brief RAII-style scoped mutex lock — auto-unlocks when the enclosing block exits.
+ *
+ * On GCC/Clang: uses __attribute__((cleanup)) for automatic unlock.
+ * On MSVC: uses __try/__finally. On other compilers: manual lock/unlock.
+ */
 #if defined(__GNUC__) || defined(__clang__)
 
+/** @brief Cleanup helper for CLOG_MUTEXGUARDED; unlocks on scope exit. */
 static inline void clog_mutex_unlock_ptr(clog_mutex_t **m)
 {
     if (*m) {
@@ -404,6 +432,11 @@ static inline void clog_mutex_unlock_ptr(clog_mutex_t **m)
 
 /* ── Time & Thread utilities ── */
 
+/**
+ * @brief Get current wall-clock time as microseconds since Unix epoch.
+ *
+ * Uses CLOCK_REALTIME on POSIX, FILETIME on Windows (with epoch adjustment).
+ */
 static inline uint64_t clog_get_timestamp_us(void)
 {
 #if defined(_WIN32) || defined(_WIN64)
@@ -418,6 +451,12 @@ static inline uint64_t clog_get_timestamp_us(void)
 #endif
 }
 
+/**
+ * @brief Get the current thread ID as a uint32_t.
+ *
+ * On POSIX, pthread_t is hashed (XOR-fold) to fit in 32 bits.
+ * On Windows, GetCurrentThreadId() is used directly.
+ */
 static inline uint32_t clog_get_thread_id(void)
 {
 #if defined(_WIN32) || defined(_WIN64)
@@ -430,6 +469,12 @@ static inline uint32_t clog_get_thread_id(void)
 #endif
 }
 
+/**
+ * @brief Get monotonic time in milliseconds (for rate limiter / timeouts).
+ *
+ * Uses CLOCK_MONOTONIC on POSIX, QueryPerformanceCounter on Windows.
+ * Not wall-clock; immune to NTP adjustments.
+ */
 static inline uint64_t clog_get_now_ms(void)
 {
 #if defined(_WIN32) || defined(_WIN64)
@@ -446,6 +491,7 @@ static inline uint64_t clog_get_now_ms(void)
 
 /* ── Console VT mode (ANSI escape support) ── */
 
+/** @brief Enable Windows VT100 escape processing for ANSI color output. No-op on POSIX. */
 static inline void clog_console_enable_vt_mode(FILE *stream)
 {
     (void)stream;
