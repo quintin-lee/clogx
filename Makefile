@@ -94,7 +94,7 @@ INCLUDEDIR ?= $(PREFIX)/include
 
 PUBLIC_HEADERS := include/log.h include/log_config.h include/log_limits.h include/log_record.h include/log_sink.h include/clogx_plugin.h
 
-.PHONY: all clean example test docs format check-format check test-valgrind install uninstall asan ubsan test-asan test-ubsan fuzz-build fuzz-config fuzz-formatter benchmark
+.PHONY: all clean example test docs format check-format check test-valgrind install uninstall asan ubsan test-asan test-ubsan fuzz-build fuzz-config fuzz-formatter benchmark tidy-check
 
 FORMAT_FILES := $(shell find include core sinks example tests fuzz benchmarks -name '*.c' -o -name '*.h' 2>/dev/null)
 
@@ -224,14 +224,7 @@ coverage-gcov:
 check:
 	$(MAKE) check-format
 	@if command -v clang-tidy >/dev/null 2>&1; then $(MAKE) check-tidy; fi
-	@if command -v clang-tidy >/dev/null 2>&1; then \
-		if [ ! -f build/clang-tidy/libclogx-unused-includes.so ]; then \
-			echo "==> Building custom clang-tidy checks"; \
-			cmake -S . -B build -DCLOG_BUILD_CLANG_TIDY_CHECKS=ON; \
-			cmake --build build --target clogx-unused-includes -j"$$(nproc)"; \
-		fi; \
-		$(MAKE) tidy-check; \
-	fi
+	@if command -v clang-tidy >/dev/null 2>&1; then $(MAKE) tidy-check; fi
 	$(MAKE) clean
 	$(MAKE) all
 	$(MAKE) test
@@ -271,18 +264,22 @@ check-tidy:
 	@command -v clang-tidy >/dev/null || { echo "clang-tidy not found; check-tidy skipped"; exit 0; }
 	clang-tidy $(CLOG_SRCS) -- -Iinclude -Icore -D_GNU_SOURCE
 
-# Run custom clang-tidy checks (requires building with CLOG_BUILD_CLANG_TIDY_CHECKS=ON)
-tidy-check:
-	@if [ ! -f build/clang-tidy/libclogx-unused-includes.so ]; then \
-		echo "Error: Custom clang-tidy checks not built. Run:"; \
-		echo "  cmake -S . -B build -DCLOG_BUILD_CLANG_TIDY_CHECKS=ON"; \
-		echo "  cmake --build build"; \
-		exit 1; \
-	fi
-	clang-tidy -p build \
-		--load build/clang-tidy/libclogx-unused-includes.so \
+# Custom clang-tidy checks (clogx-unused-includes)
+# The plugin is compiled directly with clang++ (no CMake required).
+TIDY_CHECK_SRC := clang-tidy/clogx-unused-includes/UnusedIncludesCheck.cpp
+TIDY_CHECK_HDR := clang-tidy/clogx-unused-includes/UnusedIncludesCheck.h
+TIDY_CHECK_SO  := build/clang-tidy/libclogx-unused-includes.so
+
+$(TIDY_CHECK_SO): $(TIDY_CHECK_SRC) $(TIDY_CHECK_HDR)
+	@mkdir -p $(dir $@)
+	$(CXX) -std=c++17 -shared -fPIC -D_GNU_SOURCE \
+		-I/usr/include/clang-tidy -I/usr/include/clang -I/usr/include/llvm \
+		$(TIDY_CHECK_SRC) -o $@ -lclang-cpp
+
+tidy-check: $(TIDY_CHECK_SO)
+	clang-tidy --load $(TIDY_CHECK_SO) \
 		--checks='-*,clogx-unused-includes' \
-		$(CLOG_SRCS)
+		$(CLOG_SRCS) -- -Iinclude -Icore -D_GNU_SOURCE
 
 install: $(LIB_TARGET) $(SO_TARGET)
 	install -d $(DESTDIR)$(LIBDIR)

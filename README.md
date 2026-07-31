@@ -111,7 +111,7 @@ make coverage     # generate gcov branch summary (>96%) + lcov HTML report
 make coverage-gcov# run gcov -b branch coverage gate via scripts/gcov_branch_summary.sh (CI-enforced, 75% threshold)
 make tidy         # run clang-tidy static analysis
 make check-tidy   # enforce clang-tidy warnings-as-errors
-make tidy-check   # run custom clang-tidy checks (auto-built by `make check`)
+make tidy-check   # run custom clang-tidy checks (auto-compiled, no CMake needed)
 make check        # full quality gate: format check → clang-tidy → unused-includes → clean → build → test
 make test-valgrind  # all tests under Valgrind leak check (skipped if not installed)
 make fuzz-build   # builds AFL fuzzing binaries (fuzz_config, fuzz_formatter, fuzz_pipeline)
@@ -184,27 +184,23 @@ conan install . --build=missing -o clogx/*:with_tls=True
 
 ### Custom clang-tidy Checks
 
-The project includes a custom clang-tidy check `clogx-unused-includes` that detects unused `#include` directives.
-
-**Build with custom checks:**
-
-```bash
-cmake -S . -B build -DCLOG_BUILD_CLANG_TIDY_CHECKS=ON
-cmake --build build
-```
+The project includes a custom clang-tidy check `clogx-unused-includes` that detects unused `#include` directives. The plugin is compiled directly by the Makefile (no CMake required).
 
 **Run custom checks:**
 
 ```bash
-make tidy-check
-# Or directly:
-clang-tidy -p build \
-    --load build/clang-tidy/libclogx-unused-includes.so \
-    --checks='-*,clogx-unused-includes' \
-    $(CLOG_SOURCES)
+make tidy-check   # auto-compiles the plugin, then runs it on all sources
 ```
 
-`make check` builds the check automatically (if missing) and runs it on all sources.
+Or directly:
+
+```bash
+clang-tidy --load build/clang-tidy/libclogx-unused-includes.so \
+    --checks='-*,clogx-unused-includes' \
+    $(CLOG_SOURCES) -- -Iinclude -Icore -D_GNU_SOURCE
+```
+
+`make check` runs the check automatically (rebuilding the plugin if missing) as part of the full quality gate.
 
 **Configuration options:**
 
