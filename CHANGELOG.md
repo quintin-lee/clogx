@@ -4,7 +4,12 @@ All notable changes to this project will be documented in this file.
 
 ## [Unreleased]
 
+## [0.2.0] - 2026-07-30
+
 ### Added
+- OTLP Sink: native OpenTelemetry Protocol export via `log_sink_create_otlp(endpoint, headers)` — JSON or protobuf over HTTP/2, with `otlp_endpoint`, `otlp_headers`, `otlp_protocol` YAML config keys
+- Prometheus Metrics Exporter: `log_prometheus_init(port)` / `log_prometheus_scrape(buf, size)` exposing counters (total_logged, dropped_queue_full, suppressed_rate) as Prometheus text format on HTTP `/metrics`
+- Plugin ABI: `clogx_plugin_t` struct + `clogx_plugin_register()` / `clogx_plugin_unregister()` — load `.so` at runtime via `dlopen`, each plugin gets `on_load()` / `on_unload()` lifecycle hooks
 - Multi-Instance Logger (`logger_t`): independent `logger_create()` / `logger_destroy()` / `LOGGER_INFO()` etc. — each instance owns its own config, sinks, module, and async worker, isolated from the global default logger
 - Coverage Gap Test Suite (`tests/test_coverage_gaps.c`): 9 tests targeting untaken code paths (strerror codes, config parse failure, no-sinks init, async fallback, signal-in-write, thread context update, logger_reload, custom format/time_format)
 - Millisecond-Precision Token Bucket Rate Limiter (`core/rate_limit.c`): optimized token replenishment at millisecond granularity (`g_fill_rate = max_per_sec / 1000.0`), eliminating sub-millisecond floating-point arithmetic overhead on hot paths
