@@ -41,18 +41,21 @@ Lightweight C99 logging library: config-driven, multi-sink output, optional asyn
 ## Directory Layout
 
 ```
-include/     public headers (log.h, log_config.h, log_limits.h, log_record.h, log_sink.h, log_prometheus.h, clogx_plugin.h, clog_port.h)
+include/     public headers (log.h, log_config.h, log_limits.h, log_record.h, log_sink.h, log_prometheus.h, clogx_plugin.h, clog_port.h, clogx_version.h)
 core/        config, formatting, dispatch, queue, async, rotation, rate limiter, signal handler, plugin loader, Prometheus exporter
 sinks/       console / file / socket (TLS) / syslog / OTLP / custom
 fuzz/        AFL fuzzing harnesses (fuzz_config.c, fuzz_formatter.c, fuzz_pipeline.c)
 example/     example programs
-tests/       regression tests (39 test suites)
+tests/       regression tests
 benchmarks/  throughput & async-vs-sync benchmarks
 cmake/       CMake package config templates
 scripts/     gcov branch coverage analysis tooling
+VERSION      unified project version string (single source of truth)
 ```
 
 ## Quick Start
+
+**Version banner**: on successful `log_init()` or `logger_create()`, clogx prints `[clogx] version X.Y.Z` to stderr.
 
 ```c
 #include "log.h"

@@ -55,7 +55,8 @@
 - **Config-driven**: YAML configuration file supports all runtime settings
 - **Async mode**: Background worker thread decouples logging from application performance
 - **Size-based rotation**: Automatic log file rotation based on size limit
-- **Cross-platform build**: Both Makefile and CMake build systems with CTest support
+- **Cross-platform build**: Both Makefile and CMake build systems with CTest support; `include/clog_port.h` centralizes POSIX / Windows adaptations (mutexes, threads, sockets, time functions)
+- **Version banner**: every successful `log_init()` / `logger_create()` prints `[clogx] version X.Y.Z` to stderr
 
 ---
 
@@ -896,16 +897,33 @@ See `sinks/console_sink.c`, `sinks/file_sink.c`, and `sinks/socket_sink.c` for r
 
 ## 9. Porting to Windows
 
-clogx is currently POSIX-focused. To port to Windows:
+Partial Windows support is provided via `include/clog_port.h`, which abstracts OS primitives:
 
-1. Replace `_GNU_SOURCE` feature test macro with appropriate Windows definitions.
-2. Replace `pthread_*` functions with Windows threads (`CreateThread`, `mutex`, `condition_variable`).
-3. Replace `mkdir -p` implementation with recursive directory creation on Windows.
-4. Replace `strftime`/`localtime` with Windows equivalents (`strftime_s`, `_localtime64_s`).
-5. Update Makefile/CMake to use MSVC or MinGW toolchain.
-6. Windows doesn't have `pthread_atfork`; replace with `AttachProcess` or similar mechanisms.
+- **Threads / mutexes / condition variables**: mapped to Windows `SRWLOCK`, `CONDITION_VARIABLE`, `CreateThread` / `WaitForSingleObject` / `CloseHandle`
+- **Sockets**: Winsock2 (`SOCKET`, `closesocket`, `SD_BOTH`) wrapped behind `clog_socket_t`, `clog_close_socket()`, `clog_net_init()` / `clog_net_cleanup()`
+- **File / process utilities**: `_stat64`, `_mkdir`, `_unlink`, `_access`, `GetCurrentProcessId()`, `Sleep()`
+- **Time**: `GetSystemTimeAsFileTime` -> microsecond epoch in `clog_get_timestamp_us()`; `GetCurrentThreadId()` in `clog_get_thread_id()`
+- **localtime / gmtime**: `localtime_s` / `gmtime_s` wrappers in `clog_localtime_r()` / `clog_gmtime_r()`
+- **Token bucket**: `QueryPerformanceCounter` in `clog_get_now_ms()`
+- **Console VT mode**: `clog_console_enable_vt_mode()` enables `ENABLE_VIRTUAL_TERMINAL_PROCESSING` for ANSI color output
 
-The modular architecture (core + sinks) facilitates platform adaptation.
+Known limitations on Windows:
+
+- `pthread_atfork` and POSIX signal handlers (`sigaction`, self-pipe) are unavailable; `#ifndef _WIN32` guards skip those code paths
+- Plugin ABI (`dlopen`) is unavailable; `core/plugin_loader.c` provides stub implementations that return `NULL` / `0`
+- `syslog_sink_create()` is POSIX-only (`#ifndef _WIN32`)
+- `fork()` is not supported in async mode; child-process re-init paths are skipped
+
+To build on Windows (MSVC / MinGW):
+
+```bash
+# MinGW (approximate)
+gcc -std=c99 -Wall -Wextra -Iinclude -Icore -D_GNU_SOURCE ...
+
+# MSVC via CMake (recommended)
+cmake -S . -B build -G "Visual Studio 17 2022"
+cmake --build build --config Release
+```
 
 ---
 
