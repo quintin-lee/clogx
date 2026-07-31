@@ -19,8 +19,9 @@
  * @param[in]  max_sinks  Capacity of @p out_sinks.
  * @return Number of sinks created, or -1 on error.
  */
-int log_plugin_create_sinks_from_config(const log_config_t *cfg, log_sink_t **out_sinks,
-                                        int max_sinks);
+int log_plugin_create_sinks_from_config(const log_config_t *cfg,
+                                        log_sink_t        **out_sinks,
+                                        int                 max_sinks);
 
 /**
  * @brief Unload all cached plugin handles.

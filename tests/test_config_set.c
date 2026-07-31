@@ -1,25 +1,29 @@
-#include <stdio.h>
-#include <stdlib.h>
-#include <string.h>
 #include "clog_port.h"
 #include "log.h"
 #include "log_sink.h"
+#include <stdio.h>
+#include <stdlib.h>
+#include <string.h>
 
 #define LOG_PATH "logs/config_set_test.log"
 
-static int count_lines(const char *path) {
+static int count_lines(const char *path)
+{
     FILE *f = fopen(path, "rb");
-    if (!f)
+    if (!f) {
         return -1;
-    int n = 0;
+    }
+    int  n = 0;
     char buf[256];
-    while (fgets(buf, sizeof(buf), f))
+    while (fgets(buf, sizeof(buf), f)) {
         n++;
+    }
     fclose(f);
     return n;
 }
 
-int main(void) {
+int main(void)
+{
     remove(LOG_PATH);
 
     if (log_init(NULL) != 0) {
@@ -39,17 +43,17 @@ int main(void) {
         return 1;
     }
 
-    log_config_t cfg = {0};
-    cfg.level = LOG_LEVEL_WARN;
-    cfg.async = false;
-    cfg.color = false;
-    cfg.format = "[%level] %msg";
-    cfg.time_format = "%Y-%m-%d %H:%M:%S";
+    log_config_t cfg   = {0};
+    cfg.level          = LOG_LEVEL_WARN;
+    cfg.async          = false;
+    cfg.color          = false;
+    cfg.format         = "[%level] %msg";
+    cfg.time_format    = "%Y-%m-%d %H:%M:%S";
     cfg.console_enable = false;
-    cfg.file_enable = true;
+    cfg.file_enable    = true;
     snprintf(cfg.file_path, sizeof(cfg.file_path), "%s", LOG_PATH);
     cfg.file_max_size = 50 * 1024 * 1024;
-    cfg.file_backups = 5;
+    cfg.file_backups  = 5;
     cfg.socket_enable = false;
 
     if (log_config_set(&cfg) != 0) {
@@ -128,8 +132,9 @@ int main(void) {
     }
 
     FILE *f = fopen(LOG_PATH, "rb");
-    if (!f)
+    if (!f) {
         return 1;
+    }
     char content[1024] = {0};
     fread(content, 1, sizeof(content) - 1, f);
     fclose(f);

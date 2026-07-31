@@ -1,25 +1,29 @@
-#include <stdio.h>
-#include <stdlib.h>
-#include <string.h>
 #include "clog_port.h"
 #include "log.h"
 #include "log_sink.h"
+#include <stdio.h>
+#include <stdlib.h>
+#include <string.h>
 
 #define LOG_PATH "logs/sink_level.log"
 
-static int count_lines(const char *path) {
+static int count_lines(const char *path)
+{
     FILE *f = fopen(path, "rb");
-    if (!f)
+    if (!f) {
         return -1;
-    int n = 0;
+    }
+    int  n = 0;
     char buf[256];
-    while (fgets(buf, sizeof(buf), f))
+    while (fgets(buf, sizeof(buf), f)) {
         n++;
+    }
     fclose(f);
     return n;
 }
 
-int main(void) {
+int main(void)
+{
     remove(LOG_PATH);
 
     /* Init with no config file — no sinks enabled yet. */
@@ -65,8 +69,9 @@ int main(void) {
 
     /* Quick content check */
     FILE *f = fopen(LOG_PATH, "rb");
-    if (!f)
+    if (!f) {
         return 1;
+    }
     char line[256];
     while (fgets(line, sizeof(line), f)) {
         if (strstr(line, "TRACE") || strstr(line, "DEBUG") || strstr(line, "INFO")) {

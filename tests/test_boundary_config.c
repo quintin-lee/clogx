@@ -1,35 +1,41 @@
-#include <stdio.h>
-#include <stdlib.h>
-#include <string.h>
 #include "clog_port.h"
 #include "log.h"
 #include "log_config.h"
+#include <stdio.h>
+#include <stdlib.h>
+#include <string.h>
 
 #define CONFIG_PATH "build/config_boundary_test.yaml"
 #define LOG_PATH "logs/boundary_test.log"
 
-static int write_config(const char *content) {
+static int write_config(const char *content)
+{
     FILE *f = fopen(CONFIG_PATH, "w");
-    if (!f)
+    if (!f) {
         return -1;
+    }
     fputs(content, f);
     fclose(f);
     return 0;
 }
 
-static int count_lines(const char *path) {
+static int count_lines(const char *path)
+{
     FILE *f = fopen(path, "rb");
-    if (!f)
+    if (!f) {
         return -1;
-    int n = 0;
+    }
+    int  n = 0;
     char buf[256];
-    while (fgets(buf, sizeof(buf), f))
+    while (fgets(buf, sizeof(buf), f)) {
         n++;
+    }
     fclose(f);
     return n;
 }
 
-int main(void) {
+int main(void)
+{
     remove(LOG_PATH);
     int ret = 0;
 
@@ -154,7 +160,8 @@ int main(void) {
         log_destroy();
     }
 
-    if (ret == 0)
+    if (ret == 0) {
         printf("boundary config test passed\n");
+    }
     return ret;
 }

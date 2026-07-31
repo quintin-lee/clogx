@@ -1,8 +1,4 @@
 #include "clog_port.h"
-#include <signal.h>
-#include <stdio.h>
-#include <stdlib.h>
-#include <string.h>
 #include "log.h"
 #include "log_async.h"
 #include "log_formatter.h"
@@ -10,8 +6,13 @@
 #include "log_signal.h"
 #include "log_sink.h"
 #include "queue.h"
+#include <signal.h>
+#include <stdio.h>
+#include <stdlib.h>
+#include <string.h>
 
-int main(void) {
+int main(void)
+{
     if (log_init(NULL) != 0) {
         fprintf(stderr, "log_init failed\n");
         return 1;
@@ -61,17 +62,17 @@ int main(void) {
 
     /* 3. Test Formatter Edge Cases & Color Map */
     log_record_t rec = {
-        .level = LOG_LEVEL_INFO,
+        .level   = LOG_LEVEL_INFO,
         .message = "Message with \"quotes\", \n newlines, \t tabs, \r cr, \b bs, \f ff, \x01 ctrl "
                    "& \\ backslashes",
-        .module = "test_mod",
-        .file = "test_coverage.c",
-        .func = "main_func",
-        .tag = "test_tag",
-        .line = 42,
+        .module  = "test_mod",
+        .file    = "test_coverage.c",
+        .func    = "main_func",
+        .tag     = "test_tag",
+        .line    = 42,
         .timestamp = 1600000000,
-        .tid = 1001,
-        .pid = 2002,
+        .tid       = 1001,
+        .pid       = 2002,
     };
 
     get_log_color(LOG_LEVEL_TRACE);
@@ -90,7 +91,7 @@ int main(void) {
 
     /* NULL message JSON test */
     log_record_t null_msg_rec = rec;
-    null_msg_rec.message = NULL;
+    null_msg_rec.message      = NULL;
     log_formatter_format(&null_msg_rec, out_buf, sizeof(out_buf));
 
     /* Custom token formatter test */
@@ -126,8 +127,9 @@ int main(void) {
         if (file_s->atfork_child) {
             file_s->atfork_child(file_s);
         }
-        if (file_s->destroy)
+        if (file_s->destroy) {
             file_s->destroy(file_s);
+        }
     }
 
 #ifndef _WIN32
@@ -136,8 +138,9 @@ int main(void) {
     }
     log_sink_t *syslog_null = syslog_sink_create(NULL, 1 << 3);
     if (syslog_null) {
-        if (syslog_null->destroy)
+        if (syslog_null->destroy) {
             syslog_null->destroy(syslog_null);
+        }
     }
 
     log_sink_t *syslog_s = syslog_sink_create("cov_syslog", 1 << 3);
@@ -145,8 +148,9 @@ int main(void) {
         if (syslog_s->atfork_child) {
             syslog_s->atfork_child(syslog_s);
         }
-        if (syslog_s->destroy)
+        if (syslog_s->destroy) {
             syslog_s->destroy(syslog_s);
+        }
     }
 
     log_sink_t *sock_s = socket_sink_create("127.0.0.1", 9999);
@@ -154,8 +158,9 @@ int main(void) {
         if (sock_s->atfork_child) {
             sock_s->atfork_child(sock_s);
         }
-        if (sock_s->destroy)
+        if (sock_s->destroy) {
             sock_s->destroy(sock_s);
+        }
     }
 #endif
 

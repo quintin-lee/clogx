@@ -92,11 +92,11 @@ typedef struct {
     const char *tag;     /**< Optional tag/label for additional categorization; may be NULL. */
     const char *message; /**< Formatted message body (result of printf-style expansion). */
     log_level_t level;   /**< Severity of the log entry (LOG_LEVEL_* enum value). */
-    uint32_t tid; /**< Thread identifier derived from pthread_t (truncated hash for uniqueness). */
-    uint32_t pid; /**< Process identifier (getpid()). */
-    int line;     /**< Source line number where the log macro was invoked (__LINE__). */
-    uint8_t trace_id[16]; /**< W3C TraceContext trace-id; zero bytes indicate no active trace. */
-    uint8_t span_id[8];   /**< W3C TraceContext span-id; zero bytes indicate no active span. */
+    uint32_t tid;  /**< Thread identifier derived from pthread_t (truncated hash for uniqueness). */
+    uint32_t pid;  /**< Process identifier (getpid()). */
+    int      line; /**< Source line number where the log macro was invoked (__LINE__). */
+    uint8_t  trace_id[16]; /**< W3C TraceContext trace-id; zero bytes indicate no active trace. */
+    uint8_t  span_id[8];   /**< W3C TraceContext span-id; zero bytes indicate no active span. */
 } log_record_t;
 
 /**
@@ -120,7 +120,8 @@ typedef struct {
  * Note: This is a pure function with no side effects; safe to call anytime.
  *       Inlined for performance in hot formatting paths.
  */
-static inline int otel_severity_number(log_level_t level) {
+static inline int otel_severity_number(log_level_t level)
+{
     switch (level) {
     case LOG_LEVEL_TRACE:
         return 1;
@@ -180,7 +181,8 @@ typedef enum {
  *       e.g., "\033[31mERROR\033[0m" for red. This function only selects the color index;
  *       the escape sequence generation is sink-specific.
  */
-static inline log_color_t get_log_color(log_level_t level) {
+static inline log_color_t get_log_color(log_level_t level)
+{
     switch ((int)level) {
     case LOG_LEVEL_TRACE:
         return COLOR_BLACK;

@@ -1,24 +1,28 @@
+#include "clog_port.h"
+#include "log.h"
 #include <stdio.h>
 #include <stdlib.h>
 #include <string.h>
-#include "clog_port.h"
-#include "log.h"
 
 #define LOG_PATH "logs/log_level_test.log"
 
-static int count_lines(const char *path) {
+static int count_lines(const char *path)
+{
     FILE *f = fopen(path, "rb");
-    if (!f)
+    if (!f) {
         return -1;
-    int n = 0;
+    }
+    int  n = 0;
     char buf[256];
-    while (fgets(buf, sizeof(buf), f))
+    while (fgets(buf, sizeof(buf), f)) {
         n++;
+    }
     fclose(f);
     return n;
 }
 
-int main(void) {
+int main(void)
+{
     remove(LOG_PATH);
 
     /* Init with defaults, only file sink. */
@@ -80,8 +84,8 @@ int main(void) {
 
     log_flush();
     if (count_lines(LOG_PATH) != 7) {
-        fprintf(stderr, "expected 7 lines after lowering to DEBUG, got %d\n",
-                count_lines(LOG_PATH));
+        fprintf(
+            stderr, "expected 7 lines after lowering to DEBUG, got %d\n", count_lines(LOG_PATH));
         return 1;
     }
 

@@ -40,8 +40,8 @@
 #ifndef LOG_FORMATTER_H
 #define LOG_FORMATTER_H
 
-#include <stddef.h>
 #include "log_record.h"
+#include <stddef.h>
 
 typedef struct logger_t logger_t;
 
@@ -95,7 +95,7 @@ typedef enum {
 typedef struct {
     fmt_opcode_t op; /**< Opcode selecting the field or literal handler.               */
     const char
-        *literal;       /**< Pointer to the literal text segment (valid only for FMT_OP_LITERAL). */
+          *literal;     /**< Pointer to the literal text segment (valid only for FMT_OP_LITERAL). */
     size_t literal_len; /**< Byte length of the literal segment (excluding NUL).          */
 } fmt_op_t;
 
@@ -186,7 +186,9 @@ const char *log_formatter_get_format(void);
  * @brief Instance variant of @ref log_formatter_format for a specific
  *        @ref logger_t.
  */
-int log_formatter_format_for(logger_t *logger, log_record_t *restrict record, char *restrict buf,
+int log_formatter_format_for(logger_t *logger,
+                             log_record_t *restrict record,
+                             char *restrict buf,
                              size_t buf_size);
 
 /**

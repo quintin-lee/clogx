@@ -1,10 +1,11 @@
 // Test: Macro from header is used - should produce NO warnings
+#include "log.h"
+#include <assert.h>
 #include <stdio.h>
 #include <stdlib.h>
-#include <assert.h>
-#include "log.h"
 
-int main(void) {
+int main(void)
+{
     // Using assert macro from assert.h
     int x = 42;
     assert(x > 0);

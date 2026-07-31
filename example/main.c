@@ -6,11 +6,12 @@
  * async mode, custom sinks, file rotation, structured logging,
  * thread context (MDC), and Prometheus statistics.
  */
-#include <stdio.h>
 #include "log.h"
 #include "log_config.h"
+#include <stdio.h>
 
-int main(void) {
+int main(void)
+{
     printf("=== CLog Example ===\n\n");
 
     /* ------------------------------------------------------------------
@@ -59,18 +60,18 @@ int main(void) {
     printf("\n--- Switching to programmatic config ---\n");
     log_destroy();
 
-    log_config_t cfg = {0};
-    cfg.level = LOG_LEVEL_INFO;
-    cfg.async = false;
-    cfg.color = true;
-    cfg.format = "[%time] [%level] [%module] %msg";
-    cfg.time_format = "%Y-%m-%d %H:%M:%S";
+    log_config_t cfg   = {0};
+    cfg.level          = LOG_LEVEL_INFO;
+    cfg.async          = false;
+    cfg.color          = true;
+    cfg.format         = "[%time] [%level] [%module] %msg";
+    cfg.time_format    = "%Y-%m-%d %H:%M:%S";
     cfg.console_enable = true;
     cfg.console_stderr = false;
-    cfg.file_enable = true;
+    cfg.file_enable    = true;
     snprintf(cfg.file_path, sizeof(cfg.file_path), "logs/example_programmatic.log");
     cfg.file_max_size = (size_t)50 * 1024 * 1024;
-    cfg.file_backups = 3;
+    cfg.file_backups  = 3;
     cfg.socket_enable = false;
 
     if (log_config_set(&cfg) != 0) {

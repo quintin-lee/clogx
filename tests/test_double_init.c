@@ -1,15 +1,17 @@
-#include <stdio.h>
-#include <string.h>
 #include "clog_port.h"
 #include "log.h"
+#include <stdio.h>
+#include <string.h>
 
 #define CONFIG_PATH "build/config_double_init_test.yaml"
 #define LOG_PATH "logs/double_init_test.log"
 
-static int write_config(void) {
+static int write_config(void)
+{
     FILE *f = fopen(CONFIG_PATH, "w");
-    if (!f)
+    if (!f) {
         return -1;
+    }
     fprintf(f,
             "log:\n"
             "  async: false\n"
@@ -26,10 +28,12 @@ static int write_config(void) {
     return 0;
 }
 
-int main(void) {
+int main(void)
+{
     remove(LOG_PATH);
-    if (write_config() != 0)
+    if (write_config() != 0) {
         return 1;
+    }
 
     if (log_init(CONFIG_PATH) != 0) {
         fprintf(stderr, "First log_init failed\n");

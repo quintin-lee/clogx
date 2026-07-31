@@ -2,14 +2,14 @@
  * @file test_plugin_abi.c
  * @brief Tests for the plugin ABI: loading, scanning, config, dispatch.
  */
+#include "clogx_plugin.h"
+#include "log.h"
+#include <assert.h>
+#include <dlfcn.h>
 #include <stdio.h>
 #include <stdlib.h>
 #include <string.h>
-#include <assert.h>
-#include <dlfcn.h>
 #include <unistd.h>
-#include "log.h"
-#include "clogx_plugin.h"
 
 /* Path to the test plugin .so — set at compile time via -DTEST_PLUGIN_SO */
 #ifndef TEST_PLUGIN_SO
@@ -25,11 +25,13 @@
 /*  Helper: verify sink was dispatched a record via the public API     */
 /* ------------------------------------------------------------------ */
 
-static int test_log_init_basic(const char *yaml) {
+static int test_log_init_basic(const char *yaml)
+{
     /* Write a temp config, init, log one message, destroy. */
     FILE *f = fopen("/tmp/test_plugin_cfg.yaml", "w");
-    if (!f)
+    if (!f) {
         return -1;
+    }
     fprintf(f, "%s", yaml);
     fclose(f);
 
@@ -48,7 +50,8 @@ static int test_log_init_basic(const char *yaml) {
 /* ------------------------------------------------------------------ */
 /*  Test 1: log_plugin_load — valid .so                               */
 /* ------------------------------------------------------------------ */
-static void test_load_valid(void) {
+static void test_load_valid(void)
+{
     fprintf(stderr, "=== %s ===\n", __func__);
 
     clogx_plugin_handle_t *h = log_plugin_load(TEST_PLUGIN_SO);
@@ -71,7 +74,8 @@ static void test_load_valid(void) {
 /* ------------------------------------------------------------------ */
 /*  Test 2: log_plugin_load — nonexistent path returns NULL            */
 /* ------------------------------------------------------------------ */
-static void test_load_nonexistent(void) {
+static void test_load_nonexistent(void)
+{
     fprintf(stderr, "=== %s ===\n", __func__);
     clogx_plugin_handle_t *h = log_plugin_load("/nonexistent/plugin.so");
     assert(h == NULL && "load of nonexistent path should return NULL");
@@ -81,7 +85,8 @@ static void test_load_nonexistent(void) {
 /* ------------------------------------------------------------------ */
 /*  Test 3: log_plugin_load — NULL / empty path                       */
 /* ------------------------------------------------------------------ */
-static void test_load_null_path(void) {
+static void test_load_null_path(void)
+{
     fprintf(stderr, "=== %s ===\n", __func__);
     assert(log_plugin_load(NULL) == NULL);
     assert(log_plugin_load("") == NULL);
@@ -91,7 +96,8 @@ static void test_load_null_path(void) {
 /* ------------------------------------------------------------------ */
 /*  Test 4: log_plugin_create_sink                                     */
 /* ------------------------------------------------------------------ */
-static void test_create_sink(void) {
+static void test_create_sink(void)
+{
     fprintf(stderr, "=== %s ===\n", __func__);
 
     clogx_plugin_handle_t *h = log_plugin_load(TEST_PLUGIN_SO);
@@ -118,7 +124,8 @@ static void test_create_sink(void) {
 /* ------------------------------------------------------------------ */
 /*  Test 5: log_plugin_create_sink — invalid handle                    */
 /* ------------------------------------------------------------------ */
-static void test_create_sink_invalid_handle(void) {
+static void test_create_sink_invalid_handle(void)
+{
     fprintf(stderr, "=== %s ===\n", __func__);
     assert(log_plugin_create_sink(NULL, NULL) == NULL);
     fprintf(stderr, "PASS\n");
@@ -127,7 +134,8 @@ static void test_create_sink_invalid_handle(void) {
 /* ------------------------------------------------------------------ */
 /*  Test 6: log_plugin_info — invalid handle                           */
 /* ------------------------------------------------------------------ */
-static void test_info_invalid_handle(void) {
+static void test_info_invalid_handle(void)
+{
     fprintf(stderr, "=== %s ===\n", __func__);
     assert(log_plugin_info(NULL) == NULL);
     fprintf(stderr, "PASS\n");
@@ -136,7 +144,8 @@ static void test_info_invalid_handle(void) {
 /* ------------------------------------------------------------------ */
 /*  Test 7: log_plugin_unload — NULL no-op                             */
 /* ------------------------------------------------------------------ */
-static void test_unload_null(void) {
+static void test_unload_null(void)
+{
     fprintf(stderr, "=== %s ===\n", __func__);
     log_plugin_unload(NULL); /* must not crash */
     fprintf(stderr, "PASS\n");
@@ -145,11 +154,12 @@ static void test_unload_null(void) {
 /* ------------------------------------------------------------------ */
 /*  Test 8: log_plugin_scan — valid directory                          */
 /* ------------------------------------------------------------------ */
-static void test_scan_valid_dir(void) {
+static void test_scan_valid_dir(void)
+{
     fprintf(stderr, "=== %s ===\n", __func__);
 
     clogx_plugin_handle_t *handles[8] = {0};
-    int n = log_plugin_scan(TEST_PLUGIN_DIR, handles, 8);
+    int                    n          = log_plugin_scan(TEST_PLUGIN_DIR, handles, 8);
     assert(n >= 1 && "should find at least plugin_dummy.so");
 
     int found_dummy = 0;
@@ -169,7 +179,8 @@ static void test_scan_valid_dir(void) {
 /* ------------------------------------------------------------------ */
 /*  Test 9: log_plugin_scan — nonexistent directory                    */
 /* ------------------------------------------------------------------ */
-static void test_scan_nonexistent_dir(void) {
+static void test_scan_nonexistent_dir(void)
+{
     fprintf(stderr, "=== %s ===\n", __func__);
     int n = log_plugin_scan("/nonexistent/plugins", NULL, 0);
     assert(n == 0 && "scan of nonexistent dir returns 0");
@@ -179,7 +190,8 @@ static void test_scan_nonexistent_dir(void) {
 /* ------------------------------------------------------------------ */
 /*  Test 10: log_plugin_scan — NULL dir                               */
 /* ------------------------------------------------------------------ */
-static void test_scan_null_dir(void) {
+static void test_scan_null_dir(void)
+{
     fprintf(stderr, "=== %s ===\n", __func__);
     assert(log_plugin_scan(NULL, NULL, 0) == -1);
     fprintf(stderr, "PASS\n");
@@ -188,7 +200,8 @@ static void test_scan_null_dir(void) {
 /* ------------------------------------------------------------------ */
 /*  Test 11: Plugin sink via log_add_sink (programmatic API)           */
 /* ------------------------------------------------------------------ */
-static void test_add_sink_via_api(void) {
+static void test_add_sink_via_api(void)
+{
     fprintf(stderr, "=== %s ===\n", __func__);
 
     /* Init with a temp config so g_initialized is set. */
@@ -219,11 +232,13 @@ static void test_add_sink_via_api(void) {
 /* ------------------------------------------------------------------ */
 /*  Test 12: Plugin sink via YAML config                               */
 /* ------------------------------------------------------------------ */
-static void test_config_plugins_section(void) {
+static void test_config_plugins_section(void)
+{
     fprintf(stderr, "=== %s ===\n", __func__);
 
     char cfg[1024];
-    snprintf(cfg, sizeof(cfg),
+    snprintf(cfg,
+             sizeof(cfg),
              "log:\n"
              "  level: TRACE\n"
              "  console_enable: false\n"
@@ -242,11 +257,13 @@ static void test_config_plugins_section(void) {
 /* ------------------------------------------------------------------ */
 /*  Test 13: Plugin sink via YAML config with empty config             */
 /* ------------------------------------------------------------------ */
-static void test_config_plugins_no_config(void) {
+static void test_config_plugins_no_config(void)
+{
     fprintf(stderr, "=== %s ===\n", __func__);
 
     char cfg[1024];
-    snprintf(cfg, sizeof(cfg),
+    snprintf(cfg,
+             sizeof(cfg),
              "log:\n"
              "  level: TRACE\n"
              "  console_enable: false\n"
@@ -262,11 +279,13 @@ static void test_config_plugins_no_config(void) {
 /* ------------------------------------------------------------------ */
 /*  Test 14: Plugin via top-level (backward compat) YAML              */
 /* ------------------------------------------------------------------ */
-static void test_config_top_level_plugins(void) {
+static void test_config_top_level_plugins(void)
+{
     fprintf(stderr, "=== %s ===\n", __func__);
 
     char cfg[1024];
-    snprintf(cfg, sizeof(cfg),
+    snprintf(cfg,
+             sizeof(cfg),
              "level: TRACE\n"
              "console_enable: false\n"
              "format: \"%%msg\"\n"
@@ -281,11 +300,13 @@ static void test_config_top_level_plugins(void) {
 /* ------------------------------------------------------------------ */
 /*  Test 15: Reload with plugin sinks                                  */
 /* ------------------------------------------------------------------ */
-static void test_reload_with_plugins(void) {
+static void test_reload_with_plugins(void)
+{
     fprintf(stderr, "=== %s ===\n", __func__);
 
     char cfg[1024];
-    snprintf(cfg, sizeof(cfg),
+    snprintf(cfg,
+             sizeof(cfg),
              "log:\n"
              "  level: TRACE\n"
              "  console_enable: false\n"
@@ -303,11 +324,13 @@ static void test_reload_with_plugins(void) {
 /* ------------------------------------------------------------------ */
 /*  Test 16: Multiple sinks via config (built-in + plugin)            */
 /* ------------------------------------------------------------------ */
-static void test_mixed_sinks(void) {
+static void test_mixed_sinks(void)
+{
     fprintf(stderr, "=== %s ===\n", __func__);
 
     char cfg[1024];
-    snprintf(cfg, sizeof(cfg),
+    snprintf(cfg,
+             sizeof(cfg),
              "log:\n"
              "  level: TRACE\n"
              "  console_enable: false\n"
@@ -315,7 +338,8 @@ static void test_mixed_sinks(void) {
              "  plugins:\n"
              "    - path: %s\n"
              "    - path: %s\n",
-             TEST_PLUGIN_SO, TEST_PLUGIN_SO);
+             TEST_PLUGIN_SO,
+             TEST_PLUGIN_SO);
 
     assert(test_log_init_basic(cfg) == 0);
     fprintf(stderr, "PASS\n");
@@ -325,7 +349,8 @@ static void test_mixed_sinks(void) {
 /*  Main                                                              */
 /* ------------------------------------------------------------------ */
 
-int main(void) {
+int main(void)
+{
     test_load_null_path();
     test_load_nonexistent();
     test_load_valid();

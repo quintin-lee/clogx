@@ -24,31 +24,37 @@
 #include "log_signal.h"
 #include "log_sink.h"
 
-static int g_fallback_count = 0;
-static void test_fallback_cb(void) {
+static int  g_fallback_count = 0;
+static void test_fallback_cb(void)
+{
     g_fallback_count++;
 }
 
-static int dummy_write(log_sink_t *sink, const char *buf, size_t len) {
+static int dummy_write(log_sink_t *sink, const char *buf, size_t len)
+{
     (void)sink;
     (void)buf;
     (void)len;
     return 0;
 }
-static int failing_write_fn(log_sink_t *sink, const char *buf, size_t len) {
+static int failing_write_fn(log_sink_t *sink, const char *buf, size_t len)
+{
     (void)sink;
     (void)buf;
     (void)len;
     return -1;
 }
-static void dummy_flush(log_sink_t *sink) {
+static void dummy_flush(log_sink_t *sink)
+{
     (void)sink;
 }
-static void dummy_destroy(log_sink_t *sink) {
+static void dummy_destroy(log_sink_t *sink)
+{
     (void)sink;
 }
 
-static void write_temp_file(const char *path, const char *content) {
+static void write_temp_file(const char *path, const char *content)
+{
     FILE *f = fopen(path, "w");
     if (f) {
         fputs(content, f);
@@ -56,7 +62,8 @@ static void write_temp_file(const char *path, const char *content) {
     }
 }
 
-int main(void) {
+int main(void)
+{
     printf("=== Starting test_coverage_deep ===\n");
 
     /* -------------------------------------------------------------
@@ -84,8 +91,8 @@ int main(void) {
 
     log_sink_t *valid_dummy = calloc(1, sizeof(log_sink_t));
     if (valid_dummy) {
-        valid_dummy->write = dummy_write;
-        valid_dummy->flush = dummy_flush;
+        valid_dummy->write   = dummy_write;
+        valid_dummy->flush   = dummy_flush;
         valid_dummy->destroy = dummy_destroy;
         log_sink_set_level(valid_dummy, LOG_LEVEL_TRACE);
         log_add_sink(NULL);
@@ -98,9 +105,9 @@ int main(void) {
     /* Test sink write failure path */
     log_sink_t *failing_dummy = calloc(1, sizeof(log_sink_t));
     if (failing_dummy) {
-        failing_dummy->write = failing_write_fn;
-        failing_dummy->flush = dummy_flush;
-        failing_dummy->destroy = dummy_destroy;
+        failing_dummy->write     = failing_write_fn;
+        failing_dummy->flush     = dummy_flush;
+        failing_dummy->destroy   = dummy_destroy;
         failing_dummy->min_level = LOG_LEVEL_TRACE;
         log_add_sink(failing_dummy);
         LOG_INFO("test failing sink write");
@@ -109,11 +116,11 @@ int main(void) {
     }
 
     /* Test small async queue overflow & fallback */
-    log_config_t async_overflow_cfg = {0};
-    async_overflow_cfg.async = true;
-    async_overflow_cfg.queue_size = 2;
+    log_config_t async_overflow_cfg   = {0};
+    async_overflow_cfg.async          = true;
+    async_overflow_cfg.queue_size     = 2;
     async_overflow_cfg.console_enable = false;
-    async_overflow_cfg.file_enable = false;
+    async_overflow_cfg.file_enable    = false;
     log_config_set(&async_overflow_cfg);
     for (int i = 0; i < 50; i++) {
         LOG_INFO("overflow msg %d", i);
@@ -190,29 +197,29 @@ int main(void) {
     }
 
     log_record_t null_str_rec = {
-        .level = LOG_LEVEL_INFO,
+        .level     = LOG_LEVEL_INFO,
         .timestamp = 1000,
-        .message = NULL,
-        .module = NULL,
-        .tag = NULL,
+        .message   = NULL,
+        .module    = NULL,
+        .tag       = NULL,
     };
     log_async_write(&null_str_rec);
 
     log_record_t tag_only_rec = {
-        .level = LOG_LEVEL_INFO,
+        .level     = LOG_LEVEL_INFO,
         .timestamp = 1000,
-        .message = NULL,
-        .module = NULL,
-        .tag = "tag_only",
+        .message   = NULL,
+        .module    = NULL,
+        .tag       = "tag_only",
     };
     log_async_write(&tag_only_rec);
 
     log_record_t mod_only_rec = {
-        .level = LOG_LEVEL_INFO,
+        .level     = LOG_LEVEL_INFO,
         .timestamp = 1000,
-        .message = NULL,
-        .module = "mod_only",
-        .tag = NULL,
+        .message   = NULL,
+        .module    = "mod_only",
+        .tag       = NULL,
     };
     log_async_write(&mod_only_rec);
 
@@ -253,23 +260,26 @@ int main(void) {
     }
 
     console_sink_is_color_enabled(NULL);
-    if (valid_dummy)
+    if (valid_dummy) {
         console_sink_is_color_enabled(valid_dummy);
+    }
     log_sink_t *c_out_s = console_sink_create(true);
     if (c_out_s) {
         console_sink_is_color_enabled(c_out_s);
         c_out_s->write(c_out_s, "console test\n", 13);
         c_out_s->flush(c_out_s);
-        if (c_out_s->destroy)
+        if (c_out_s->destroy) {
             c_out_s->destroy(c_out_s);
+        }
     }
 
     if (custom_sink_create(NULL, NULL, NULL, NULL) != NULL) {
         fprintf(stderr, "expected NULL custom sink\n");
     }
     custom_sink_get_private_data(NULL);
-    if (valid_dummy)
+    if (valid_dummy) {
         custom_sink_get_private_data(valid_dummy);
+    }
 
     if (socket_sink_create_tls(NULL, 80, false, NULL, false) != NULL) {
         fprintf(stderr, "expected NULL socket sink\n");
@@ -318,8 +328,9 @@ int main(void) {
         syslog_null->write(syslog_null, "[FATAL] syslog fatal", 19);
         syslog_null->write(syslog_null, "[INFO] syslog info", 17);
         syslog_null->flush(syslog_null);
-        if (syslog_null->atfork_child)
+        if (syslog_null->atfork_child) {
             syslog_null->atfork_child(syslog_null);
+        }
         syslog_null->destroy(syslog_null);
     }
 #endif
@@ -332,37 +343,41 @@ int main(void) {
     log_dispatcher_dispatch(NULL);
     log_dispatcher_destroy_snapshot(NULL);
 
-    log_config_t color_cfg = {0};
-    color_cfg.level = LOG_LEVEL_TRACE;
-    color_cfg.color = true;
+    log_config_t color_cfg   = {0};
+    color_cfg.level          = LOG_LEVEL_TRACE;
+    color_cfg.color          = true;
     color_cfg.console_enable = true;
     color_cfg.console_stderr = false;
-    color_cfg.format = "[%time] [%level] %msg";
+    color_cfg.format         = "[%time] [%level] %msg";
     log_config_set(&color_cfg);
 
-    log_level_t levels[] = {LOG_LEVEL_TRACE, LOG_LEVEL_DEBUG, LOG_LEVEL_INFO,
-                            LOG_LEVEL_WARN,  LOG_LEVEL_ERROR, LOG_LEVEL_FATAL};
+    log_level_t levels[] = {LOG_LEVEL_TRACE,
+                            LOG_LEVEL_DEBUG,
+                            LOG_LEVEL_INFO,
+                            LOG_LEVEL_WARN,
+                            LOG_LEVEL_ERROR,
+                            LOG_LEVEL_FATAL};
     for (size_t i = 0; i < sizeof(levels) / sizeof(levels[0]); i++) {
         log_record_t color_rec = {
-            .level = levels[i],
+            .level     = levels[i],
             .timestamp = 1600000000000000ULL,
-            .message = "color test message without newline",
-            .line = 123,
-            .tid = 1,
-            .pid = 2,
+            .message   = "color test message without newline",
+            .line      = 123,
+            .tid       = 1,
+            .pid       = 2,
         };
         log_dispatcher_dispatch(&color_rec);
     }
     log_destroy();
 
     /* Snapshot build, commit, destroy tests */
-    log_config_t snap_full_cfg = {0};
+    log_config_t snap_full_cfg   = {0};
     snap_full_cfg.console_enable = true;
     snap_full_cfg.console_stderr = true;
-    snap_full_cfg.file_enable = true;
+    snap_full_cfg.file_enable    = true;
     snprintf(snap_full_cfg.file_path, sizeof(snap_full_cfg.file_path), "build/snap_deep.log");
     snap_full_cfg.file_max_size = 1024 * 1024;
-    snap_full_cfg.file_backups = 2;
+    snap_full_cfg.file_backups  = 2;
 
     log_dispatcher_snapshot_t real_snap = {0};
     if (log_dispatcher_build_snapshot(&snap_full_cfg, &real_snap) == 0) {
@@ -372,10 +387,10 @@ int main(void) {
         log_dispatcher_destroy_snapshot(&real_snap);
     }
 
-    log_config_t empty_sink_cfg = {0};
+    log_config_t empty_sink_cfg   = {0};
     empty_sink_cfg.console_enable = false;
-    empty_sink_cfg.file_enable = false;
-    empty_sink_cfg.socket_enable = false;
+    empty_sink_cfg.file_enable    = false;
+    empty_sink_cfg.socket_enable  = false;
     log_dispatcher_snapshot_t snap;
     if (log_dispatcher_build_snapshot(&empty_sink_cfg, &snap) == 0) {
         fprintf(stderr, "expected snapshot build error\n");
@@ -391,41 +406,44 @@ int main(void) {
     log_destroy();
     log_reload(); /* Reload while uninitialized -> CLOG_ERR_RELOAD */
 
-    write_temp_file("build/cfg_valid_full.yaml", "log:\n"
-                                                 "  level: TRACE\n"
-                                                 "  async: true\n"
-                                                 "  queue_size: 1024\n"
-                                                 "  catch_signals: false\n"
-                                                 "  color: true\n"
-                                                 "  format: \"json\"\n"
-                                                 "  time_format: \"%Y-%m-%d %H:%M:%S\"\n"
-                                                 "  console_enable: true\n"
-                                                 "  console_stderr: true\n"
-                                                 "  file_enable: true\n"
-                                                 "  file_path: build/deep_app.log\n"
-                                                 "  max_size: 10KB\n"
-                                                 "  backups: 5\n"
-                                                 "  socket_enable: false\n"
-                                                 "  rate_limit_enable: true\n"
-                                                 "  rate_limit_max_per_sec: 500\n"
-                                                 "  rate_limit_burst: 50\n");
+    write_temp_file("build/cfg_valid_full.yaml",
+                    "log:\n"
+                    "  level: TRACE\n"
+                    "  async: true\n"
+                    "  queue_size: 1024\n"
+                    "  catch_signals: false\n"
+                    "  color: true\n"
+                    "  format: \"json\"\n"
+                    "  time_format: \"%Y-%m-%d %H:%M:%S\"\n"
+                    "  console_enable: true\n"
+                    "  console_stderr: true\n"
+                    "  file_enable: true\n"
+                    "  file_path: build/deep_app.log\n"
+                    "  max_size: 10KB\n"
+                    "  backups: 5\n"
+                    "  socket_enable: false\n"
+                    "  rate_limit_enable: true\n"
+                    "  rate_limit_max_per_sec: 500\n"
+                    "  rate_limit_burst: 50\n");
 
     if (log_init("build/cfg_valid_full.yaml") == 0) {
         log_sink_t *s_tmp = console_sink_create(false);
-        if (s_tmp)
+        if (s_tmp) {
             log_add_sink(s_tmp);
+        }
         log_reload(); /* Valid reload test */
         log_destroy();
     }
 
-    write_temp_file("build/cfg_aliases.yaml", "log:\n"
-                                              "  path: build/alias_file.log\n"
-                                              "  backup: 3\n"
-                                              "  host: \"127.0.0.1\"\n"
-                                              "  port: 8080\n"
-                                              "  tls_enable: false\n"
-                                              "  tls_ca_file: \"ca.crt\"\n"
-                                              "  tls_skip_verify: true\n");
+    write_temp_file("build/cfg_aliases.yaml",
+                    "log:\n"
+                    "  path: build/alias_file.log\n"
+                    "  backup: 3\n"
+                    "  host: \"127.0.0.1\"\n"
+                    "  port: 8080\n"
+                    "  tls_enable: false\n"
+                    "  tls_ca_file: \"ca.crt\"\n"
+                    "  tls_skip_verify: true\n");
     log_init("build/cfg_aliases.yaml");
     log_destroy();
 
@@ -436,32 +454,34 @@ int main(void) {
     log_init("build/non_existent_file_999.yaml");
     log_destroy();
 
-    write_temp_file("build/cfg_max_size_units.yaml", "log:\n"
-                                                     "  max_size: 5KB\n"
-                                                     "  max_size: 2M\n"
-                                                     "  max_size: 3MB\n"
-                                                     "  max_size: 1G\n"
-                                                     "  max_size: 2GB\n"
-                                                     "  max_size: 500\n"
-                                                     "  rate_limit_max_per_sec: 1000\n"
-                                                     "  rate_limit_burst: 100\n");
+    write_temp_file("build/cfg_max_size_units.yaml",
+                    "log:\n"
+                    "  max_size: 5KB\n"
+                    "  max_size: 2M\n"
+                    "  max_size: 3MB\n"
+                    "  max_size: 1G\n"
+                    "  max_size: 2GB\n"
+                    "  max_size: 500\n"
+                    "  rate_limit_max_per_sec: 1000\n"
+                    "  rate_limit_burst: 100\n");
     log_init("build/cfg_max_size_units.yaml");
     log_destroy();
 
-    write_temp_file("build/cfg_invalid_branches.yaml", "log:\n"
-                                                       "  max_size: 99999999999999999999999GB\n"
-                                                       "  max_size: 100TB\n"
-                                                       "  max_size: \"\"\n"
-                                                       "  rate_limit_max_per_sec: -5\n"
-                                                       "  rate_limit_max_per_sec: abc\n"
-                                                       "  rate_limit_burst: -2\n"
-                                                       "  rate_limit_burst: xyz\n"
-                                                       "  port: 70000\n"
-                                                       "  port: -1\n"
-                                                       "  backups: -10\n"
-                                                       "  queue_size: -100\n"
-                                                       "  level: UNKNOWN_LEVEL\n"
-                                                       "  unknown_key_foobar: 12345\n");
+    write_temp_file("build/cfg_invalid_branches.yaml",
+                    "log:\n"
+                    "  max_size: 99999999999999999999999GB\n"
+                    "  max_size: 100TB\n"
+                    "  max_size: \"\"\n"
+                    "  rate_limit_max_per_sec: -5\n"
+                    "  rate_limit_max_per_sec: abc\n"
+                    "  rate_limit_burst: -2\n"
+                    "  rate_limit_burst: xyz\n"
+                    "  port: 70000\n"
+                    "  port: -1\n"
+                    "  backups: -10\n"
+                    "  queue_size: -100\n"
+                    "  level: UNKNOWN_LEVEL\n"
+                    "  unknown_key_foobar: 12345\n");
     log_init("build/cfg_invalid_branches.yaml");
     log_destroy();
 
@@ -473,8 +493,9 @@ int main(void) {
     if (bad_file_s) {
         bad_file_s->write(bad_file_s, "test", 4);
         bad_file_s->flush(bad_file_s);
-        if (bad_file_s->destroy)
+        if (bad_file_s->destroy) {
             bad_file_s->destroy(bad_file_s);
+        }
     }
 
     log_sink_t *rot_s = file_sink_create("build/rot_forced.log", 20, 2);
@@ -483,24 +504,25 @@ int main(void) {
         rot_s->write(rot_s, line, strlen(line));
         rot_s->write(rot_s, line, strlen(line));
         rot_s->flush(rot_s);
-        if (rot_s->destroy)
+        if (rot_s->destroy) {
             rot_s->destroy(rot_s);
+        }
     }
 
     /* -------------------------------------------------------------
      * 8. FORMATTER TRUNCATION & PATTERN VARIATIONS
      * ------------------------------------------------------------- */
     log_record_t esc_rec = {
-        .level = LOG_LEVEL_INFO,
+        .level     = LOG_LEVEL_INFO,
         .timestamp = 1600000000000000ULL,
-        .file = "test.c",
-        .func = "func_esc",
-        .module = "mod_esc",
-        .tag = "tag_esc",
-        .message = "quotes \" bs \\ fn \n cr \r tab \t ff \f bs \b ctrl \x03",
-        .line = 100,
-        .tid = 1,
-        .pid = 2,
+        .file      = "test.c",
+        .func      = "func_esc",
+        .module    = "mod_esc",
+        .tag       = "tag_esc",
+        .message   = "quotes \" bs \\ fn \n cr \r tab \t ff \f bs \b ctrl \x03",
+        .line      = 100,
+        .tid       = 1,
+        .pid       = 2,
     };
 
     log_formatter_init("json", "%Y-%m-%d");
@@ -525,16 +547,16 @@ int main(void) {
     }
 
     log_record_t null_fields_rec = {
-        .level = LOG_LEVEL_WARN,
+        .level     = LOG_LEVEL_WARN,
         .timestamp = 1600000000000000ULL,
-        .file = NULL,
-        .func = NULL,
-        .module = NULL,
-        .tag = NULL,
-        .message = NULL,
-        .line = 50,
-        .tid = 10,
-        .pid = 20,
+        .file      = NULL,
+        .func      = NULL,
+        .module    = NULL,
+        .tag       = NULL,
+        .message   = NULL,
+        .line      = 50,
+        .tid       = 10,
+        .pid       = 20,
     };
     char text_buf[512];
     log_formatter_format(&null_fields_rec, text_buf, sizeof(text_buf));
@@ -543,15 +565,15 @@ int main(void) {
     /* -------------------------------------------------------------
      * 9. MULTI-PIPELINE & ASYNC FULL RUN
      * ------------------------------------------------------------- */
-    log_config_t async_cfg = {0};
-    async_cfg.level = LOG_LEVEL_DEBUG;
-    async_cfg.async = true;
-    async_cfg.queue_size = 64;
-    async_cfg.color = false;
-    async_cfg.format = "[%time] [%level] %msg";
+    log_config_t async_cfg   = {0};
+    async_cfg.level          = LOG_LEVEL_DEBUG;
+    async_cfg.async          = true;
+    async_cfg.queue_size     = 64;
+    async_cfg.color          = false;
+    async_cfg.format         = "[%time] [%level] %msg";
     async_cfg.console_enable = true;
     async_cfg.console_stderr = true;
-    async_cfg.file_enable = false;
+    async_cfg.file_enable    = false;
     log_config_set(&async_cfg);
 
     log_set_async_fallback_cb(test_fallback_cb);
@@ -562,17 +584,17 @@ int main(void) {
     log_flush();
     log_destroy();
 
-    log_config_t multi_cfg = {0};
-    multi_cfg.level = LOG_LEVEL_TRACE;
-    multi_cfg.async = false;
-    multi_cfg.color = true;
-    multi_cfg.format = "[%time] [%level] %msg";
+    log_config_t multi_cfg   = {0};
+    multi_cfg.level          = LOG_LEVEL_TRACE;
+    multi_cfg.async          = false;
+    multi_cfg.color          = true;
+    multi_cfg.format         = "[%time] [%level] %msg";
     multi_cfg.console_enable = true;
     multi_cfg.console_stderr = false;
-    multi_cfg.file_enable = true;
+    multi_cfg.file_enable    = true;
     snprintf(multi_cfg.file_path, sizeof(multi_cfg.file_path), "build/multi_pipeline.log");
     multi_cfg.file_max_size = 1024 * 1024;
-    multi_cfg.file_backups = 2;
+    multi_cfg.file_backups  = 2;
     log_config_set(&multi_cfg);
 
     log_sink_t *c_err = console_sink_create_stderr(true);
@@ -592,8 +614,9 @@ int main(void) {
 
     if (c_err) {
         log_remove_sink(c_err);
-        if (c_err->destroy)
+        if (c_err->destroy) {
             c_err->destroy(c_err);
+        }
     }
 
     log_flush();

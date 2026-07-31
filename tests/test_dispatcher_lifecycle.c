@@ -1,16 +1,18 @@
+#include "clog_port.h"
+#include "log.h"
 #include <stdio.h>
 #include <stdlib.h>
 #include <string.h>
-#include "clog_port.h"
-#include "log.h"
 
 #define CONFIG_PATH "build/config_reload_test.yaml"
 #define LOG_PATH "logs/reload_test.log"
 
-static int write_config(void) {
+static int write_config(void)
+{
     FILE *f = fopen(CONFIG_PATH, "w");
-    if (!f)
+    if (!f) {
         return -1;
+    }
     fprintf(f,
             "log:\n"
             "  async: false\n"
@@ -27,19 +29,23 @@ static int write_config(void) {
     return 0;
 }
 
-static int count_lines(const char *path) {
+static int count_lines(const char *path)
+{
     FILE *f = fopen(path, "rb");
-    if (!f)
+    if (!f) {
         return -1;
-    int n = 0;
+    }
+    int  n = 0;
     char buf[256];
-    while (fgets(buf, sizeof(buf), f))
+    while (fgets(buf, sizeof(buf), f)) {
         n++;
+    }
     fclose(f);
     return n;
 }
 
-int main(void) {
+int main(void)
+{
     remove(LOG_PATH);
     if (write_config() != 0) {
         fprintf(stderr, "write config failed\n");

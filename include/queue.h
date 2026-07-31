@@ -41,9 +41,9 @@
 #ifndef QUEUE_H
 #define QUEUE_H
 
-#include <stddef.h>
 #include "clog_port.h"
 #include "log_record.h"
+#include <stddef.h>
 
 /**
  * @struct mpsc_queue_t
@@ -60,17 +60,17 @@
  *       section is short (a record copy) and contention is low.
  */
 typedef struct mpsc_queue_t {
-    log_record_t *buffer;  /**< Backing storage (owned, @ref capacity × sizeof(log_record_t)). */
-    size_t capacity;       /**< Maximum number of records before blocking producers. */
-    size_t head;           /**< Next write index (producer side). */
-    size_t tail;           /**< Next read index (consumer side). */
-    size_t count;          /**< Current number of records in the buffer. */
-    int closed;            /**< Non-zero once @ref mpsc_queue_close has been called. */
-    clog_mutex_t mutex;    /**< Serializes all queue field accesses. */
-    clog_cond_t not_full;  /**< Producers wait here when @ref count == @ref capacity. */
-    clog_cond_t not_empty; /**< Consumer waits here when @ref count == 0. */
-    clog_cond_t drained;   /**< Signaled when @ref count reaches 0 after close (for @ref
-                              mpsc_queue_wait_empty). */
+    log_record_t *buffer;    /**< Backing storage (owned, @ref capacity × sizeof(log_record_t)). */
+    size_t        capacity;  /**< Maximum number of records before blocking producers. */
+    size_t        head;      /**< Next write index (producer side). */
+    size_t        tail;      /**< Next read index (consumer side). */
+    size_t        count;     /**< Current number of records in the buffer. */
+    int           closed;    /**< Non-zero once @ref mpsc_queue_close has been called. */
+    clog_mutex_t  mutex;     /**< Serializes all queue field accesses. */
+    clog_cond_t   not_full;  /**< Producers wait here when @ref count == @ref capacity. */
+    clog_cond_t   not_empty; /**< Consumer waits here when @ref count == 0. */
+    clog_cond_t   drained;   /**< Signaled when @ref count reaches 0 after close (for @ref
+                                mpsc_queue_wait_empty). */
 } mpsc_queue_t;
 
 /**
@@ -154,7 +154,8 @@ int mpsc_queue_get(mpsc_queue_t *restrict q, log_record_t *restrict record);
  *             normal usage; consumer should retry).
  * @retval -1  Queue is closed and drained.
  */
-int mpsc_queue_get_batch(mpsc_queue_t *restrict q, log_record_t *restrict records,
+int mpsc_queue_get_batch(mpsc_queue_t *restrict q,
+                         log_record_t *restrict records,
                          size_t max_records);
 
 /**

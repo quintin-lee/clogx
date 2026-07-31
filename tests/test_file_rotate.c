@@ -1,29 +1,33 @@
+#include "clog_port.h"
+#include "log_sink.h"
 #include <stdio.h>
 #include <stdlib.h>
 #include <string.h>
-#include "clog_port.h"
-#include "log_sink.h"
 
 #define LOG_PATH "logs/rotate_unit.log"
 #define BACKUP_PATH "logs/rotate_unit.log.1"
 
-static void cleanup(void) {
+static void cleanup(void)
+{
     remove(LOG_PATH);
     remove(BACKUP_PATH);
     remove("logs/rotate_unit.log.2");
 }
 
-static long file_size(const char *path) {
+static long file_size(const char *path)
+{
     FILE *f = fopen(path, "rb");
-    if (!f)
+    if (!f) {
         return -1;
+    }
     fseek(f, 0, SEEK_END);
     long sz = ftell(f);
     fclose(f);
     return sz;
 }
 
-int main(void) {
+int main(void)
+{
     cleanup();
 
     /* Tiny rotation threshold so a few writes trigger rotate */
@@ -66,11 +70,12 @@ int main(void) {
     }
 
     FILE *f = fopen(LOG_PATH, "rb");
-    if (!f)
+    if (!f) {
         return 1;
-    char buf[256];
+    }
+    char   buf[256];
     size_t n = fread(buf, 1, sizeof(buf) - 1, f);
-    buf[n] = '\0';
+    buf[n]   = '\0';
     fclose(f);
 
     if (strcmp(buf, after) != 0) {

@@ -41,29 +41,32 @@
  * Implements the `clogx_plugin_v1` ABI.
  */
 
+#include "clog_port.h"
+#include "clogx_plugin.h"
+#include "log_formatter.h"
+#include "log_sink.h"
 #include <stdio.h>
 #include <stdlib.h>
 #include <string.h>
-#include "clog_port.h"
-#include "log_sink.h"
-#include "log_formatter.h"
-#include "clogx_plugin.h"
 
 typedef struct {
-    char endpoint[256];
-    char service_name[128];
+    char  endpoint[256];
+    char  service_name[128];
     FILE *file_out;
 } otlp_sink_data_t;
 
-static int otlp_sink_write(log_sink_t *sink, const char *buf, size_t len) {
-    if (!sink || !sink->private_data || !buf)
+static int otlp_sink_write(log_sink_t *sink, const char *buf, size_t len)
+{
+    if (!sink || !sink->private_data || !buf) {
         return -1;
+    }
     otlp_sink_data_t *data = (otlp_sink_data_t *)sink->private_data;
 
     if (data->file_out) {
         size_t written = fwrite(buf, 1, len, data->file_out);
-        if (written < len)
+        if (written < len) {
             return -1;
+        }
         fputc('\n', data->file_out);
         return (int)(len + 1);
     }
@@ -72,9 +75,11 @@ static int otlp_sink_write(log_sink_t *sink, const char *buf, size_t len) {
     return (int)fwrite(buf, 1, len, stdout);
 }
 
-static void otlp_sink_flush(log_sink_t *sink) {
-    if (!sink || !sink->private_data)
+static void otlp_sink_flush(log_sink_t *sink)
+{
+    if (!sink || !sink->private_data) {
         return;
+    }
     otlp_sink_data_t *data = (otlp_sink_data_t *)sink->private_data;
     if (data->file_out) {
         fflush(data->file_out);
@@ -83,9 +88,11 @@ static void otlp_sink_flush(log_sink_t *sink) {
     }
 }
 
-static void otlp_sink_destroy(log_sink_t *sink) {
-    if (!sink)
+static void otlp_sink_destroy(log_sink_t *sink)
+{
+    if (!sink) {
         return;
+    }
     if (sink->private_data) {
         otlp_sink_data_t *data = (otlp_sink_data_t *)sink->private_data;
         if (data->file_out && data->file_out != stdout && data->file_out != stderr) {
@@ -96,14 +103,17 @@ static void otlp_sink_destroy(log_sink_t *sink) {
     free(sink);
 }
 
-static void otlp_sink_atfork_child(log_sink_t *sink) {
+static void otlp_sink_atfork_child(log_sink_t *sink)
+{
     (void)sink;
 }
 
-log_sink_t *otlp_sink_create(const char *endpoint, const char *service_name) {
+log_sink_t *otlp_sink_create(const char *endpoint, const char *service_name)
+{
     log_sink_t *sink = (log_sink_t *)calloc(1, sizeof(log_sink_t));
-    if (!sink)
+    if (!sink) {
         return NULL;
+    }
 
     otlp_sink_data_t *data = (otlp_sink_data_t *)calloc(1, sizeof(otlp_sink_data_t));
     if (!data) {
@@ -130,13 +140,13 @@ log_sink_t *otlp_sink_create(const char *endpoint, const char *service_name) {
         data->file_out = stdout;
     }
 
-    sink->abi_version = CLOGX_PLUGIN_ABI_VERSION;
-    sink->write = otlp_sink_write;
-    sink->flush = otlp_sink_flush;
-    sink->destroy = otlp_sink_destroy;
+    sink->abi_version  = CLOGX_PLUGIN_ABI_VERSION;
+    sink->write        = otlp_sink_write;
+    sink->flush        = otlp_sink_flush;
+    sink->destroy      = otlp_sink_destroy;
     sink->atfork_child = otlp_sink_atfork_child;
     sink->private_data = data;
-    sink->min_level = LOG_LEVEL_TRACE;
+    sink->min_level    = LOG_LEVEL_TRACE;
 
     return sink;
 }

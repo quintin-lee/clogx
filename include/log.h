@@ -14,12 +14,12 @@
 #ifndef LOG_H
 #define LOG_H
 
-#include <string.h>
+#include "clogx_plugin.h"
 #include "log_config.h"
+#include "log_prometheus.h"
 #include "log_record.h"
 #include "log_sink.h"
-#include "log_prometheus.h"
-#include "clogx_plugin.h"
+#include <string.h>
 
 /* Compiler portability macros. */
 #if defined(__GNUC__) || defined(__clang__)
@@ -35,19 +35,19 @@
  * @brief Structured error codes returned by clogx APIs.
  */
 typedef enum {
-    CLOG_OK = 0,
-    CLOG_ERR_INVALID_ARG = -1,
+    CLOG_OK                 = 0,
+    CLOG_ERR_INVALID_ARG    = -1,
     CLOG_ERR_INIT_REENTRANT = -2,
-    CLOG_ERR_CONFIG_OPEN = -3,
-    CLOG_ERR_CONFIG_PARSE = -4,
-    CLOG_ERR_NO_SINKS = -5,
-    CLOG_ERR_FILE_OPEN = -6,
-    CLOG_ERR_FILE_WRITE = -7,
-    CLOG_ERR_QUEUE_FULL = -8,
-    CLOG_ERR_THREAD_CREATE = -9,
+    CLOG_ERR_CONFIG_OPEN    = -3,
+    CLOG_ERR_CONFIG_PARSE   = -4,
+    CLOG_ERR_NO_SINKS       = -5,
+    CLOG_ERR_FILE_OPEN      = -6,
+    CLOG_ERR_FILE_WRITE     = -7,
+    CLOG_ERR_QUEUE_FULL     = -8,
+    CLOG_ERR_THREAD_CREATE  = -9,
     CLOG_ERR_SOCKET_CONNECT = -10,
-    CLOG_ERR_OOM = -11,
-    CLOG_ERR_RELOAD = -12,
+    CLOG_ERR_OOM            = -11,
+    CLOG_ERR_RELOAD         = -12,
 } clogx_errno_t;
 
 /**
@@ -388,7 +388,7 @@ typedef struct {
     uint64_t total_logged_count;       /**< Total log records submitted. */
     uint64_t dropped_queue_full_count; /**< Total records dropped due to async queue full. */
     uint64_t suppressed_rate_count;    /**< Total records suppressed by rate limiter. */
-    size_t current_queue_depth;        /**< Current pending records in async queue. */
+    size_t   current_queue_depth;      /**< Current pending records in async queue. */
 } log_stats_t;
 
 /**
@@ -627,8 +627,9 @@ CLOGX_API int log_reload(void);
  *       (since the record is copied). The LOG_* macros handle this automatically by passing
  *       stack-allocated strings that remain valid during the function call.
  */
-CLOGX_API void log_writevprintf(log_level_t level, const char *file, int line, const char *func,
-                                const char *fmt, ...) CLOGX_PRINTF_FMT(5, 6);
+CLOGX_API void log_writevprintf(
+    log_level_t level, const char *file, int line, const char *func, const char *fmt, ...)
+    CLOGX_PRINTF_FMT(5, 6);
 
 /**
  * @brief Extract the basename portion of a file path.
@@ -647,15 +648,18 @@ CLOGX_API void log_writevprintf(log_level_t level, const char *file, int line, c
  *         into the input buffer and is valid only as long as the input string
  *         remains alive and unmodified.
  */
-static inline const char *clogx_filename_only(const char *path) {
+static inline const char *clogx_filename_only(const char *path)
+{
     const char *slash;
     const char *base = path ? path : "";
-    slash = strrchr(base, '/');
-    if (slash)
+    slash            = strrchr(base, '/');
+    if (slash) {
         base = slash + 1;
+    }
     slash = strrchr(base, '\\');
-    if (slash)
+    if (slash) {
         base = slash + 1;
+    }
     return base;
 }
 
@@ -940,8 +944,13 @@ CLOGX_API void logger_destroy(logger_t *logger);
  *       CLOGX_PRINTF_FMT attribute provides compile-time validation of variadic
  *       arguments against the format string when using GCC/Clang.
  */
-CLOGX_API void logger_writevprintf(logger_t *logger, log_level_t level, const char *file, int line,
-                                   const char *func, const char *fmt, ...) CLOGX_PRINTF_FMT(6, 7);
+CLOGX_API void logger_writevprintf(logger_t   *logger,
+                                   log_level_t level,
+                                   const char *file,
+                                   int         line,
+                                   const char *func,
+                                   const char *fmt,
+                                   ...) CLOGX_PRINTF_FMT(6, 7);
 /**
  * @brief Flush pending logs for this logger instance.
  *
@@ -1187,8 +1196,8 @@ CLOGX_API log_config_t *logger_config_get(const logger_t *logger);
  * @param[in] ... Format arguments as per LOG_TRACE.
  */
 #define LOGGER_TRACE(logger, ...)                                                                  \
-    logger_writevprintf((logger), LOG_LEVEL_TRACE, LOG_FILENAME_ONLY(), __LINE__, __func__,        \
-                        __VA_ARGS__)
+    logger_writevprintf(                                                                           \
+        (logger), LOG_LEVEL_TRACE, LOG_FILENAME_ONLY(), __LINE__, __func__, __VA_ARGS__)
 /**
  * @def LOGGER_DEBUG(logger, ...)
  * @brief Log a debug-level message on the given logger instance.
@@ -1200,8 +1209,8 @@ CLOGX_API log_config_t *logger_config_get(const logger_t *logger);
  * @param[in] ... Format arguments as per LOG_DEBUG.
  */
 #define LOGGER_DEBUG(logger, ...)                                                                  \
-    logger_writevprintf((logger), LOG_LEVEL_DEBUG, LOG_FILENAME_ONLY(), __LINE__, __func__,        \
-                        __VA_ARGS__)
+    logger_writevprintf(                                                                           \
+        (logger), LOG_LEVEL_DEBUG, LOG_FILENAME_ONLY(), __LINE__, __func__, __VA_ARGS__)
 /**
  * @def LOGGER_INFO(logger, ...)
  * @brief Log an informational message on the given logger instance.
@@ -1213,8 +1222,8 @@ CLOGX_API log_config_t *logger_config_get(const logger_t *logger);
  * @param[in] ... Format arguments as per LOG_INFO.
  */
 #define LOGGER_INFO(logger, ...)                                                                   \
-    logger_writevprintf((logger), LOG_LEVEL_INFO, LOG_FILENAME_ONLY(), __LINE__, __func__,         \
-                        __VA_ARGS__)
+    logger_writevprintf(                                                                           \
+        (logger), LOG_LEVEL_INFO, LOG_FILENAME_ONLY(), __LINE__, __func__, __VA_ARGS__)
 /**
  * @def LOGGER_WARN(logger, ...)
  * @brief Log a warning message on the given logger instance.
@@ -1226,8 +1235,8 @@ CLOGX_API log_config_t *logger_config_get(const logger_t *logger);
  * @param[in] ... Format arguments as per LOG_WARN.
  */
 #define LOGGER_WARN(logger, ...)                                                                   \
-    logger_writevprintf((logger), LOG_LEVEL_WARN, LOG_FILENAME_ONLY(), __LINE__, __func__,         \
-                        __VA_ARGS__)
+    logger_writevprintf(                                                                           \
+        (logger), LOG_LEVEL_WARN, LOG_FILENAME_ONLY(), __LINE__, __func__, __VA_ARGS__)
 /**
  * @def LOGGER_ERROR(logger, ...)
  * @brief Log an error message on the given logger instance.
@@ -1239,8 +1248,8 @@ CLOGX_API log_config_t *logger_config_get(const logger_t *logger);
  * @param[in] ... Format arguments as per LOG_ERROR.
  */
 #define LOGGER_ERROR(logger, ...)                                                                  \
-    logger_writevprintf((logger), LOG_LEVEL_ERROR, LOG_FILENAME_ONLY(), __LINE__, __func__,        \
-                        __VA_ARGS__)
+    logger_writevprintf(                                                                           \
+        (logger), LOG_LEVEL_ERROR, LOG_FILENAME_ONLY(), __LINE__, __func__, __VA_ARGS__)
 /**
  * @def LOGGER_FATAL(logger, ...)
  * @brief Log a fatal message on the given logger instance.
@@ -1252,8 +1261,8 @@ CLOGX_API log_config_t *logger_config_get(const logger_t *logger);
  * @param[in] ... Format arguments as per LOG_FATAL.
  */
 #define LOGGER_FATAL(logger, ...)                                                                  \
-    logger_writevprintf((logger), LOG_LEVEL_FATAL, LOG_FILENAME_ONLY(), __LINE__, __func__,        \
-                        __VA_ARGS__)
+    logger_writevprintf(                                                                           \
+        (logger), LOG_LEVEL_FATAL, LOG_FILENAME_ONLY(), __LINE__, __func__, __VA_ARGS__)
 /** @} */
 
 #endif /* LOG_H */

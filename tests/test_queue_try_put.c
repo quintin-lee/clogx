@@ -1,9 +1,10 @@
+#include "log_record.h"
+#include "queue.h"
 #include <stdio.h>
 #include <string.h>
-#include "queue.h"
-#include "log_record.h"
 
-int main(void) {
+int main(void)
+{
     mpsc_queue_t *q = mpsc_queue_create(1);
     if (!q) {
         fprintf(stderr, "create failed\n");

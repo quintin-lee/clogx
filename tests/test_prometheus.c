@@ -3,16 +3,17 @@
  * @brief Unit tests for Prometheus metrics renderer and HTTP exporter.
  */
 
-#include <assert.h>
-#include <stdio.h>
-#include <string.h>
 #include "clog_port.h"
 #include "log.h"
 #include "log_prometheus.h"
+#include <assert.h>
+#include <stdio.h>
+#include <string.h>
 
-static void test_prometheus_render(void) {
+static void test_prometheus_render(void)
+{
     char buf[2048];
-    int len = clog_prometheus_render_metrics(buf, sizeof(buf));
+    int  len = clog_prometheus_render_metrics(buf, sizeof(buf));
     assert(len > 0);
     assert(strstr(buf, "# HELP clogx_log_events_total") != NULL);
     assert(strstr(buf, "clogx_log_events_total{level=\"info\"}") != NULL);
@@ -21,9 +22,10 @@ static void test_prometheus_render(void) {
     printf("test_prometheus_render passed\n");
 }
 
-static void test_prometheus_exporter(void) {
+static void test_prometheus_exporter(void)
+{
     int port = 19090;
-    int ret = -1;
+    int ret  = -1;
     for (int p = 19090; p < 19100; p++) {
         ret = clog_prometheus_exporter_start(p);
         if (ret == CLOG_OK) {
@@ -43,9 +45,10 @@ static void test_prometheus_exporter(void) {
     printf("test_prometheus_exporter passed (port %d)\n", port);
 }
 
-static void test_prometheus_http_socket(void) {
+static void test_prometheus_http_socket(void)
+{
     int port = 19100;
-    int ret = -1;
+    int ret  = -1;
     for (int p = 19100; p < 19110; p++) {
         ret = clog_prometheus_exporter_start(p);
         if (ret == CLOG_OK) {
@@ -61,7 +64,7 @@ static void test_prometheus_http_socket(void) {
     struct sockaddr_in addr;
     memset(&addr, 0, sizeof(addr));
     addr.sin_family = AF_INET;
-    addr.sin_port = htons((uint16_t)port);
+    addr.sin_port   = htons((uint16_t)port);
     inet_pton(AF_INET, "127.0.0.1", &addr.sin_addr);
 
     ret = connect(fd, (struct sockaddr *)&addr, sizeof(addr));
@@ -70,13 +73,14 @@ static void test_prometheus_http_socket(void) {
     const char *req = "GET / HTTP/1.1\r\nHost: 127.0.0.1\r\nConnection: close\r\n\r\n";
     send(fd, req, strlen(req), 0);
 
-    char resp[4096];
-    size_t total = 0;
+    char    resp[4096];
+    size_t  total = 0;
     ssize_t n;
     while ((n = recv(fd, resp + total, sizeof(resp) - total - 1, 0)) > 0) {
         total += (size_t)n;
-        if (total >= sizeof(resp) - 1)
+        if (total >= sizeof(resp) - 1) {
             break;
+        }
     }
     resp[total] = '\0';
     clog_close_socket(fd);
@@ -89,7 +93,8 @@ static void test_prometheus_http_socket(void) {
     printf("test_prometheus_http_socket passed (port %d)\n", port);
 }
 
-int main(void) {
+int main(void)
+{
     test_prometheus_render();
     test_prometheus_exporter();
     test_prometheus_http_socket();

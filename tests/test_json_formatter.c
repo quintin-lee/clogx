@@ -1,16 +1,18 @@
+#include "log.h"
+#include "log_formatter.h"
 #include <stdio.h>
 #include <stdlib.h>
 #include <string.h>
-#include "log.h"
-#include "log_formatter.h"
 
 #define CONFIG_PATH "build/config_json_test.yaml"
 #define LOG_PATH "logs/json_test.log"
 
-static int write_config(void) {
+static int write_config(void)
+{
     FILE *f = fopen(CONFIG_PATH, "w");
-    if (!f)
+    if (!f) {
         return -1;
+    }
     fprintf(f,
             "log:\n"
             "  async: false\n"
@@ -25,7 +27,8 @@ static int write_config(void) {
     return 0;
 }
 
-int main(void) {
+int main(void)
+{
     remove(LOG_PATH);
     if (write_config() != 0 || log_init(CONFIG_PATH) != 0) {
         fprintf(stderr, "json test log_init failed\n");
@@ -43,7 +46,7 @@ int main(void) {
         return 1;
     }
 
-    char buf[2048];
+    char   buf[2048];
     size_t n = fread(buf, 1, sizeof(buf) - 1, f);
     fclose(f);
     buf[n] = '\0';

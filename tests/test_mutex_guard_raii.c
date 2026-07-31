@@ -6,20 +6,22 @@
  * it when the code block exits via any control flow path.
  */
 
+#include "clog_port.h"
 #include <stdio.h>
 #include <stdlib.h>
-#include "clog_port.h"
 
 static clog_mutex_t g_mutex = CLOG_MUTEX_INITIALIZER;
 
 /* Test 1: early return inside guard - macro must release on scope exit */
-static int test_guard_early_return(void) {
+static int test_guard_early_return(void)
+{
     CLOG_MUTEXGUARDED(&g_mutex, { return 42; });
     return -1; /* Should not reach */
 }
 
 /* Test 2: normal fall-through exit */
-static int test_guard_normal_exit(void) {
+static int test_guard_normal_exit(void)
+{
     int result = 0;
     CLOG_MUTEXGUARDED(&g_mutex, { result = 1; });
     /* Lock should be released here */
@@ -27,17 +29,20 @@ static int test_guard_normal_exit(void) {
 }
 
 /* Test 3: nested if-else with multiple exit paths */
-static int test_guard_multiple_exits(void) {
+static int test_guard_multiple_exits(void)
+{
     CLOG_MUTEXGUARDED(&g_mutex, {
-        if (1)
+        if (1) {
             return 10;
-        else
+        } else {
             return 20;
+        }
     });
     return -1;
 }
 
-int main(void) {
+int main(void)
+{
     printf("Testing CLOG_MUTEXGUARDED RAII macro...\n");
 
     if (clog_mutex_init(&g_mutex) != 0) {

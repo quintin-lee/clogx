@@ -38,25 +38,27 @@
  * Implements the `clogx_plugin_v1` ABI.
  */
 
+#include "clogx_plugin.h"
+#include "log_sink.h"
 #include <stdio.h>
 #include <stdlib.h>
 #include <string.h>
-#include "log_sink.h"
-#include "clogx_plugin.h"
 
 #ifndef _WIN32
 #include <syslog.h>
 
 typedef struct {
     char *ident;
-    int facility;
+    int   facility;
 } syslog_sink_data_t;
 
-static int syslog_write(log_sink_t *sink, const char *buf, size_t len) {
+static int syslog_write(log_sink_t *sink, const char *buf, size_t len)
+{
     (void)len;
     syslog_sink_data_t *data = (syslog_sink_data_t *)sink->private_data;
-    if (!data || !buf)
+    if (!data || !buf) {
         return -1;
+    }
 
     /* Parse priority from prefix if available, or default to LOG_INFO */
     int priority = LOG_INFO;
@@ -74,13 +76,16 @@ static int syslog_write(log_sink_t *sink, const char *buf, size_t len) {
     return (int)len;
 }
 
-static void syslog_flush(log_sink_t *sink) {
+static void syslog_flush(log_sink_t *sink)
+{
     (void)sink;
 }
 
-static void syslog_destroy(log_sink_t *sink) {
-    if (!sink)
+static void syslog_destroy(log_sink_t *sink)
+{
+    if (!sink) {
         return;
+    }
     syslog_sink_data_t *data = (syslog_sink_data_t *)sink->private_data;
     if (data) {
         closelog();
@@ -90,18 +95,22 @@ static void syslog_destroy(log_sink_t *sink) {
     free(sink);
 }
 
-static void syslog_atfork_child(log_sink_t *sink) {
-    if (!sink || !sink->private_data)
+static void syslog_atfork_child(log_sink_t *sink)
+{
+    if (!sink || !sink->private_data) {
         return;
+    }
     syslog_sink_data_t *data = (syslog_sink_data_t *)sink->private_data;
     closelog();
     openlog(data->ident, LOG_PID | LOG_NDELAY, data->facility);
 }
 
-log_sink_t *syslog_sink_create(const char *ident, int facility) {
+log_sink_t *syslog_sink_create(const char *ident, int facility)
+{
     log_sink_t *sink = malloc(sizeof(log_sink_t));
-    if (!sink)
+    if (!sink) {
         return NULL;
+    }
 
     syslog_sink_data_t *data = malloc(sizeof(syslog_sink_data_t));
     if (!data) {
@@ -109,25 +118,26 @@ log_sink_t *syslog_sink_create(const char *ident, int facility) {
         return NULL;
     }
 
-    data->ident = ident ? strdup(ident) : strdup("clogx");
+    data->ident    = ident ? strdup(ident) : strdup("clogx");
     data->facility = facility;
 
     openlog(data->ident, LOG_PID | LOG_NDELAY, data->facility);
 
-    sink->abi_version = CLOGX_PLUGIN_ABI_VERSION;
-    sink->write = syslog_write;
-    sink->flush = syslog_flush;
-    sink->destroy = syslog_destroy;
+    sink->abi_version  = CLOGX_PLUGIN_ABI_VERSION;
+    sink->write        = syslog_write;
+    sink->flush        = syslog_flush;
+    sink->destroy      = syslog_destroy;
     sink->atfork_child = syslog_atfork_child;
     sink->private_data = data;
-    sink->min_level = LOG_LEVEL_TRACE;
+    sink->min_level    = LOG_LEVEL_TRACE;
 
     return sink;
 }
 
 #else
 
-log_sink_t *syslog_sink_create(const char *ident, int facility) {
+log_sink_t *syslog_sink_create(const char *ident, int facility)
+{
     (void)ident;
     (void)facility;
     return NULL;

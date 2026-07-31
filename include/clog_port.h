@@ -8,8 +8,8 @@
 
 #include <stddef.h>
 #include <stdint.h>
-#include <stdlib.h>
 #include <stdio.h>
+#include <stdlib.h>
 #include <time.h>
 
 #if defined(_WIN32) || defined(_WIN64)
@@ -22,11 +22,11 @@
 #ifndef WIN32_LEAN_AND_MEAN
 #define WIN32_LEAN_AND_MEAN
 #endif
-#include <windows.h>
-#include <process.h>
-#include <io.h>
 #include <direct.h>
+#include <io.h>
+#include <process.h>
 #include <sys/stat.h>
+#include <windows.h>
 #include <winsock2.h>
 #include <ws2tcpip.h>
 
@@ -74,21 +74,24 @@ typedef struct _stat64 clog_stat_t;
 
 /* Sockets */
 typedef SOCKET clog_socket_t;
-typedef int clog_sock_size_t;
+typedef int    clog_sock_size_t;
 #define CLOG_INVALID_SOCKET INVALID_SOCKET
 #define clog_is_invalid_socket(s) ((s) == INVALID_SOCKET)
-static inline void clog_close_socket(clog_socket_t s) {
+static inline void clog_close_socket(clog_socket_t s)
+{
     if (s != INVALID_SOCKET) {
         shutdown(s, SD_BOTH);
         closesocket(s);
     }
 }
 
-static inline int clog_net_init(void) {
+static inline int clog_net_init(void)
+{
     WSADATA wsa_data;
     return WSAStartup(MAKEWORD(2, 2), &wsa_data);
 }
-static inline void clog_net_cleanup(void) {
+static inline void clog_net_cleanup(void)
+{
     WSACleanup();
 }
 
@@ -96,17 +99,21 @@ static inline void clog_net_cleanup(void) {
 typedef SRWLOCK clog_mutex_t;
 #define CLOG_MUTEX_INITIALIZER SRWLOCK_INIT
 
-static inline int clog_mutex_init(clog_mutex_t *m) {
+static inline int clog_mutex_init(clog_mutex_t *m)
+{
     InitializeSRWLock(m);
     return 0;
 }
-static inline void clog_mutex_destroy(clog_mutex_t *m) {
+static inline void clog_mutex_destroy(clog_mutex_t *m)
+{
     (void)m;
 }
-static inline void clog_mutex_lock(clog_mutex_t *m) {
+static inline void clog_mutex_lock(clog_mutex_t *m)
+{
     AcquireSRWLockExclusive(m);
 }
-static inline void clog_mutex_unlock(clog_mutex_t *m) {
+static inline void clog_mutex_unlock(clog_mutex_t *m)
+{
     ReleaseSRWLockExclusive(m);
 }
 
@@ -114,23 +121,29 @@ static inline void clog_mutex_unlock(clog_mutex_t *m) {
 typedef SRWLOCK clog_rwlock_t;
 #define CLOG_RWLOCK_INITIALIZER SRWLOCK_INIT
 
-static inline int clog_rwlock_init(clog_rwlock_t *rw) {
+static inline int clog_rwlock_init(clog_rwlock_t *rw)
+{
     InitializeSRWLock(rw);
     return 0;
 }
-static inline void clog_rwlock_destroy(clog_rwlock_t *rw) {
+static inline void clog_rwlock_destroy(clog_rwlock_t *rw)
+{
     (void)rw;
 }
-static inline void clog_rwlock_rdlock(clog_rwlock_t *rw) {
+static inline void clog_rwlock_rdlock(clog_rwlock_t *rw)
+{
     AcquireSRWLockShared(rw);
 }
-static inline void clog_rwlock_rdunlock(clog_rwlock_t *rw) {
+static inline void clog_rwlock_rdunlock(clog_rwlock_t *rw)
+{
     ReleaseSRWLockShared(rw);
 }
-static inline void clog_rwlock_wrlock(clog_rwlock_t *rw) {
+static inline void clog_rwlock_wrlock(clog_rwlock_t *rw)
+{
     AcquireSRWLockExclusive(rw);
 }
-static inline void clog_rwlock_wrunlock(clog_rwlock_t *rw) {
+static inline void clog_rwlock_wrunlock(clog_rwlock_t *rw)
+{
     ReleaseSRWLockExclusive(rw);
 }
 
@@ -138,20 +151,25 @@ static inline void clog_rwlock_wrunlock(clog_rwlock_t *rw) {
 typedef CONDITION_VARIABLE clog_cond_t;
 #define CLOG_COND_INITIALIZER CONDITION_VARIABLE_INIT
 
-static inline int clog_cond_init(clog_cond_t *c) {
+static inline int clog_cond_init(clog_cond_t *c)
+{
     InitializeConditionVariable(c);
     return 0;
 }
-static inline void clog_cond_destroy(clog_cond_t *c) {
+static inline void clog_cond_destroy(clog_cond_t *c)
+{
     (void)c;
 }
-static inline void clog_cond_wait(clog_cond_t *c, clog_mutex_t *m) {
+static inline void clog_cond_wait(clog_cond_t *c, clog_mutex_t *m)
+{
     SleepConditionVariableSRW(c, m, INFINITE, 0);
 }
-static inline void clog_cond_signal(clog_cond_t *c) {
+static inline void clog_cond_signal(clog_cond_t *c)
+{
     WakeConditionVariable(c);
 }
-static inline void clog_cond_broadcast(clog_cond_t *c) {
+static inline void clog_cond_broadcast(clog_cond_t *c)
+{
     WakeAllConditionVariable(c);
 }
 
@@ -163,22 +181,25 @@ typedef struct {
     void *arg;
 } clog_thread_arg_t;
 
-static inline DWORD WINAPI clog_thread_proc(LPVOID lpParam) {
+static inline DWORD WINAPI clog_thread_proc(LPVOID lpParam)
+{
     clog_thread_arg_t *targ = (clog_thread_arg_t *)lpParam;
-    void *(*func)(void *) = targ->func;
-    void *arg = targ->arg;
+    void *(*func)(void *)   = targ->func;
+    void *arg               = targ->arg;
     free(targ);
     func(arg);
     return 0;
 }
 
-static inline int clog_thread_create(clog_thread_t *t, void *(*func)(void *), void *arg) {
+static inline int clog_thread_create(clog_thread_t *t, void *(*func)(void *), void *arg)
+{
     clog_thread_arg_t *targ = (clog_thread_arg_t *)malloc(sizeof(clog_thread_arg_t));
-    if (!targ)
+    if (!targ) {
         return -1;
+    }
     targ->func = func;
-    targ->arg = arg;
-    *t = CreateThread(NULL, 0, clog_thread_proc, targ, 0, NULL);
+    targ->arg  = arg;
+    *t         = CreateThread(NULL, 0, clog_thread_proc, targ, 0, NULL);
     if (*t == NULL) {
         free(targ);
         return -1;
@@ -186,7 +207,8 @@ static inline int clog_thread_create(clog_thread_t *t, void *(*func)(void *), vo
     return 0;
 }
 
-static inline int clog_thread_join(clog_thread_t t) {
+static inline int clog_thread_join(clog_thread_t t)
+{
     if (t != NULL && t != INVALID_HANDLE_VALUE) {
         WaitForSingleObject(t, INFINITE);
         CloseHandle(t);
@@ -194,22 +216,24 @@ static inline int clog_thread_join(clog_thread_t t) {
     return 0;
 }
 
-static inline struct tm *clog_localtime_r(const time_t *timep, struct tm *result) {
+static inline struct tm *clog_localtime_r(const time_t *timep, struct tm *result)
+{
     return (localtime_s(result, timep) == 0) ? result : NULL;
 }
-static inline struct tm *clog_gmtime_r(const time_t *timep, struct tm *result) {
+static inline struct tm *clog_gmtime_r(const time_t *timep, struct tm *result)
+{
     return (gmtime_s(result, timep) == 0) ? result : NULL;
 }
 
 #else
 
-#include <unistd.h>
-#include <pthread.h>
-#include <sys/stat.h>
-#include <sys/socket.h>
-#include <netinet/in.h>
 #include <arpa/inet.h>
 #include <netdb.h>
+#include <netinet/in.h>
+#include <pthread.h>
+#include <sys/socket.h>
+#include <sys/stat.h>
+#include <unistd.h>
 
 typedef struct stat clog_stat_t;
 #define clog_fstat(fd, st) fstat((fd), (st))
@@ -221,86 +245,107 @@ typedef struct stat clog_stat_t;
 #define clog_unlink(path) unlink(path)
 #define clog_mkdir(path) mkdir((path), 0755)
 
-typedef int clog_socket_t;
-typedef size_t clog_sock_size_t;
+typedef int       clog_socket_t;
+typedef size_t    clog_sock_size_t;
 #define CLOG_INVALID_SOCKET (-1)
 #define clog_is_invalid_socket(s) ((s) < 0)
 #define clog_close_socket(s) close(s)
-static inline int clog_net_init(void) {
+static inline int clog_net_init(void)
+{
     return 0;
 }
-static inline void clog_net_cleanup(void) {
+static inline void clog_net_cleanup(void)
+{
 }
 
 typedef pthread_mutex_t clog_mutex_t;
 #define CLOG_MUTEX_INITIALIZER PTHREAD_MUTEX_INITIALIZER
 
-static inline int clog_mutex_init(clog_mutex_t *m) {
+static inline int clog_mutex_init(clog_mutex_t *m)
+{
     return pthread_mutex_init(m, NULL);
 }
-static inline void clog_mutex_destroy(clog_mutex_t *m) {
+static inline void clog_mutex_destroy(clog_mutex_t *m)
+{
     pthread_mutex_destroy(m);
 }
-static inline void clog_mutex_lock(clog_mutex_t *m) {
+static inline void clog_mutex_lock(clog_mutex_t *m)
+{
     pthread_mutex_lock(m);
 }
-static inline void clog_mutex_unlock(clog_mutex_t *m) {
+static inline void clog_mutex_unlock(clog_mutex_t *m)
+{
     pthread_mutex_unlock(m);
 }
 
 typedef pthread_rwlock_t clog_rwlock_t;
 #define CLOG_RWLOCK_INITIALIZER PTHREAD_RWLOCK_INITIALIZER
 
-static inline int clog_rwlock_init(clog_rwlock_t *rw) {
+static inline int clog_rwlock_init(clog_rwlock_t *rw)
+{
     return pthread_rwlock_init(rw, NULL);
 }
-static inline void clog_rwlock_destroy(clog_rwlock_t *rw) {
+static inline void clog_rwlock_destroy(clog_rwlock_t *rw)
+{
     pthread_rwlock_destroy(rw);
 }
-static inline void clog_rwlock_rdlock(clog_rwlock_t *rw) {
+static inline void clog_rwlock_rdlock(clog_rwlock_t *rw)
+{
     pthread_rwlock_rdlock(rw);
 }
-static inline void clog_rwlock_rdunlock(clog_rwlock_t *rw) {
+static inline void clog_rwlock_rdunlock(clog_rwlock_t *rw)
+{
     pthread_rwlock_unlock(rw);
 }
-static inline void clog_rwlock_wrlock(clog_rwlock_t *rw) {
+static inline void clog_rwlock_wrlock(clog_rwlock_t *rw)
+{
     pthread_rwlock_wrlock(rw);
 }
-static inline void clog_rwlock_wrunlock(clog_rwlock_t *rw) {
+static inline void clog_rwlock_wrunlock(clog_rwlock_t *rw)
+{
     pthread_rwlock_unlock(rw);
 }
 
 typedef pthread_cond_t clog_cond_t;
 #define CLOG_COND_INITIALIZER PTHREAD_COND_INITIALIZER
 
-static inline int clog_cond_init(clog_cond_t *c) {
+static inline int clog_cond_init(clog_cond_t *c)
+{
     return pthread_cond_init(c, NULL);
 }
-static inline void clog_cond_destroy(clog_cond_t *c) {
+static inline void clog_cond_destroy(clog_cond_t *c)
+{
     pthread_cond_destroy(c);
 }
-static inline void clog_cond_wait(clog_cond_t *c, clog_mutex_t *m) {
+static inline void clog_cond_wait(clog_cond_t *c, clog_mutex_t *m)
+{
     pthread_cond_wait(c, m);
 }
-static inline void clog_cond_signal(clog_cond_t *c) {
+static inline void clog_cond_signal(clog_cond_t *c)
+{
     pthread_cond_signal(c);
 }
-static inline void clog_cond_broadcast(clog_cond_t *c) {
+static inline void clog_cond_broadcast(clog_cond_t *c)
+{
     pthread_cond_broadcast(c);
 }
 
 typedef pthread_t clog_thread_t;
-static inline int clog_thread_create(clog_thread_t *t, void *(*func)(void *), void *arg) {
+static inline int clog_thread_create(clog_thread_t *t, void *(*func)(void *), void *arg)
+{
     return pthread_create(t, NULL, func, arg);
 }
-static inline int clog_thread_join(clog_thread_t t) {
+static inline int clog_thread_join(clog_thread_t t)
+{
     return pthread_join(t, NULL);
 }
 
-static inline struct tm *clog_localtime_r(const time_t *timep, struct tm *result) {
+static inline struct tm *clog_localtime_r(const time_t *timep, struct tm *result)
+{
     return localtime_r(timep, result);
 }
-static inline struct tm *clog_gmtime_r(const time_t *timep, struct tm *result) {
+static inline struct tm *clog_gmtime_r(const time_t *timep, struct tm *result)
+{
     return gmtime_r(timep, result);
 }
 
@@ -312,7 +357,8 @@ static inline struct tm *clog_gmtime_r(const time_t *timep, struct tm *result) {
 
 #if defined(__GNUC__) || defined(__clang__)
 
-static inline void clog_mutex_unlock_ptr(clog_mutex_t **m) {
+static inline void clog_mutex_unlock_ptr(clog_mutex_t **m)
+{
     if (*m) {
         clog_mutex_unlock(*m);
     }

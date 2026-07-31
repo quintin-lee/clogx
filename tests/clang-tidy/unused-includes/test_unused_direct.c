@@ -1,9 +1,10 @@
 // Test: Direct unused include - should produce warning for stdio.h
+#include "log.h"
 #include <stdio.h>
 #include <stdlib.h>
-#include "log.h"
 
-int main(void) {
+int main(void)
+{
     // NOT using stdio.h (no printf, fprintf, etc.)
 
     // Using stdlib.h

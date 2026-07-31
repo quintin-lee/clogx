@@ -1,16 +1,18 @@
+#include "clog_port.h"
+#include "log.h"
 #include <stdio.h>
 #include <stdlib.h>
 #include <string.h>
-#include "clog_port.h"
-#include "log.h"
 
 #define CONFIG_PATH "build/config_rate_limit_test.yaml"
 #define LOG_PATH "logs/rate_limit_test.log"
 
-static int write_config(void) {
+static int write_config(void)
+{
     FILE *f = fopen(CONFIG_PATH, "w");
-    if (!f)
+    if (!f) {
         return -1;
+    }
     fprintf(f,
             "log:\n"
             "  async: false\n"
@@ -28,11 +30,13 @@ static int write_config(void) {
     return 0;
 }
 
-static int count_lines(const char *path) {
+static int count_lines(const char *path)
+{
     FILE *f = fopen(path, "rb");
-    if (!f)
+    if (!f) {
         return 0;
-    int count = 0;
+    }
+    int  count = 0;
     char line[512];
     while (fgets(line, sizeof(line), f)) {
         count++;
@@ -41,7 +45,8 @@ static int count_lines(const char *path) {
     return count;
 }
 
-int main(void) {
+int main(void)
+{
     remove(LOG_PATH);
     if (write_config() != 0 || log_init(CONFIG_PATH) != 0) {
         fprintf(stderr, "rate limit test log_init failed\n");
@@ -74,7 +79,7 @@ int main(void) {
         return 1;
     }
 
-    char buf[4096];
+    char   buf[4096];
     size_t n = fread(buf, 1, sizeof(buf) - 1, f);
     fclose(f);
     buf[n] = '\0';

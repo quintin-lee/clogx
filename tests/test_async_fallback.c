@@ -1,16 +1,18 @@
-#include <stdio.h>
-#include <string.h>
 #include "clog_port.h"
 #include "log.h"
 #include "log_async.h"
+#include <stdio.h>
+#include <string.h>
 
 #define CONFIG_PATH "build/config_fallback_test.yaml"
 #define LOG_PATH "logs/fallback_test.log"
 
-static int write_config(void) {
+static int write_config(void)
+{
     FILE *f = fopen(CONFIG_PATH, "w");
-    if (!f)
+    if (!f) {
         return -1;
+    }
     fprintf(f,
             "log:\n"
             "  async: true\n"
@@ -30,11 +32,13 @@ static int write_config(void) {
 
 static int callback_invoked = 0;
 
-static void fallback_cb(void) {
+static void fallback_cb(void)
+{
     callback_invoked++;
 }
 
-int main(void) {
+int main(void)
+{
     remove(LOG_PATH);
     if (write_config() != 0 || log_init(CONFIG_PATH) != 0) {
         fprintf(stderr, "init failed\n");

@@ -1,9 +1,10 @@
-#include <stdio.h>
-#include <stdlib.h>
 #include "log.h"
 #include "log_sink.h"
+#include <stdio.h>
+#include <stdlib.h>
 
-int main(void) {
+int main(void)
+{
 #ifndef _WIN32
     if (log_init(NULL) != 0) {
         fprintf(stderr, "log_init failed\n");

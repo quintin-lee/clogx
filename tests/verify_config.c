@@ -1,30 +1,34 @@
-#include <stdio.h>
-#include <string.h>
 #include "clog_port.h"
 #include "log_config.h"
+#include <stdio.h>
+#include <string.h>
 
 #define CONFIG_PATH "build/config_verify_test.yaml"
 
-static int write_config(void) {
+static int write_config(void)
+{
     FILE *f = fopen(CONFIG_PATH, "w");
-    if (!f)
+    if (!f) {
         return -1;
-    fprintf(f, "log:\n"
-               "  async: false\n"
-               "  queue_size: 4096\n"
-               "  color: true\n"
-               "  format: '[%%time] [%%level] %%msg'\n"
-               "  console_enable: true\n"
-               "  file_enable: true\n"
-               "  file_path: logs/verify_config.log\n"
-               "  max_size: 50MB\n"
-               "  backups: 3\n"
-               "  socket_enable: false\n");
+    }
+    fprintf(f,
+            "log:\n"
+            "  async: false\n"
+            "  queue_size: 4096\n"
+            "  color: true\n"
+            "  format: '[%%time] [%%level] %%msg'\n"
+            "  console_enable: true\n"
+            "  file_enable: true\n"
+            "  file_path: logs/verify_config.log\n"
+            "  max_size: 50MB\n"
+            "  backups: 3\n"
+            "  socket_enable: false\n");
     fclose(f);
     return 0;
 }
 
-int main(void) {
+int main(void)
+{
     if (write_config() != 0) {
         fprintf(stderr, "failed to write config\n");
         return 1;
@@ -43,8 +47,14 @@ int main(void) {
         fprintf(stderr,
                 "config mismatch: level=%d async=%d color=%d console=%d file=%d "
                 "path='%s' max=%llu backups=%d queue=%d\n",
-                cfg->level, cfg->async, cfg->color, cfg->console_enable, cfg->file_enable,
-                cfg->file_path, (unsigned long long)cfg->file_max_size, cfg->file_backups,
+                cfg->level,
+                cfg->async,
+                cfg->color,
+                cfg->console_enable,
+                cfg->file_enable,
+                cfg->file_path,
+                (unsigned long long)cfg->file_max_size,
+                cfg->file_backups,
                 cfg->queue_size);
         return 1;
     }

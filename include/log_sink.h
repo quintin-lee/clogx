@@ -25,10 +25,10 @@
 #ifndef LOG_SINK_H
 #define LOG_SINK_H
 
+#include "log_record.h"
+#include <stdbool.h>
 #include <stddef.h>
 #include <stdint.h>
-#include <stdbool.h>
-#include "log_record.h"
 
 #ifndef CLOGX_API
 #if defined(__GNUC__) || defined(__clang__)
@@ -278,8 +278,8 @@ CLOGX_API log_sink_t *socket_sink_create(const char *host, int port);
  * Note Thread-safe: each sink has its own SSL_CTX/SSL object. Performance overhead
  *       of TLS handshake is incurred only on first connection or reconnect.
  */
-CLOGX_API log_sink_t *socket_sink_create_tls(const char *host, int port, bool use_tls,
-                                             const char *ca_file, bool skip_verify);
+CLOGX_API log_sink_t *socket_sink_create_tls(
+    const char *host, int port, bool use_tls, const char *ca_file, bool skip_verify);
 
 /**
  * @brief Create a custom user-defined sink plugin.
@@ -302,10 +302,11 @@ CLOGX_API log_sink_t *socket_sink_create_tls(const char *host, int port, bool us
  *       responsible for freeing it if necessary. This sink can be added via
  *       log_add_sink or logger_add_sink just like built-in sinks.
  */
-CLOGX_API log_sink_t *custom_sink_create(int (*write_fn)(log_sink_t *sink, const char *buf,
-                                                         size_t len),
-                                         void (*flush_fn)(log_sink_t *sink),
-                                         void (*destroy_fn)(log_sink_t *sink), void *private_data);
+CLOGX_API log_sink_t *
+custom_sink_create(int (*write_fn)(log_sink_t *sink, const char *buf, size_t len),
+                   void (*flush_fn)(log_sink_t *sink),
+                   void (*destroy_fn)(log_sink_t *sink),
+                   void *private_data);
 
 /**
  * @brief Retrieve the implementation-private pointer of a custom sink.
@@ -381,9 +382,11 @@ CLOGX_API log_sink_t *otlp_sink_create(const char *endpoint, const char *service
  * Note Directly modifies the @c min_level field of the log_sink struct.
  *       Thread-safe: the dispatcher checks min_level under lock when iterating sinks.
  */
-static inline void log_sink_set_level(log_sink_t *sink, log_level_t level) {
-    if (sink)
+static inline void log_sink_set_level(log_sink_t *sink, log_level_t level)
+{
+    if (sink) {
         sink->min_level = level;
+    }
 }
 
 /**
@@ -398,7 +401,8 @@ static inline void log_sink_set_level(log_sink_t *sink, log_level_t level) {
  *
  * Note Inline accessor for fast read. Matches the policy of log_sink_set_level.
  */
-static inline log_level_t log_sink_get_level(const log_sink_t *sink) {
+static inline log_level_t log_sink_get_level(const log_sink_t *sink)
+{
     return sink ? sink->min_level : LOG_LEVEL_TRACE;
 }
 

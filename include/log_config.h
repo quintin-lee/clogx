@@ -14,10 +14,10 @@
 #ifndef LOG_CONFIG_H
 #define LOG_CONFIG_H
 
+#include "log_limits.h"
+#include "log_record.h"
 #include <stdbool.h>
 #include <stdint.h>
-#include "log_record.h"
-#include "log_limits.h"
 
 /* Reuse CLOGX_API from log.h if already included, otherwise define it. */
 #ifndef CLOGX_API
@@ -77,38 +77,38 @@ typedef enum {
  *     initialization/modification—changes require a full reload.
  */
 typedef struct {
-    log_level_t level; /**< Minimum level that will be emitted (TRACE..FATAL). */
-    bool async;        /**< Enable background worker + queue (true/false). */
-    int queue_size;    /**< Async queue capacity (number of records to buffer). Must be > 0 if
-                          async=true. */
-    bool color;        /**< Enable ANSI color codes for console sink output. */
+    log_level_t level;       /**< Minimum level that will be emitted (TRACE..FATAL). */
+    bool        async;       /**< Enable background worker + queue (true/false). */
+    int         queue_size;  /**< Async queue capacity (number of records to buffer). Must be > 0 if
+                                async=true. */
+    bool              color; /**< Enable ANSI color codes for console sink output. */
     log_format_type_t format_type; /**< Output format mode (TEXT or JSON/OTEL). */
-    const char *format;      /**< Format string template (points at internal storage). Ignored if
-                                format_type != TEXT. */
+    const char       *format; /**< Format string template (points at internal storage). Ignored if
+                                 format_type != TEXT. */
     const char *time_format; /**< strftime template for %time token (points at internal storage). */
-    int console_enable;      /**< Non-zero to enable stdout/stderr sink. 0 disables. */
-    int console_stderr;      /**< Non-zero to use stderr instead of stdout for console output. */
-    int file_enable;         /**< Non-zero to enable file sink with rotation. */
-    char file_path[CLOG_MAX_PATH_SIZE]; /**< Destination log file path (null-terminated). */
-    uint64_t file_max_size;             /**< Rotation threshold in bytes (0 = disable rotation). */
-    int file_backups;                   /**< Number of numbered backups to keep (.1 .. .N). */
-    int socket_enable;                  /**< Non-zero to enable TCP socket sink. */
+    int         console_enable; /**< Non-zero to enable stdout/stderr sink. 0 disables. */
+    int         console_stderr; /**< Non-zero to use stderr instead of stdout for console output. */
+    int         file_enable;    /**< Non-zero to enable file sink with rotation. */
+    char        file_path[CLOG_MAX_PATH_SIZE]; /**< Destination log file path (null-terminated). */
+    uint64_t    file_max_size; /**< Rotation threshold in bytes (0 = disable rotation). */
+    int         file_backups;  /**< Number of numbered backups to keep (.1 .. .N). */
+    int         socket_enable; /**< Non-zero to enable TCP socket sink. */
     char socket_host[CLOG_MAX_PATH_SIZE]; /**< Socket peer IPv4 address (e.g., "127.0.0.1"). */
-    int socket_port;                      /**< Socket peer port in host byte order (1..65535). */
+    int  socket_port;                     /**< Socket peer port in host byte order (1..65535). */
     bool socket_tls; /**< Enable TLS encryption for socket sink (requires OpenSSL). */
     char socket_tls_ca_file[CLOG_MAX_PATH_SIZE]; /**< Path to CA certificate file for TLS
                                                     verification. */
     bool socket_tls_skip_verify; /**< Skip server certificate verification (insecure, for testing
                                     only). */
     bool rate_limit_enable;      /**< Enable global token bucket rate limiting. */
-    int rate_limit_max_per_sec;  /**< Maximum allowed log events per second. */
-    int rate_limit_burst;        /**< Maximum burst capacity for the token bucket. */
+    int  rate_limit_max_per_sec; /**< Maximum allowed log events per second. */
+    int  rate_limit_burst;       /**< Maximum burst capacity for the token bucket. */
     bool catch_signals;          /**< Catch SIGTERM/SIGINT for graceful shutdown via self-pipe. */
 
     /* ---- Prometheus /metrics endpoint ---- */
 
     bool prometheus_enable; /**< Enable Prometheus HTTP /metrics endpoint. */
-    int prometheus_port;    /**< Listen port for metrics HTTP server (0 = disable). */
+    int  prometheus_port;   /**< Listen port for metrics HTTP server (0 = disable). */
 
     /* ---- Plugin sink configuration (loaded from YAML "plugins:" section) ---- */
 
@@ -295,7 +295,8 @@ CLOGX_API bool log_config_color_enabled(void);
  * Note: Always evaluates @p level exactly once. Inlined at call site for
  *       zero runtime cost. Uses @ref log_get_level internally (thread-safe).
  */
-static inline int log_should_emit(log_level_t level) {
+static inline int log_should_emit(log_level_t level)
+{
     return level >= log_get_level();
 }
 

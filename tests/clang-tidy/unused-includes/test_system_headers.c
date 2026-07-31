@@ -1,12 +1,13 @@
 // Test: System headers behavior with IgnoreSystemHeaders option
 // When IgnoreSystemHeaders=true, system headers should not produce warnings
 // When IgnoreSystemHeaders=false (default), system headers should produce warnings
+#include "log.h"    // Used - no warning
 #include <stdio.h>  // Should warn if IgnoreSystemHeaders=false
 #include <stdlib.h> // Used - no warning
 #include <string.h> // Should warn if IgnoreSystemHeaders=false
-#include "log.h"    // Used - no warning
 
-int main(void) {
+int main(void)
+{
     // Using stdlib.h
     int *p = malloc(sizeof(int));
     free(p);

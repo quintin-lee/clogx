@@ -3,22 +3,24 @@
  * @brief Edge-case tests for async atfork and error paths.
  */
 
-#include <stdio.h>
-#include <stdlib.h>
-#include <string.h>
-#include <assert.h>
 #include "clog_port.h"
-#include <sys/wait.h>
 #include "log.h"
 #include "log_async.h"
 #include "log_internal.h"
+#include <assert.h>
+#include <stdio.h>
+#include <stdlib.h>
+#include <string.h>
+#include <sys/wait.h>
 
-static void test_async_atfork_child_null_logger(void) {
+static void test_async_atfork_child_null_logger(void)
+{
     log_async_atfork_child_for(NULL);
     printf("test_async_atfork_child_null_logger passed\n");
 }
 
-static void test_async_atfork_child_not_running(void) {
+static void test_async_atfork_child_not_running(void)
+{
     logger_t logger;
     memset(&logger, 0, sizeof(logger));
     logger.async_running = 0;
@@ -27,7 +29,8 @@ static void test_async_atfork_child_not_running(void) {
     printf("test_async_atfork_child_not_running passed\n");
 }
 
-static void test_async_atfork_child_null_queue(void) {
+static void test_async_atfork_child_null_queue(void)
+{
     logger_t logger;
     memset(&logger, 0, sizeof(logger));
     logger.async_running = 1;
@@ -36,7 +39,8 @@ static void test_async_atfork_child_null_queue(void) {
     printf("test_async_atfork_child_null_queue passed\n");
 }
 
-int main(void) {
+int main(void)
+{
     test_async_atfork_child_null_logger();
     test_async_atfork_child_not_running();
     test_async_atfork_child_null_queue();

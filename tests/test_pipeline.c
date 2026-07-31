@@ -2,18 +2,20 @@
  * @file test_pipeline.c
  * @brief End-to-end logging pipeline test: init → write → file output.
  */
-#include <stdio.h>
-#include <string.h>
 #include "clog_port.h"
 #include "log.h"
+#include <stdio.h>
+#include <string.h>
 
 #define CONFIG_PATH "build/config_pipeline_test.yaml"
 #define LOG_PATH "logs/pipeline_test.log"
 
-static int write_config(void) {
+static int write_config(void)
+{
     FILE *f = fopen(CONFIG_PATH, "w");
-    if (!f)
+    if (!f) {
         return -1;
+    }
     fprintf(f,
             "log:\n"
             "  async: false\n"
@@ -30,7 +32,8 @@ static int write_config(void) {
     return 0;
 }
 
-int main(void) {
+int main(void)
+{
     remove(LOG_PATH);
     if (write_config() != 0) {
         fprintf(stderr, "failed to write config\n");
@@ -54,7 +57,7 @@ int main(void) {
         return 1;
     }
 
-    char buf[4096];
+    char   buf[4096];
     size_t n = fread(buf, 1, sizeof(buf) - 1, f);
     fclose(f);
     buf[n] = '\0';

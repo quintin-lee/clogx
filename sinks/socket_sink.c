@@ -39,37 +39,39 @@
  *
  * Implements the `clogx_plugin_v1` ABI.
  */
+#include "clog_port.h"
+#include "clogx_plugin.h"
+#include "log_record.h"
+#include "log_sink.h"
 #include <stdio.h>
 #include <stdlib.h>
 #include <string.h>
-#include "clog_port.h"
-#include "log_sink.h"
-#include "log_record.h"
-#include "clogx_plugin.h"
 
 #ifdef CLOG_USE_TLS
-#include <openssl/ssl.h>
 #include <openssl/err.h>
+#include <openssl/ssl.h>
 #endif
 
 typedef struct {
     clog_socket_t sockfd;
-    const char *host;
-    int port;
-    int connected;
-    bool use_tls;
-    char *ca_file;
-    bool skip_verify;
+    const char   *host;
+    int           port;
+    int           connected;
+    bool          use_tls;
+    char         *ca_file;
+    bool          skip_verify;
 #ifdef CLOG_USE_TLS
     SSL_CTX *ssl_ctx;
-    SSL *ssl;
+    SSL     *ssl;
 #endif
 } socket_sink_data_t;
 
-static int socket_connect(log_sink_t *sink) {
+static int socket_connect(log_sink_t *sink)
+{
     socket_sink_data_t *data = (socket_sink_data_t *)sink->private_data;
-    if (data->connected)
+    if (data->connected) {
         return 0;
+    }
 
     clog_net_init();
 
@@ -81,7 +83,7 @@ static int socket_connect(log_sink_t *sink) {
     struct sockaddr_in serv_addr;
     memset(&serv_addr, 0, sizeof(serv_addr));
     serv_addr.sin_family = AF_INET;
-    serv_addr.sin_port = htons((uint16_t)data->port);
+    serv_addr.sin_port   = htons((uint16_t)data->port);
     if (inet_pton(AF_INET, data->host, &serv_addr.sin_addr) <= 0) {
         fprintf(stderr, "Invalid socket host: %s\n", data->host);
         clog_close_socket(data->sockfd);
@@ -91,7 +93,7 @@ static int socket_connect(log_sink_t *sink) {
     if (connect(data->sockfd, (struct sockaddr *)&serv_addr, sizeof(serv_addr)) < 0) {
         perror("Failed to connect to socket server");
         clog_close_socket(data->sockfd);
-        data->sockfd = CLOG_INVALID_SOCKET;
+        data->sockfd    = CLOG_INVALID_SOCKET;
         data->connected = 0;
         return -1;
     }
@@ -99,7 +101,7 @@ static int socket_connect(log_sink_t *sink) {
     if (data->use_tls) {
 #ifdef CLOG_USE_TLS
         const SSL_METHOD *method = TLS_method();
-        data->ssl_ctx = SSL_CTX_new(method);
+        data->ssl_ctx            = SSL_CTX_new(method);
         if (!data->ssl_ctx) {
             fprintf(stderr, "SSL_CTX_new failed\n");
             clog_close_socket(data->sockfd);
@@ -155,11 +157,13 @@ static int socket_connect(log_sink_t *sink) {
     return 0;
 }
 
-static int socket_write(log_sink_t *sink, const char *buf, size_t len) {
+static int socket_write(log_sink_t *sink, const char *buf, size_t len)
+{
     socket_sink_data_t *data = (socket_sink_data_t *)sink->private_data;
     if (clog_is_invalid_socket(data->sockfd)) {
-        if (socket_connect(sink) != 0 || clog_is_invalid_socket(data->sockfd))
+        if (socket_connect(sink) != 0 || clog_is_invalid_socket(data->sockfd)) {
             return -1;
+        }
     }
 
     size_t total_sent = 0;
@@ -198,11 +202,13 @@ static int socket_write(log_sink_t *sink, const char *buf, size_t len) {
     return (int)total_sent;
 }
 
-static void socket_flush(log_sink_t *sink) {
+static void socket_flush(log_sink_t *sink)
+{
     (void)sink;
 }
 
-static void socket_destroy(log_sink_t *sink) {
+static void socket_destroy(log_sink_t *sink)
+{
     socket_sink_data_t *data = (socket_sink_data_t *)sink->private_data;
     if (data) {
 #ifdef CLOG_USE_TLS
@@ -224,9 +230,11 @@ static void socket_destroy(log_sink_t *sink) {
     free(sink);
 }
 
-static void socket_atfork_child(log_sink_t *sink) {
-    if (!sink || !sink->private_data)
+static void socket_atfork_child(log_sink_t *sink)
+{
+    if (!sink || !sink->private_data) {
         return;
+    }
     socket_sink_data_t *data = (socket_sink_data_t *)sink->private_data;
 #ifdef CLOG_USE_TLS
     if (data->ssl) {
@@ -245,14 +253,17 @@ static void socket_atfork_child(log_sink_t *sink) {
     data->connected = 0;
 }
 
-log_sink_t *socket_sink_create_tls(const char *host, int port, bool use_tls, const char *ca_file,
-                                   bool skip_verify) {
-    if (!host || strlen(host) == 0 || port <= 0 || port > 65535)
+log_sink_t *socket_sink_create_tls(
+    const char *host, int port, bool use_tls, const char *ca_file, bool skip_verify)
+{
+    if (!host || strlen(host) == 0 || port <= 0 || port > 65535) {
         return NULL;
+    }
     /* LCOV_EXCL_START - System allocation failure */
     log_sink_t *sink = malloc(sizeof(log_sink_t));
-    if (!sink)
+    if (!sink) {
         return NULL;
+    }
     socket_sink_data_t *data = malloc(sizeof(socket_sink_data_t));
     if (!data) {
         free(sink);
@@ -265,27 +276,28 @@ log_sink_t *socket_sink_create_tls(const char *host, int port, bool use_tls, con
         return NULL;
     }
     /* LCOV_EXCL_STOP */
-    data->port = port;
-    data->sockfd = CLOG_INVALID_SOCKET;
-    data->connected = 0;
-    data->use_tls = use_tls;
-    data->ca_file = ca_file ? strdup(ca_file) : NULL;
+    data->port        = port;
+    data->sockfd      = CLOG_INVALID_SOCKET;
+    data->connected   = 0;
+    data->use_tls     = use_tls;
+    data->ca_file     = ca_file ? strdup(ca_file) : NULL;
     data->skip_verify = skip_verify;
 #ifdef CLOG_USE_TLS
     data->ssl_ctx = NULL;
-    data->ssl = NULL;
+    data->ssl     = NULL;
 #endif
 
-    sink->abi_version = CLOGX_PLUGIN_ABI_VERSION;
-    sink->write = socket_write;
-    sink->flush = socket_flush;
-    sink->destroy = socket_destroy;
+    sink->abi_version  = CLOGX_PLUGIN_ABI_VERSION;
+    sink->write        = socket_write;
+    sink->flush        = socket_flush;
+    sink->destroy      = socket_destroy;
     sink->atfork_child = socket_atfork_child;
     sink->private_data = data;
-    sink->min_level = LOG_LEVEL_TRACE;
+    sink->min_level    = LOG_LEVEL_TRACE;
     return sink;
 }
 
-log_sink_t *socket_sink_create(const char *host, int port) {
+log_sink_t *socket_sink_create(const char *host, int port)
+{
     return socket_sink_create_tls(host, port, false, NULL, false);
 }

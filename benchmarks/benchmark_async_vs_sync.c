@@ -3,17 +3,18 @@
 #include <string.h>
 #include <time.h>
 
-static void bench_mode(const char *label, bool is_async) {
+static void bench_mode(const char *label, bool is_async)
+{
     if (log_init("benchmarks/bench_config.yaml") != CLOG_OK) {
         fprintf(stderr, "Failed to initialize benchmark config\n");
         return;
     }
     log_config_t *cfg = log_config_get();
-    cfg->async = is_async;
-    cfg->queue_size = is_async ? 8192 : 0;
+    cfg->async        = is_async;
+    cfg->queue_size   = is_async ? 8192 : 0;
     log_config_set(cfg);
 
-    const int N = 200000;
+    const int       N = 200000;
     struct timespec ts_start, ts_end;
     clock_gettime(CLOCK_MONOTONIC, &ts_start);
 
@@ -31,7 +32,8 @@ static void bench_mode(const char *label, bool is_async) {
     log_destroy();
 }
 
-int main(void) {
+int main(void)
+{
     printf("=== clogx benchmark: async vs sync ===\n");
     bench_mode("sync", false);
     bench_mode("async", true);

@@ -1,28 +1,32 @@
-#include <stdio.h>
-#include <string.h>
 #include "clog_port.h"
 #include "log.h"
 #include "log_sink.h"
+#include <stdio.h>
+#include <string.h>
 
 #define CONFIG_PATH "build/config_console_stderr_test.yaml"
 
-static int write_config(void) {
+static int write_config(void)
+{
     FILE *f = fopen(CONFIG_PATH, "w");
-    if (!f)
+    if (!f) {
         return -1;
-    fprintf(f, "log:\n"
-               "  async: false\n"
-               "  color: false\n"
-               "  format: '%%msg'\n"
-               "  console_enable: true\n"
-               "  console_stderr: true\n"
-               "  file_enable: false\n"
-               "  socket_enable: false\n");
+    }
+    fprintf(f,
+            "log:\n"
+            "  async: false\n"
+            "  color: false\n"
+            "  format: '%%msg'\n"
+            "  console_enable: true\n"
+            "  console_stderr: true\n"
+            "  file_enable: false\n"
+            "  socket_enable: false\n");
     fclose(f);
     return 0;
 }
 
-int main(void) {
+int main(void)
+{
     if (write_config() != 0 || log_init(CONFIG_PATH) != 0) {
         fprintf(stderr, "init failed\n");
         return 1;

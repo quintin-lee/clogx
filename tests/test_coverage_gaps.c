@@ -18,12 +18,14 @@
 #include "log_sink.h"
 #include "rotate.h"
 
-static int g_fb_count;
-static void inc_fallback(void) {
+static int  g_fb_count;
+static void inc_fallback(void)
+{
     g_fb_count++;
 }
 
-static void write_file(const char *path, const char *content) {
+static void write_file(const char *path, const char *content)
+{
     FILE *f = fopen(path, "w");
     if (f) {
         fputs(content, f);
@@ -33,30 +35,36 @@ static void write_file(const char *path, const char *content) {
 
 /* Small test sink for coverage tests. */
 static int s_sink_write_count;
-static int test_sink_write(log_sink_t *sink, const char *buf, size_t len) {
+static int test_sink_write(log_sink_t *sink, const char *buf, size_t len)
+{
     (void)sink;
     (void)buf;
     s_sink_write_count++;
     return (int)len;
 }
-static void test_sink_flush(log_sink_t *sink) {
+static void test_sink_flush(log_sink_t *sink)
+{
     (void)sink;
 }
-static void test_sink_destroy(log_sink_t *sink) {
+static void test_sink_destroy(log_sink_t *sink)
+{
     (void)sink;
 }
-static log_sink_t *make_test_sink(void) {
+static log_sink_t *make_test_sink(void)
+{
     log_sink_t *sink = (log_sink_t *)calloc(1, sizeof(log_sink_t));
-    if (!sink)
+    if (!sink) {
         exit(1);
-    sink->write = test_sink_write;
-    sink->flush = test_sink_flush;
+    }
+    sink->write   = test_sink_write;
+    sink->flush   = test_sink_flush;
     sink->destroy = test_sink_destroy;
     return sink;
 }
 
 /* ── T1: log_strerror for missing error codes ── */
-static void test_strerror_missing_codes(void) {
+static void test_strerror_missing_codes(void)
+{
     const char *s;
     s = log_strerror(CLOG_ERR_CONFIG_OPEN);
     if (!s || strcmp(s, "unknown error") == 0) {
@@ -82,7 +90,8 @@ static void test_strerror_missing_codes(void) {
 }
 
 /* ── T2: log_get_async_fallback_cb (set then get) ── */
-static void test_get_async_fallback_cb(void) {
+static void test_get_async_fallback_cb(void)
+{
     log_set_async_fallback_cb(inc_fallback);
     void (*got)(void) = log_get_async_fallback_cb();
     if (got != inc_fallback) {
@@ -94,7 +103,8 @@ static void test_get_async_fallback_cb(void) {
 }
 
 /* ── T3: logger_init_internal line 142 — bad YAML → CLOG_ERR_CONFIG_OPEN ── */
-static void test_init_config_parse_fail(void) {
+static void test_init_config_parse_fail(void)
+{
     int ret = log_init("tests/config/coverage_bad.yaml");
     if (ret != CLOG_ERR_CONFIG_OPEN) {
         fprintf(stderr, "FAIL: expected CONFIG_OPEN, got %d\n", ret);
@@ -104,7 +114,8 @@ static void test_init_config_parse_fail(void) {
 }
 
 /* ── T4: logger_init_internal line 148 — no sinks → CLOG_ERR_NO_SINKS ── */
-static void test_init_no_sinks(void) {
+static void test_init_no_sinks(void)
+{
     int ret = log_init("tests/config/coverage_no_sinks.yaml");
     if (ret != CLOG_ERR_NO_SINKS) {
         fprintf(stderr, "FAIL: expected NO_SINKS, got %d\n", ret);
@@ -114,11 +125,12 @@ static void test_init_no_sinks(void) {
 }
 
 /* ── T5: logger_writevprintf_internal lines 241-245 — async fallback ── */
-static void test_async_write_fallback(void) {
-    log_config_t cfg = {0};
-    cfg.level = LOG_LEVEL_TRACE;
-    cfg.async = true;
-    cfg.queue_size = 64;
+static void test_async_write_fallback(void)
+{
+    log_config_t cfg   = {0};
+    cfg.level          = LOG_LEVEL_TRACE;
+    cfg.async          = true;
+    cfg.queue_size     = 64;
     cfg.console_enable = true;
     cfg.console_stderr = true;
 
@@ -145,7 +157,8 @@ static void test_async_write_fallback(void) {
 }
 
 /* ── T6: log_set_thread_context line 298 — update existing key ── */
-static void test_set_thread_context_update(void) {
+static void test_set_thread_context_update(void)
+{
     log_set_thread_context("t6key", "first");
     log_set_thread_context("t6key", "second");
     const char *v = log_get_thread_context("t6key");
@@ -159,19 +172,21 @@ static void test_set_thread_context_update(void) {
 
 #ifndef _WIN32
 /* ── T7: logger_writevprintf_internal line 173-174 — signal in write path ── */
-static void test_signal_processing_in_write(void) {
+static void test_signal_processing_in_write(void)
+{
     log_restore_signal_handlers();
     struct sigaction sa_ign, old_sa;
     memset(&sa_ign, 0, sizeof(sa_ign));
     sa_ign.sa_handler = SIG_IGN;
     sigaction(SIGTERM, &sa_ign, &old_sa);
 
-    write_file("build/gap_signal.yaml", "log:\n"
-                                        "  level: TRACE\n"
-                                        "  async: false\n"
-                                        "  console_enable: true\n"
-                                        "  console_stderr: true\n"
-                                        "  catch_signals: true\n");
+    write_file("build/gap_signal.yaml",
+               "log:\n"
+               "  level: TRACE\n"
+               "  async: false\n"
+               "  console_enable: true\n"
+               "  console_stderr: true\n"
+               "  catch_signals: true\n");
 
     if (log_init("build/gap_signal.yaml") != 0) {
         fprintf(stderr, "FAIL: log_init for T7\n");
@@ -189,7 +204,8 @@ static void test_signal_processing_in_write(void) {
 #endif
 
 /* ── T8: logger_reload (lines 555-581) ── */
-static void test_logger_reload(void) {
+static void test_logger_reload(void)
+{
     int ret;
 
     ret = logger_reload(NULL);
@@ -214,11 +230,12 @@ static void test_logger_reload(void) {
     logger_destroy(logger);
 
     /* Also exercise the default-logger reload path. */
-    write_file("build/gap_reload.yaml", "log:\n"
-                                        "  level: TRACE\n"
-                                        "  async: false\n"
-                                        "  console_enable: true\n"
-                                        "  console_stderr: true\n");
+    write_file("build/gap_reload.yaml",
+               "log:\n"
+               "  level: TRACE\n"
+               "  async: false\n"
+               "  console_enable: true\n"
+               "  console_stderr: true\n");
 
     if (log_init("build/gap_reload.yaml") != 0) {
         fprintf(stderr, "FAIL: log_init for T8\n");
@@ -235,14 +252,15 @@ static void test_logger_reload(void) {
 }
 
 /* ── T9: logger_create_from_config format/time_format (lines 489-495) ── */
-static void test_logger_create_from_config_format(void) {
-    log_config_t cfg = {0};
-    cfg.level = LOG_LEVEL_TRACE;
-    cfg.async = false;
+static void test_logger_create_from_config_format(void)
+{
+    log_config_t cfg   = {0};
+    cfg.level          = LOG_LEVEL_TRACE;
+    cfg.async          = false;
     cfg.console_enable = true;
     cfg.console_stderr = true;
-    cfg.format = "[%level] %msg";
-    cfg.time_format = "%H:%M:%S";
+    cfg.format         = "[%level] %msg";
+    cfg.time_format    = "%H:%M:%S";
 
     logger_t *logger = logger_create_from_config(&cfg);
     if (!logger) {
@@ -255,11 +273,12 @@ static void test_logger_create_from_config_format(void) {
 }
 
 /* ── T10: async init already running → return 0 (async.c L106) ── */
-static void test_async_init_already_running(void) {
-    log_config_t cfg = {0};
-    cfg.level = LOG_LEVEL_TRACE;
-    cfg.async = true;
-    cfg.queue_size = 64;
+static void test_async_init_already_running(void)
+{
+    log_config_t cfg   = {0};
+    cfg.level          = LOG_LEVEL_TRACE;
+    cfg.async          = true;
+    cfg.queue_size     = 64;
     cfg.console_enable = true;
     cfg.console_stderr = true;
 
@@ -279,11 +298,12 @@ static void test_async_init_already_running(void) {
 }
 
 /* ── T11: queue full in async write (async.c L154-157) ── */
-static void test_async_queue_full_write(void) {
-    log_config_t cfg = {0};
-    cfg.level = LOG_LEVEL_TRACE;
-    cfg.async = true;
-    cfg.queue_size = 1;
+static void test_async_queue_full_write(void)
+{
+    log_config_t cfg   = {0};
+    cfg.level          = LOG_LEVEL_TRACE;
+    cfg.async          = true;
+    cfg.queue_size     = 1;
     cfg.console_enable = true;
     cfg.console_stderr = true;
 
@@ -309,11 +329,12 @@ static void test_async_queue_full_write(void) {
 }
 
 /* ── T12: queue depth with active queue (async.c L165-168) ── */
-static void test_async_queue_depth_active(void) {
-    log_config_t cfg = {0};
-    cfg.level = LOG_LEVEL_TRACE;
-    cfg.async = true;
-    cfg.queue_size = 64;
+static void test_async_queue_depth_active(void)
+{
+    log_config_t cfg   = {0};
+    cfg.level          = LOG_LEVEL_TRACE;
+    cfg.async          = true;
+    cfg.queue_size     = 64;
     cfg.console_enable = true;
     cfg.console_stderr = true;
 
@@ -338,15 +359,16 @@ static void test_async_queue_depth_active(void) {
 }
 
 /* ── T13: logger_flush error paths (log.c L547-552) ── */
-static void test_logger_flush_paths(void) {
+static void test_logger_flush_paths(void)
+{
     /* NULL logger — no-op. */
     logger_flush(NULL);
 
     /* Instance with async=true. */
-    log_config_t cfg = {0};
-    cfg.level = LOG_LEVEL_TRACE;
-    cfg.async = true;
-    cfg.queue_size = 4;
+    log_config_t cfg   = {0};
+    cfg.level          = LOG_LEVEL_TRACE;
+    cfg.async          = true;
+    cfg.queue_size     = 4;
     cfg.console_enable = true;
     cfg.console_stderr = true;
 
@@ -363,8 +385,9 @@ static void test_logger_flush_paths(void) {
 }
 
 /* ── T14: logger_add_sink / remove_sink error paths (log.c L584-594) ── */
-static void test_logger_sink_error_paths(void) {
-    int ret;
+static void test_logger_sink_error_paths(void)
+{
+    int         ret;
     log_sink_t *sink = make_test_sink();
 
     /* NULL logger. */
@@ -393,8 +416,9 @@ static void test_logger_sink_error_paths(void) {
 
     /* Uninitialized logger (no call to logger_init_internal). */
     logger_t *raw = (logger_t *)calloc(1, sizeof(logger_t));
-    if (!raw)
+    if (!raw) {
         exit(1);
+    }
     clog_mutex_init(&raw->dispatcher_mutex);
     ret = logger_add_sink(raw, sink);
     if (ret != CLOG_ERR_RELOAD) {
@@ -419,7 +443,8 @@ static void test_logger_sink_error_paths(void) {
 }
 
 /* ── T15: miscellaneous logger API NULL error paths ── */
-static void test_logger_api_error_paths(void) {
+static void test_logger_api_error_paths(void)
+{
     char buf[16];
 
     /* log.c L598-599. */
@@ -460,16 +485,17 @@ static void test_logger_api_error_paths(void) {
 }
 
 /* ── T16: suppressed message + async path (log.c L228-232) ── */
-static void test_suppressed_msg_async(void) {
-    log_config_t cfg = {0};
-    cfg.level = LOG_LEVEL_TRACE;
-    cfg.async = true;
-    cfg.queue_size = 64;
-    cfg.console_enable = true;
-    cfg.console_stderr = true;
-    cfg.rate_limit_enable = true;
+static void test_suppressed_msg_async(void)
+{
+    log_config_t cfg           = {0};
+    cfg.level                  = LOG_LEVEL_TRACE;
+    cfg.async                  = true;
+    cfg.queue_size             = 64;
+    cfg.console_enable         = true;
+    cfg.console_stderr         = true;
+    cfg.rate_limit_enable      = true;
     cfg.rate_limit_max_per_sec = 0;
-    cfg.rate_limit_burst = 0;
+    cfg.rate_limit_burst       = 0;
 
     if (log_init(NULL) != 0) {
         fprintf(stderr, "FAIL: log_init for T16\n");
@@ -492,13 +518,14 @@ static void test_suppressed_msg_async(void) {
 }
 
 /* ── T17: logger_config_set time_format branch (log.c L638-640) ── */
-static void test_logger_config_set_time_format(void) {
-    log_config_t cfg = {0};
-    cfg.level = LOG_LEVEL_TRACE;
+static void test_logger_config_set_time_format(void)
+{
+    log_config_t cfg   = {0};
+    cfg.level          = LOG_LEVEL_TRACE;
     cfg.console_enable = true;
     cfg.console_stderr = true;
-    cfg.format = "[%level] %msg";
-    cfg.time_format = "%H:%M:%S";
+    cfg.format         = "[%level] %msg";
+    cfg.time_format    = "%H:%M:%S";
 
     logger_t *logger = logger_create_from_config(&cfg);
     if (!logger) {
@@ -507,8 +534,8 @@ static void test_logger_config_set_time_format(void) {
     }
 
     log_config_t new_cfg = {0};
-    new_cfg.level = LOG_LEVEL_DEBUG;
-    new_cfg.time_format = "%S";
+    new_cfg.level        = LOG_LEVEL_DEBUG;
+    new_cfg.time_format  = "%S";
     logger_config_set(logger, &new_cfg);
 
     logger_destroy(logger);
@@ -516,13 +543,15 @@ static void test_logger_config_set_time_format(void) {
 }
 
 /* ── T18: log_reload with no-sinks config (log.c L432) ── */
-static void test_reload_no_sinks(void) {
+static void test_reload_no_sinks(void)
+{
     /* Init with a valid (sinks-enabled) config first. */
-    write_file("build/gap_nosinks_reload.yaml", "log:\n"
-                                                "  level: TRACE\n"
-                                                "  async: false\n"
-                                                "  console_enable: true\n"
-                                                "  console_stderr: true\n");
+    write_file("build/gap_nosinks_reload.yaml",
+               "log:\n"
+               "  level: TRACE\n"
+               "  async: false\n"
+               "  console_enable: true\n"
+               "  console_stderr: true\n");
 
     if (log_init("build/gap_nosinks_reload.yaml") != 0) {
         fprintf(stderr, "FAIL: log_init for T18\n");
@@ -530,10 +559,11 @@ static void test_reload_no_sinks(void) {
     }
 
     /* Overwrite the config file with no-sinks and reload. */
-    write_file("build/gap_nosinks_reload.yaml", "log:\n"
-                                                "  level: TRACE\n"
-                                                "  async: false\n"
-                                                "  console_enable: false\n");
+    write_file("build/gap_nosinks_reload.yaml",
+               "log:\n"
+               "  level: TRACE\n"
+               "  async: false\n"
+               "  console_enable: false\n");
 
     int ret = log_reload();
     if (ret != CLOG_ERR_NO_SINKS) {
@@ -544,7 +574,8 @@ static void test_reload_no_sinks(void) {
     printf("test_reload_no_sinks PASSED\n");
 }
 
-static void test_config_set_null(void) {
+static void test_config_set_null(void)
+{
     int ret = log_config_set(NULL);
     if (ret != -1) {
         fprintf(stderr, "FAIL: log_config_set(NULL) expected -1, got %d\n", ret);
@@ -553,12 +584,14 @@ static void test_config_set_null(void) {
     printf("test_config_set_null PASSED\n");
 }
 
-static void test_config_reload(void) {
-    write_file("build/gap_config_reload.yaml", "log:\n"
-                                               "  level: TRACE\n"
-                                               "  async: false\n"
-                                               "  console_enable: true\n"
-                                               "  console_stderr: true\n");
+static void test_config_reload(void)
+{
+    write_file("build/gap_config_reload.yaml",
+               "log:\n"
+               "  level: TRACE\n"
+               "  async: false\n"
+               "  console_enable: true\n"
+               "  console_stderr: true\n");
 
     if (log_init("build/gap_config_reload.yaml") != 0) {
         fprintf(stderr, "FAIL: log_init for config_reload\n");
@@ -573,14 +606,16 @@ static void test_config_reload(void) {
     printf("test_config_reload PASSED\n");
 }
 
-static void test_prometheus_config_yaml(void) {
-    write_file("build/gap_prometheus.yaml", "log:\n"
-                                            "  level: TRACE\n"
-                                            "  async: false\n"
-                                            "  console_enable: true\n"
-                                            "  console_stderr: true\n"
-                                            "  prometheus_enable: true\n"
-                                            "  prometheus_port: 19090\n");
+static void test_prometheus_config_yaml(void)
+{
+    write_file("build/gap_prometheus.yaml",
+               "log:\n"
+               "  level: TRACE\n"
+               "  async: false\n"
+               "  console_enable: true\n"
+               "  console_stderr: true\n"
+               "  prometheus_enable: true\n"
+               "  prometheus_port: 19090\n");
 
     int ret = log_init("build/gap_prometheus.yaml");
     if (ret != 0) {
@@ -591,7 +626,8 @@ static void test_prometheus_config_yaml(void) {
     printf("test_prometheus_config_yaml PASSED\n");
 }
 
-static void test_file_sink_null_paths(void) {
+static void test_file_sink_null_paths(void)
+{
     log_sink_t *fs = file_sink_create(NULL, 0, 0);
     if (fs) {
         fs->destroy(fs);
@@ -610,11 +646,12 @@ static void test_file_sink_null_paths(void) {
     printf("test_file_sink_null_paths PASSED\n");
 }
 
-static void test_async_edge_cases(void) {
-    log_config_t cfg = {0};
-    cfg.level = LOG_LEVEL_TRACE;
-    cfg.async = true;
-    cfg.queue_size = 64;
+static void test_async_edge_cases(void)
+{
+    log_config_t cfg   = {0};
+    cfg.level          = LOG_LEVEL_TRACE;
+    cfg.async          = true;
+    cfg.queue_size     = 64;
     cfg.console_enable = true;
     cfg.console_stderr = true;
 
@@ -623,14 +660,14 @@ static void test_async_edge_cases(void) {
 
         /* Record with ONLY module (no message, no tag) */
         log_record_t rec_mod = {0};
-        rec_mod.level = LOG_LEVEL_INFO;
-        rec_mod.module = "only_mod";
+        rec_mod.level        = LOG_LEVEL_INFO;
+        rec_mod.module       = "only_mod";
         log_async_write(&rec_mod);
 
         /* Record with ONLY tag (no message, no module) */
         log_record_t rec_tag = {0};
-        rec_tag.level = LOG_LEVEL_INFO;
-        rec_tag.tag = "only_tag";
+        rec_tag.level        = LOG_LEVEL_INFO;
+        rec_tag.tag          = "only_tag";
         log_async_write(&rec_tag);
 
         log_async_flush();
@@ -641,13 +678,16 @@ static void test_async_edge_cases(void) {
     printf("test_async_edge_cases PASSED\n");
 }
 
-static void test_sink_null_paths(void) {
+static void test_sink_null_paths(void)
+{
     log_sink_t *ss = socket_sink_create(NULL, 0);
-    if (ss)
+    if (ss) {
         ss->destroy(ss);
+    }
     ss = socket_sink_create("", -1);
-    if (ss)
+    if (ss) {
         ss->destroy(ss);
+    }
     socket_sink_create_tls(NULL, 0, false, NULL, false);
     socket_sink_create_tls("127.0.0.1", -1, false, NULL, false);
 
@@ -656,16 +696,18 @@ static void test_sink_null_paths(void) {
         sys_s->write(sys_s, NULL, 0);
         sys_s->flush(NULL);
         sys_s->flush(sys_s);
-        if (sys_s->atfork_child)
+        if (sys_s->atfork_child) {
             sys_s->atfork_child(NULL);
+        }
         sys_s->destroy(sys_s);
     }
 
     log_sink_t *cs = console_sink_create(false);
     if (cs) {
         cs->flush(NULL);
-        if (cs->atfork_child)
+        if (cs->atfork_child) {
             cs->atfork_child(NULL);
+        }
         cs->destroy(cs);
     }
 
@@ -679,7 +721,8 @@ static void test_sink_null_paths(void) {
     printf("test_sink_null_paths PASSED\n");
 }
 
-static void test_socket_sink_broken_pipe(void) {
+static void test_socket_sink_broken_pipe(void)
+{
 #ifndef _WIN32
     void (*old_sigpipe)(int) = signal(SIGPIPE, SIG_IGN);
     int fds[2];
@@ -688,12 +731,12 @@ static void test_socket_sink_broken_pipe(void) {
         if (sink && sink->private_data) {
             struct {
                 clog_socket_t sockfd;
-                int connected;
+                int           connected;
             } *data = sink->private_data;
             if (!clog_is_invalid_socket(data->sockfd)) {
                 clog_close_socket(data->sockfd);
             }
-            data->sockfd = fds[0];
+            data->sockfd    = fds[0];
             data->connected = 1;
 
             close(fds[1]);
@@ -711,35 +754,37 @@ static void test_socket_sink_broken_pipe(void) {
     printf("test_socket_sink_broken_pipe PASSED\n");
 }
 
-static void test_rotate_edge_cases(void) {
+static void test_rotate_edge_cases(void)
+{
     assert(file_rotate_file(NULL, 10) == 0);
     assert(file_rotate_file("build/nonexistent.log", -1) == 0);
     assert(file_rotate_file("build/nonexistent.log", 0) == 0);
     printf("test_rotate_edge_cases PASSED\n");
 }
 
-static void test_async_100_coverage(void) {
+static void test_async_100_coverage(void)
+{
     assert(log_async_init_for(NULL, 64) == -1);
     assert(log_async_get_queue_depth_for(NULL) == 0);
 
     logger_t dummy_logger = {0};
     assert(log_async_get_queue_depth_for(&dummy_logger) == 0);
 
-    log_config_t cfg = {0};
-    cfg.level = LOG_LEVEL_INFO;
-    cfg.async = true;
-    cfg.queue_size = 64;
+    log_config_t cfg   = {0};
+    cfg.level          = LOG_LEVEL_INFO;
+    cfg.async          = true;
+    cfg.queue_size     = 64;
     cfg.console_enable = true;
     cfg.console_stderr = true;
 
     logger_t *logger = logger_create_from_config(&cfg);
     if (logger) {
         log_record_t empty_rec = {0};
-        empty_rec.level = LOG_LEVEL_INFO;
+        empty_rec.level        = LOG_LEVEL_INFO;
         log_async_write_for(logger, &empty_rec);
 
         log_record_t trace_rec = {0};
-        trace_rec.level = LOG_LEVEL_TRACE;
+        trace_rec.level        = LOG_LEVEL_TRACE;
         log_async_write_for(logger, &trace_rec);
 
         log_async_flush_for(logger);
@@ -749,7 +794,8 @@ static void test_async_100_coverage(void) {
     printf("test_async_100_coverage PASSED\n");
 }
 
-int main(void) {
+int main(void)
+{
     printf("=== coverage-gap tests ===\n");
 
     test_strerror_missing_codes();

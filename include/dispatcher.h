@@ -37,9 +37,9 @@
 #ifndef DISPATCHER_H
 #define DISPATCHER_H
 
+#include "log_config.h"
 #include "log_record.h"
 #include "log_sink.h"
-#include "log_config.h"
 
 /* Opaque logger_t forward declaration for _for variants. */
 typedef struct logger_t logger_t;
@@ -52,8 +52,8 @@ typedef struct logger_t logger_t;
  * (ownership transferred to the dispatcher) or destroyed.
  */
 typedef struct {
-    log_sink_t **sinks; /**< Array of sink pointers (owned by the snapshot or dispatcher). */
-    int sink_count;     /**< Number of elements in @ref sinks. */
+    log_sink_t **sinks;      /**< Array of sink pointers (owned by the snapshot or dispatcher). */
+    int          sink_count; /**< Number of elements in @ref sinks. */
 } log_dispatcher_snapshot_t;
 
 /**
@@ -198,7 +198,8 @@ void log_dispatcher_flush_for(logger_t *logger);
 /** @brief Instance variant of @ref log_dispatcher_init. */
 int log_dispatcher_init_for(logger_t *logger);
 /** @brief Instance variant of @ref log_dispatcher_build_snapshot. */
-int log_dispatcher_build_snapshot_for(logger_t *logger, log_config_t *restrict cfg,
+int log_dispatcher_build_snapshot_for(logger_t *logger,
+                                      log_config_t *restrict cfg,
                                       log_dispatcher_snapshot_t *restrict snap);
 /** @brief Instance variant of @ref log_dispatcher_commit_snapshot. */
 void log_dispatcher_commit_snapshot_for(logger_t *logger, log_dispatcher_snapshot_t *restrict snap);

@@ -1,22 +1,23 @@
-#include <stdio.h>
-#include <stdlib.h>
-#include <string.h>
 #include "clog_port.h"
 #include "log.h"
 #include "log_sink.h"
+#include <stdio.h>
+#include <stdlib.h>
+#include <string.h>
 
 #define NUM_MSGS 50
 #define BUF_SIZE 16384
 
 typedef struct {
-    int port;
-    int received_lines;
-    int ready;
+    int          port;
+    int          received_lines;
+    int          ready;
     clog_mutex_t mutex;
-    clog_cond_t cond;
+    clog_cond_t  cond;
 } server_ctx_t;
 
-static void *listener_thread(void *arg) {
+static void *listener_thread(void *arg)
+{
     server_ctx_t *ctx = (server_ctx_t *)arg;
 
     clog_net_init();
@@ -29,9 +30,9 @@ static void *listener_thread(void *arg) {
 
     struct sockaddr_in addr;
     memset(&addr, 0, sizeof(addr));
-    addr.sin_family = AF_INET;
+    addr.sin_family      = AF_INET;
     addr.sin_addr.s_addr = htonl(INADDR_LOOPBACK);
-    addr.sin_port = 0;
+    addr.sin_port        = 0;
 
     if (bind(server_fd, (struct sockaddr *)&addr, sizeof(addr)) < 0) {
         perror("server bind");
@@ -70,10 +71,11 @@ static void *listener_thread(void *arg) {
     }
 
     char buf[BUF_SIZE];
-    int total = 0;
-    int n;
-    while ((n = (int)recv(client_fd, buf + total,
-                          (clog_sock_size_t)(sizeof(buf) - 1 - (size_t)total), 0)) > 0) {
+    int  total = 0;
+    int  n;
+    while ((n = (int)recv(
+                client_fd, buf + total, (clog_sock_size_t)(sizeof(buf) - 1 - (size_t)total), 0)) >
+           0) {
         total += n;
         buf[total] = '\0';
     }
@@ -83,15 +85,17 @@ static void *listener_thread(void *arg) {
 
     int lines = 0;
     for (int i = 0; i < total; i++) {
-        if (buf[i] == '\n')
+        if (buf[i] == '\n') {
             lines++;
+        }
     }
     ctx->received_lines = lines;
 
     return NULL;
 }
 
-int main(void) {
+int main(void)
+{
     server_ctx_t ctx;
     memset(&ctx, 0, sizeof(ctx));
     clog_mutex_init(&ctx.mutex);

@@ -1,19 +1,21 @@
+#include "clog_port.h"
+#include "log_sink.h"
 #include <stdio.h>
 #include <stdlib.h>
 #include <string.h>
-#include "clog_port.h"
 #include <sys/stat.h>
-#include "log_sink.h"
 
 #define DIR_PATH "logs/nested_dir_test"
 #define LOG_PATH "logs/nested_dir_test/app.log"
 
-static void cleanup(void) {
+static void cleanup(void)
+{
     remove(LOG_PATH);
     rmdir(DIR_PATH);
 }
 
-int main(void) {
+int main(void)
+{
     cleanup();
 
     log_sink_t *sink = file_sink_create(LOG_PATH, 1024 * 1024, 2);

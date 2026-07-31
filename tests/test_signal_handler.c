@@ -7,23 +7,26 @@
 #include <string.h>
 
 #if defined(_WIN32) || defined(_WIN64)
-int main(void) {
+int main(void)
+{
     printf("signal handler test skipped on Windows\n");
     return 0;
 }
 #else
 #include "clog_port.h"
+#include "log.h"
 #include <signal.h>
 #include <sys/wait.h>
-#include "log.h"
 
 #define CONFIG_PATH "build/config_signal_test.yaml"
 #define LOG_PATH "logs/signal_test.log"
 
-static int write_config(void) {
+static int write_config(void)
+{
     FILE *f = fopen(CONFIG_PATH, "w");
-    if (!f)
+    if (!f) {
         return -1;
+    }
     fprintf(f,
             "log:\n"
             "  async: true\n"
@@ -40,7 +43,8 @@ static int write_config(void) {
     return 0;
 }
 
-int main(void) {
+int main(void)
+{
     remove(LOG_PATH);
 
     pid_t pid = fork();
@@ -66,8 +70,8 @@ int main(void) {
 
     /* Verify child process was terminated by SIGINT */
     if (!WIFSIGNALED(status) || WTERMSIG(status) != SIGINT) {
-        fprintf(stderr, "expected child terminated by SIGINT (%d), got status %d\n", SIGINT,
-                status);
+        fprintf(
+            stderr, "expected child terminated by SIGINT (%d), got status %d\n", SIGINT, status);
         return 1;
     }
 
@@ -77,7 +81,7 @@ int main(void) {
         return 1;
     }
 
-    char buf[2048];
+    char   buf[2048];
     size_t n = fread(buf, 1, sizeof(buf) - 1, f);
     fclose(f);
     buf[n] = '\0';

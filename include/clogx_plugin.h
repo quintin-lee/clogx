@@ -47,8 +47,8 @@
 #ifndef CLOGX_PLUGIN_H
 #define CLOGX_PLUGIN_H
 
-#include <stdint.h>
 #include "log_sink.h"
+#include <stdint.h>
 
 #ifdef __cplusplus
 extern "C" {
@@ -118,11 +118,11 @@ extern "C" {
  * @endcode
  */
 typedef struct {
-    uint32_t abi_version;    /**< MUST equal CLOGX_PLUGIN_ABI_VERSION. Checked by loader. */
-    uint32_t plugin_version; /**< Plugin's own semantic version (independent of ABI). */
-    uint64_t caps;           /**< Bitmask of CLOGX_PLUGIN_CAP_* flags describing capabilities. */
-    const char *name;        /**< Short name, e.g., "kafka", "syslog-ext". Not NULL. */
-    const char *description; /**< Human-readable one-liner, e.g., "Kafka log sink". Not NULL. */
+    uint32_t    abi_version;    /**< MUST equal CLOGX_PLUGIN_ABI_VERSION. Checked by loader. */
+    uint32_t    plugin_version; /**< Plugin's own semantic version (independent of ABI). */
+    uint64_t    caps;           /**< Bitmask of CLOGX_PLUGIN_CAP_* flags describing capabilities. */
+    const char *name;           /**< Short name, e.g., "kafka", "syslog-ext". Not NULL. */
+    const char *description;    /**< Human-readable one-liner, e.g., "Kafka log sink". Not NULL. */
 } clogx_plugin_t;
 
 /* ------------------------------------------------------------------ */

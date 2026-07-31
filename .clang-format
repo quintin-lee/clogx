@@ -8,8 +8,15 @@ ColumnLimit: 100
 AllowShortFunctionsOnASingleLine: None
 AllowShortIfStatementsOnASingleLine: Never
 AllowShortLoopsOnASingleLine: false
-BreakBeforeBraces: Attach
+AllowShortBlocksOnASingleLine: Never
+BreakBeforeBraces: Linux
 AlignAfterOpenBracket: Align
+AlignTrailingComments: true
+AlignConsecutiveAssignments: true
+AlignConsecutiveDeclarations: true
+BinPackParameters: false
+BinPackArguments: false
 PointerAlignment: Right
-SortIncludes: false
+SortIncludes: true
+InsertBraces: true
 ...

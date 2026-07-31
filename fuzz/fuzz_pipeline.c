@@ -6,14 +6,15 @@
  * log_writevprintf() with arbitrary messages to stress the init →
  * format → dispatch → sink write path end-to-end.
  */
-#include <stdio.h>
-#include <stdlib.h>
-#include <string.h>
 #include "log.h"
 #include "log_formatter.h"
 #include "log_record.h"
+#include <stdio.h>
+#include <stdlib.h>
+#include <string.h>
 
-int main(int argc, char **argv) {
+int main(int argc, char **argv)
+{
     if (argc < 2) {
         return 0;
     }
@@ -23,22 +24,22 @@ int main(int argc, char **argv) {
         return 0;
     }
 
-    char data[4096];
+    char   data[4096];
     size_t n = fread(data, 1, sizeof(data) - 1, f);
     fclose(f);
     data[n] = '\0';
 
     log_record_t rec = {
-        .level = (log_level_t)(n % 7),
+        .level     = (log_level_t)(n % 7),
         .timestamp = (uint64_t)n * 1000000,
-        .tid = (uint32_t)n,
-        .pid = (uint32_t)(n + 1),
-        .file = "fuzz_file.c",
-        .func = "fuzz_func",
-        .line = (int)n,
-        .module = "fuzz_mod",
-        .tag = "fuzz_tag",
-        .message = data,
+        .tid       = (uint32_t)n,
+        .pid       = (uint32_t)(n + 1),
+        .file      = "fuzz_file.c",
+        .func      = "fuzz_func",
+        .line      = (int)n,
+        .module    = "fuzz_mod",
+        .tag       = "fuzz_tag",
+        .message   = data,
     };
 
     char out_buf[2048];

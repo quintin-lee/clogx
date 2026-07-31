@@ -1,9 +1,10 @@
 // Test: All includes are used - should produce NO warnings
+#include "log.h"
 #include <stdio.h>
 #include <stdlib.h>
-#include "log.h"
 
-int main(void) {
+int main(void)
+{
     // Using stdio.h
     printf("Hello\n");
 

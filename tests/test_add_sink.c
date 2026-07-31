@@ -1,16 +1,18 @@
-#include <stdio.h>
-#include <string.h>
 #include "clog_port.h"
 #include "log.h"
+#include <stdio.h>
+#include <string.h>
 
 #define CONFIG_PATH "build/config_add_sink_test.yaml"
 #define BASE_LOG "logs/add_sink_base.log"
 #define EXTRA_LOG "logs/add_sink_extra.log"
 
-static int write_config(void) {
+static int write_config(void)
+{
     FILE *f = fopen(CONFIG_PATH, "w");
-    if (!f)
+    if (!f) {
         return -1;
+    }
     fprintf(f,
             "log:\n"
             "  async: false\n"
@@ -25,19 +27,22 @@ static int write_config(void) {
     return 0;
 }
 
-static int file_contains(const char *path, const char *needle) {
-    char buf[1024];
-    FILE *f = fopen(path, "rb");
+static int file_contains(const char *path, const char *needle)
+{
+    char   buf[1024];
+    FILE  *f = fopen(path, "rb");
     size_t n;
-    if (!f)
+    if (!f) {
         return 0;
+    }
     n = fread(buf, 1, sizeof(buf) - 1, f);
     fclose(f);
     buf[n] = '\0';
     return strstr(buf, needle) != NULL;
 }
 
-int main(void) {
+int main(void)
+{
     log_sink_t *extra;
 
     remove(BASE_LOG);

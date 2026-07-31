@@ -1,15 +1,17 @@
-#include <stdio.h>
-#include <string.h>
 #include "clog_port.h"
 #include "log.h"
+#include <stdio.h>
+#include <string.h>
 
 #define CONFIG_PATH "build/config_module_trunc_test.yaml"
 #define LOG_PATH "logs/module_trunc_test.log"
 
-static int write_config(void) {
+static int write_config(void)
+{
     FILE *f = fopen(CONFIG_PATH, "w");
-    if (!f)
+    if (!f) {
         return -1;
+    }
     fprintf(f,
             "log:\n"
             "  async: false\n"
@@ -24,11 +26,12 @@ static int write_config(void) {
     return 0;
 }
 
-int main(void) {
-    char big[5000];
-    char module[64];
-    FILE *f;
-    char buf[6000];
+int main(void)
+{
+    char   big[5000];
+    char   module[64];
+    FILE  *f;
+    char   buf[6000];
     size_t n;
     size_t i;
 
@@ -46,8 +49,9 @@ int main(void) {
         return 1;
     }
 
-    for (i = 0; i < sizeof(big) - 1; i++)
+    for (i = 0; i < sizeof(big) - 1; i++) {
         big[i] = 'A';
+    }
     big[sizeof(big) - 1] = '\0';
 
     LOG_INFO("%s", big);

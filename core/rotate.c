@@ -24,12 +24,14 @@
  * The rotation itself only touches the file system and does not interact
  * with the logging pipeline, so no additional synchronisation is needed.
  */
-#include <stdio.h>
 #include "clog_port.h"
+#include <stdio.h>
 
-int file_rotate_file(const char *base_path, int max_backups) {
-    if (!base_path || max_backups <= 0)
+int file_rotate_file(const char *base_path, int max_backups)
+{
+    if (!base_path || max_backups <= 0) {
         return 0;
+    }
 
     char path[512];
 

@@ -7,22 +7,25 @@
 #include <string.h>
 
 #if defined(_WIN32) || defined(_WIN64)
-int main(void) {
+int main(void)
+{
     printf("fork safety test skipped on Windows\n");
     return 0;
 }
 #else
 #include "clog_port.h"
-#include <sys/wait.h>
 #include "log.h"
+#include <sys/wait.h>
 
 #define CONFIG_PATH "build/config_fork_test.yaml"
 #define LOG_PATH "logs/fork_test.log"
 
-static int write_config(void) {
+static int write_config(void)
+{
     FILE *f = fopen(CONFIG_PATH, "w");
-    if (!f)
+    if (!f) {
         return -1;
+    }
     fprintf(f,
             "log:\n"
             "  async: true\n"
@@ -38,7 +41,8 @@ static int write_config(void) {
     return 0;
 }
 
-int main(void) {
+int main(void)
+{
     remove(LOG_PATH);
     if (write_config() != 0 || log_init(CONFIG_PATH) != 0) {
         fprintf(stderr, "fork test log_init failed\n");
@@ -81,7 +85,7 @@ int main(void) {
         return 1;
     }
 
-    char buf[4096];
+    char   buf[4096];
     size_t n = fread(buf, 1, sizeof(buf) - 1, f);
     fclose(f);
     buf[n] = '\0';

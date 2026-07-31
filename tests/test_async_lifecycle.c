@@ -2,20 +2,22 @@
  * @file test_async_lifecycle.c
  * @brief Tests async worker thread start, drain, and shutdown lifecycle.
  */
-#include <stdio.h>
-#include <string.h>
 #include "clog_port.h"
 #include "log.h"
+#include <stdio.h>
+#include <string.h>
 
 #define NUM_THREADS 4
 #define LOGS_PER_THREAD 50
 #define CONFIG_PATH "build/config_async_test.yaml"
 #define LOG_PATH "logs/async_test.log"
 
-static int write_async_config(void) {
+static int write_async_config(void)
+{
     FILE *f = fopen(CONFIG_PATH, "w");
-    if (!f)
+    if (!f) {
         return -1;
+    }
 
     fprintf(f,
             "log:\n"
@@ -34,8 +36,9 @@ static int write_async_config(void) {
     return 0;
 }
 
-static void *writer_thread(void *arg) {
-    int id = *(int *)arg;
+static void *writer_thread(void *arg)
+{
+    int  id = *(int *)arg;
     char msg[64];
 
     for (int i = 0; i < LOGS_PER_THREAD; i++) {
@@ -46,7 +49,8 @@ static void *writer_thread(void *arg) {
     return NULL;
 }
 
-int main(void) {
+int main(void)
+{
     remove(LOG_PATH);
 
     if (write_async_config() != 0) {
@@ -60,7 +64,7 @@ int main(void) {
     }
 
     clog_thread_t threads[NUM_THREADS];
-    int ids[NUM_THREADS];
+    int           ids[NUM_THREADS];
 
     for (int i = 0; i < NUM_THREADS; i++) {
         ids[i] = i;
@@ -83,7 +87,7 @@ int main(void) {
         return 1;
     }
 
-    int lines = 0;
+    int  lines = 0;
     char line[512];
     while (fgets(line, sizeof(line), f)) {
         lines++;

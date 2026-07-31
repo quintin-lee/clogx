@@ -1,41 +1,49 @@
+#include "log.h"
+#include "log_sink.h"
 #include <stdio.h>
 #include <stdlib.h>
 #include <string.h>
-#include "log.h"
-#include "log_sink.h"
 
 typedef struct {
-    int write_count;
-    int flush_count;
-    int destroy_count;
+    int  write_count;
+    int  flush_count;
+    int  destroy_count;
     char last_msg[256];
 } test_custom_data_t;
 
-static int my_custom_write(log_sink_t *sink, const char *buf, size_t len) {
+static int my_custom_write(log_sink_t *sink, const char *buf, size_t len)
+{
     test_custom_data_t *data = (test_custom_data_t *)custom_sink_get_private_data(sink);
-    if (!data)
+    if (!data) {
         return -1;
+    }
     data->write_count++;
-    snprintf(data->last_msg, sizeof(data->last_msg), "%.*s",
-             (int)(len < sizeof(data->last_msg) ? len : sizeof(data->last_msg) - 1), buf);
+    snprintf(data->last_msg,
+             sizeof(data->last_msg),
+             "%.*s",
+             (int)(len < sizeof(data->last_msg) ? len : sizeof(data->last_msg) - 1),
+             buf);
     return (int)len;
 }
 
-static void my_custom_flush(log_sink_t *sink) {
+static void my_custom_flush(log_sink_t *sink)
+{
     test_custom_data_t *data = (test_custom_data_t *)custom_sink_get_private_data(sink);
     if (data) {
         data->flush_count++;
     }
 }
 
-static void my_custom_destroy(log_sink_t *sink) {
+static void my_custom_destroy(log_sink_t *sink)
+{
     test_custom_data_t *data = (test_custom_data_t *)custom_sink_get_private_data(sink);
     if (data) {
         data->destroy_count++;
     }
 }
 
-int main(void) {
+int main(void)
+{
     test_custom_data_t user_data = {0};
 
     log_sink_t *custom_sink =

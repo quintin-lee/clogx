@@ -1,18 +1,20 @@
+#include "clog_port.h"
+#include "log.h"
 #include <stdio.h>
 #include <stdlib.h>
 #include <string.h>
-#include "clog_port.h"
-#include "log.h"
 
 #define NUM_THREADS 8
 #define LOGS_PER_THREAD 100
 #define CONFIG_PATH "build/config_mt_sync.yaml"
 #define LOG_PATH "logs/mt_sync.log"
 
-static int write_config(void) {
+static int write_config(void)
+{
     FILE *f = fopen(CONFIG_PATH, "w");
-    if (!f)
+    if (!f) {
         return -1;
+    }
 
     fprintf(f,
             "log:\n"
@@ -35,9 +37,10 @@ typedef struct {
     int errors;
 } thread_result_t;
 
-static void *writer_thread(void *arg) {
+static void *writer_thread(void *arg)
+{
     thread_result_t *res = (thread_result_t *)arg;
-    char msg[64];
+    char             msg[64];
 
     for (int i = 0; i < LOGS_PER_THREAD; i++) {
         snprintf(msg, sizeof(msg), "thread-%d msg-%d", res->id, i);
@@ -47,7 +50,8 @@ static void *writer_thread(void *arg) {
     return NULL;
 }
 
-int main(void) {
+int main(void)
+{
     remove(LOG_PATH);
 
     if (write_config() != 0) {
@@ -60,11 +64,11 @@ int main(void) {
         return 1;
     }
 
-    clog_thread_t threads[NUM_THREADS];
+    clog_thread_t   threads[NUM_THREADS];
     thread_result_t results[NUM_THREADS];
 
     for (int i = 0; i < NUM_THREADS; i++) {
-        results[i].id = i;
+        results[i].id     = i;
         results[i].errors = 0;
         if (clog_thread_create(&threads[i], writer_thread, &results[i]) != 0) {
             fprintf(stderr, "clog_thread_create failed\n");
@@ -85,7 +89,7 @@ int main(void) {
         return 1;
     }
 
-    int lines = 0;
+    int  lines = 0;
     char line[512];
     while (fgets(line, sizeof(line), f)) {
         lines++;

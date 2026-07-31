@@ -5,12 +5,13 @@
  * Feeds arbitrary file contents to log_parse_config_file() to
  * discover parser crashes, assertion failures, and memory errors.
  */
+#include "log.h"
 #include <stdio.h>
 #include <stdlib.h>
 #include <unistd.h>
-#include "log.h"
 
-int main(int argc, char **argv) {
+int main(int argc, char **argv)
+{
     if (argc < 2) {
         return 0;
     }

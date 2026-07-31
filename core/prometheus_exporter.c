@@ -44,32 +44,33 @@
  * counters are `_Atomic`); no locks needed for rendering.
  */
 
-#include <stdio.h>
-#include <stdlib.h>
-#include <string.h>
 #include "clog_port.h"
 #include "log.h"
 #include "log_prometheus.h"
+#include <stdio.h>
+#include <stdlib.h>
+#include <string.h>
 
 #if defined(_WIN32) || defined(_WIN64)
 #include <winsock2.h>
 #include <ws2tcpip.h>
 #else
-#include <unistd.h>
-#include <sys/socket.h>
-#include <netinet/in.h>
 #include <arpa/inet.h>
+#include <netinet/in.h>
+#include <sys/socket.h>
+#include <unistd.h>
 #endif
 
 /* Global level counters accessed by log.c and prometheus renderer */
 extern volatile uint64_t g_prometheus_level_counts[6];
 
 static clog_thread_t g_prom_thread;
-static volatile bool g_prom_running = false;
+static volatile bool g_prom_running   = false;
 static clog_socket_t g_prom_server_fd = CLOG_INVALID_SOCKET;
-static clog_mutex_t g_prom_mutex = CLOG_MUTEX_INITIALIZER;
+static clog_mutex_t  g_prom_mutex     = CLOG_MUTEX_INITIALIZER;
 
-static const char *level_name(int idx) {
+static const char *level_name(int idx)
+{
     switch (idx) {
     case 0:
         return "trace";
@@ -88,38 +89,47 @@ static const char *level_name(int idx) {
     }
 }
 
-int clog_prometheus_render_metrics(char *buf, size_t buf_size) {
-    if (!buf || buf_size == 0)
+int clog_prometheus_render_metrics(char *buf, size_t buf_size)
+{
+    if (!buf || buf_size == 0) {
         return -1;
+    }
 
     log_stats_t stats;
     log_get_stats(&stats);
 
-    char *out = buf;
+    char  *out       = buf;
     size_t remaining = buf_size;
-    int ret;
+    int    ret;
 
     /* Log events counter by level */
-    ret = snprintf(out, remaining,
+    ret = snprintf(out,
+                   remaining,
                    "# HELP clogx_log_events_total Total number of log events emitted by level.\n"
                    "# TYPE clogx_log_events_total counter\n");
-    if (ret <= 0 || (size_t)ret >= remaining)
+    if (ret <= 0 || (size_t)ret >= remaining) {
         return -1;
+    }
     out += ret;
     remaining -= (size_t)ret;
 
     for (int i = 0; i < 6; i++) {
-        ret = snprintf(out, remaining, "clogx_log_events_total{level=\"%s\"} %llu\n", level_name(i),
+        ret = snprintf(out,
+                       remaining,
+                       "clogx_log_events_total{level=\"%s\"} %llu\n",
+                       level_name(i),
                        (unsigned long long)g_prometheus_level_counts[i]);
-        if (ret <= 0 || (size_t)ret >= remaining)
+        if (ret <= 0 || (size_t)ret >= remaining) {
             return -1;
+        }
         out += ret;
         remaining -= (size_t)ret;
     }
 
     /* Total logged, dropped, suppressed counters, and queue depth gauge */
     ret = snprintf(
-        out, remaining,
+        out,
+        remaining,
         "# HELP clogx_log_dropped_events_total Total log events dropped due to queue full.\n"
         "# TYPE clogx_log_dropped_events_total counter\n"
         "clogx_log_dropped_events_total %llu\n"
@@ -132,49 +142,55 @@ int clog_prometheus_render_metrics(char *buf, size_t buf_size) {
         (unsigned long long)stats.dropped_queue_full_count,
         (unsigned long long)stats.suppressed_rate_count,
         (unsigned long long)stats.current_queue_depth);
-    if (ret <= 0 || (size_t)ret >= remaining)
+    if (ret <= 0 || (size_t)ret >= remaining) {
         return -1;
+    }
     out += ret;
 
     return (int)(out - buf);
 }
 
-static void *prometheus_worker_thread(void *arg) {
+static void *prometheus_worker_thread(void *arg)
+{
     (void)arg;
     char metrics_body[4096];
     char http_response[8192];
 
     while (g_prom_running) {
         struct sockaddr_in client_addr;
-        socklen_t client_len = sizeof(client_addr);
+        socklen_t          client_len = sizeof(client_addr);
 
         clog_socket_t client_fd =
             accept(g_prom_server_fd, (struct sockaddr *)&client_addr, &client_len);
         if (client_fd == CLOG_INVALID_SOCKET) {
-            if (!g_prom_running)
+            if (!g_prom_running) {
                 break;
+            }
             clog_sleep_ms(50);
             continue;
         }
 
-        char recv_buf[1024];
+        char           recv_buf[1024];
         struct timeval tv;
-        tv.tv_sec = 5;
+        tv.tv_sec  = 5;
         tv.tv_usec = 0;
         setsockopt(client_fd, SOL_SOCKET, SO_RCVTIMEO, (const char *)&tv, sizeof(tv));
         int bytes = (int)recv(client_fd, recv_buf, sizeof(recv_buf) - 1, 0);
         if (bytes > 0) {
             recv_buf[bytes] = '\0';
             int metrics_len = clog_prometheus_render_metrics(metrics_body, sizeof(metrics_body));
-            if (metrics_len < 0)
+            if (metrics_len < 0) {
                 metrics_len = 0;
+            }
 
-            int resp_len = snprintf(http_response, sizeof(http_response),
+            int resp_len = snprintf(http_response,
+                                    sizeof(http_response),
                                     "HTTP/1.1 200 OK\r\n"
                                     "Content-Type: text/plain; version=0.0.4; charset=utf-8\r\n"
                                     "Content-Length: %d\r\n"
                                     "Connection: close\r\n\r\n%s",
-                                    metrics_len, metrics_body);
+                                    metrics_len,
+                                    metrics_body);
             if (resp_len > 0) {
                 send(client_fd, http_response, (size_t)resp_len, 0);
             }
@@ -184,9 +200,11 @@ static void *prometheus_worker_thread(void *arg) {
     return NULL;
 }
 
-int clog_prometheus_exporter_start(int port) {
-    if (port <= 0 || port > 65535)
+int clog_prometheus_exporter_start(int port)
+{
+    if (port <= 0 || port > 65535) {
         return CLOG_ERR_INVALID_ARG;
+    }
 
     clog_mutex_lock(&g_prom_mutex);
     if (g_prom_running) {
@@ -210,9 +228,9 @@ int clog_prometheus_exporter_start(int port) {
 
     struct sockaddr_in addr;
     memset(&addr, 0, sizeof(addr));
-    addr.sin_family = AF_INET;
+    addr.sin_family      = AF_INET;
     addr.sin_addr.s_addr = htonl(INADDR_LOOPBACK);
-    addr.sin_port = htons((uint16_t)port);
+    addr.sin_port        = htons((uint16_t)port);
 
     if (bind(g_prom_server_fd, (struct sockaddr *)&addr, sizeof(addr)) != 0) {
         clog_close_socket(g_prom_server_fd);
@@ -241,7 +259,8 @@ int clog_prometheus_exporter_start(int port) {
     return CLOG_OK;
 }
 
-void clog_prometheus_exporter_stop(void) {
+void clog_prometheus_exporter_stop(void)
+{
     clog_mutex_lock(&g_prom_mutex);
     if (!g_prom_running) {
         clog_mutex_unlock(&g_prom_mutex);
@@ -259,7 +278,8 @@ void clog_prometheus_exporter_stop(void) {
     clog_thread_join(g_prom_thread);
 }
 
-bool clog_prometheus_exporter_is_running(void) {
+bool clog_prometheus_exporter_is_running(void)
+{
     clog_mutex_lock(&g_prom_mutex);
     bool running = g_prom_running;
     clog_mutex_unlock(&g_prom_mutex);

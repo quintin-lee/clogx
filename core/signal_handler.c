@@ -49,26 +49,30 @@
 #endif
 
 static volatile sig_atomic_t g_signal_pending = 0;
-static bool g_installed = false;
+static bool                  g_installed      = false;
 
 #if defined(_WIN32) || defined(_WIN64)
 typedef void (*sig_handler_t)(int);
 static sig_handler_t g_old_sigterm = NULL;
-static sig_handler_t g_old_sigint = NULL;
+static sig_handler_t g_old_sigint  = NULL;
 
-void log_signal_handler(int sig) {
+void log_signal_handler(int sig)
+{
     g_signal_pending = sig;
 }
 
-int log_get_pending_signal(void) {
+int log_get_pending_signal(void)
+{
     return (int)g_signal_pending;
 }
 
-int log_get_signal_fd(void) {
+int log_get_signal_fd(void)
+{
     return -1;
 }
 
-void log_process_pending_signals(void) {
+void log_process_pending_signals(void)
+{
     int sig = (int)g_signal_pending;
     if (sig == 0) {
         return;
@@ -90,20 +94,22 @@ void log_process_pending_signals(void) {
     raise(sig);
 }
 
-clogx_errno_t log_install_signal_handlers(void) {
+clogx_errno_t log_install_signal_handlers(void)
+{
     if (g_installed) {
         return CLOG_OK;
     }
 
     g_old_sigterm = signal(SIGTERM, log_signal_handler);
-    g_old_sigint = signal(SIGINT, log_signal_handler);
+    g_old_sigint  = signal(SIGINT, log_signal_handler);
 
-    g_installed = true;
+    g_installed      = true;
     g_signal_pending = 0;
     return CLOG_OK;
 }
 
-void log_restore_signal_handlers(void) {
+void log_restore_signal_handlers(void)
+{
     if (!g_installed) {
         return;
     }
@@ -113,7 +119,7 @@ void log_restore_signal_handlers(void) {
     if (g_old_sigint) {
         signal(SIGINT, g_old_sigint);
     }
-    g_installed = false;
+    g_installed      = false;
     g_signal_pending = 0;
 }
 
@@ -121,9 +127,10 @@ void log_restore_signal_handlers(void) {
 
 static struct sigaction g_old_sigterm;
 static struct sigaction g_old_sigint;
-static int g_signal_pipe[2] = {-1, -1};
+static int              g_signal_pipe[2] = {-1, -1};
 
-static void setup_self_pipe(void) {
+static void setup_self_pipe(void)
+{
     if (g_signal_pipe[0] >= 0) {
         return;
     }
@@ -145,7 +152,8 @@ static void setup_self_pipe(void) {
 #endif
 }
 
-static void close_self_pipe(void) {
+static void close_self_pipe(void)
+{
     for (int i = 0; i < 2; i++) {
         if (g_signal_pipe[i] >= 0) {
             close(g_signal_pipe[i]);
@@ -154,25 +162,29 @@ static void close_self_pipe(void) {
     }
 }
 
-int log_get_signal_fd(void) {
+int log_get_signal_fd(void)
+{
     return g_signal_pipe[0];
 }
 
-void log_signal_handler(int sig) {
+void log_signal_handler(int sig)
+{
     /* Pure Async-Signal-Safe handler: set flag and write to non-blocking self-pipe (zero locks) */
     g_signal_pending = sig;
     if (g_signal_pipe[1] >= 0) {
-        unsigned char ch = (unsigned char)sig;
-        ssize_t res = write(g_signal_pipe[1], &ch, 1);
+        unsigned char ch  = (unsigned char)sig;
+        ssize_t       res = write(g_signal_pipe[1], &ch, 1);
         (void)res;
     }
 }
 
-int log_get_pending_signal(void) {
+int log_get_pending_signal(void)
+{
     return (int)g_signal_pending;
 }
 
-void log_process_pending_signals(void) {
+void log_process_pending_signals(void)
+{
     int sig = (int)g_signal_pending;
     if (sig == 0 && g_signal_pipe[0] >= 0) {
         unsigned char ch = 0;
@@ -210,7 +222,8 @@ void log_process_pending_signals(void) {
     raise(sig);
 }
 
-clogx_errno_t log_install_signal_handlers(void) {
+clogx_errno_t log_install_signal_handlers(void)
+{
     if (g_installed) {
         return CLOG_OK;
     }
@@ -220,7 +233,7 @@ clogx_errno_t log_install_signal_handlers(void) {
     struct sigaction sa;
     memset(&sa, 0, sizeof(sa));
     sa.sa_handler = log_signal_handler;
-    sa.sa_flags = (int)SA_RESETHAND;
+    sa.sa_flags   = (int)SA_RESETHAND;
     sigemptyset(&sa.sa_mask);
 
     /* LCOV_EXCL_START - System call failures (requires seccomp/rlimit to simulate) */
@@ -235,19 +248,20 @@ clogx_errno_t log_install_signal_handlers(void) {
     }
     /* LCOV_EXCL_STOP */
 
-    g_installed = true;
+    g_installed      = true;
     g_signal_pending = 0;
     return CLOG_OK;
 }
 
-void log_restore_signal_handlers(void) {
+void log_restore_signal_handlers(void)
+{
     if (!g_installed) {
         return;
     }
     sigaction(SIGTERM, &g_old_sigterm, NULL);
     sigaction(SIGINT, &g_old_sigint, NULL);
     close_self_pipe();
-    g_installed = false;
+    g_installed      = false;
     g_signal_pending = 0;
 }
 #endif

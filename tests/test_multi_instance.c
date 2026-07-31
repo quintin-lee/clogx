@@ -2,45 +2,50 @@
  * @file test_multi_instance.c
  * @brief Tests multi-instance logger_t API: create, write, destroy independence.
  */
-#include <stdio.h>
-#include <stdlib.h>
-#include <string.h>
-#include <assert.h>
 #include "dispatcher.h"
 #include "log.h"
 #include "log_config.h"
 #include "log_sink.h"
+#include <assert.h>
+#include <stdio.h>
+#include <stdlib.h>
+#include <string.h>
 
 static int g_sink_write_count;
 
 /* Minimal test sink that counts writes (receives formatted buffer). */
-static int test_sink_write(log_sink_t *sink, const char *buf, size_t len) {
+static int test_sink_write(log_sink_t *sink, const char *buf, size_t len)
+{
     (void)sink;
     (void)buf;
     g_sink_write_count++;
     return (int)len;
 }
 
-static void test_sink_flush(log_sink_t *sink) {
+static void test_sink_flush(log_sink_t *sink)
+{
     (void)sink;
 }
 
-static void test_sink_destroy(log_sink_t *sink) {
+static void test_sink_destroy(log_sink_t *sink)
+{
     free(sink);
 }
 
-static log_sink_t *make_test_sink(void) {
+static log_sink_t *make_test_sink(void)
+{
     log_sink_t *sink = (log_sink_t *)calloc(1, sizeof(log_sink_t));
     assert(sink != NULL);
-    sink->write = test_sink_write;
-    sink->flush = test_sink_flush;
+    sink->write   = test_sink_write;
+    sink->flush   = test_sink_flush;
     sink->destroy = test_sink_destroy;
     return sink;
 }
 
 /* ── NULL / error paths ── */
 
-static void test_create_null(void) {
+static void test_create_null(void)
+{
     logger_t *logger = logger_create(NULL);
     /* Default config enables console, so this should succeed. */
     assert(logger != NULL);
@@ -48,26 +53,29 @@ static void test_create_null(void) {
     printf("test_create_null PASSED\n");
 }
 
-static void test_create_from_config_null(void) {
+static void test_create_from_config_null(void)
+{
     logger_t *logger = logger_create_from_config(NULL);
     assert(logger == NULL);
     printf("test_create_from_config_null PASSED\n");
 }
 
-static void test_destroy_null(void) {
+static void test_destroy_null(void)
+{
     logger_destroy(NULL); /* must be a no-op */
     printf("test_destroy_null PASSED\n");
 }
 
 /* ── Instance creation from config fails with no sinks ── */
 
-static void test_create_no_sinks_fails(void) {
-    log_config_t cfg = {0};
-    cfg.level = LOG_LEVEL_INFO;
-    cfg.async = false;
+static void test_create_no_sinks_fails(void)
+{
+    log_config_t cfg   = {0};
+    cfg.level          = LOG_LEVEL_INFO;
+    cfg.async          = false;
     cfg.console_enable = false;
-    cfg.file_enable = false;
-    cfg.socket_enable = false;
+    cfg.file_enable    = false;
+    cfg.socket_enable  = false;
 
     logger_t *logger = logger_create_from_config(&cfg);
     /* No sinks configured → init fails */
@@ -77,19 +85,20 @@ static void test_create_no_sinks_fails(void) {
 
 /* ── Instance level isolation ── */
 
-static void test_level_isolation(void) {
-    log_config_t cfg = {0};
-    cfg.level = LOG_LEVEL_INFO;
-    cfg.async = false;
+static void test_level_isolation(void)
+{
+    log_config_t cfg   = {0};
+    cfg.level          = LOG_LEVEL_INFO;
+    cfg.async          = false;
     cfg.console_enable = true;
     cfg.console_stderr = true;
-    cfg.color = false;
+    cfg.color          = false;
 
     logger_t *info_logger = logger_create_from_config(&cfg);
     assert(info_logger != NULL);
     assert(logger_get_level(info_logger) == LOG_LEVEL_INFO);
 
-    cfg.level = LOG_LEVEL_ERROR;
+    cfg.level              = LOG_LEVEL_ERROR;
     logger_t *error_logger = logger_create_from_config(&cfg);
     assert(error_logger != NULL);
     assert(logger_get_level(error_logger) == LOG_LEVEL_ERROR);
@@ -105,13 +114,14 @@ static void test_level_isolation(void) {
 
 /* ── Instance module isolation ── */
 
-static void test_module_isolation(void) {
-    log_config_t cfg = {0};
-    cfg.level = LOG_LEVEL_TRACE;
-    cfg.async = false;
+static void test_module_isolation(void)
+{
+    log_config_t cfg   = {0};
+    cfg.level          = LOG_LEVEL_TRACE;
+    cfg.async          = false;
     cfg.console_enable = true;
     cfg.console_stderr = true;
-    cfg.color = false;
+    cfg.color          = false;
 
     logger_t *a = logger_create_from_config(&cfg);
     logger_t *b = logger_create_from_config(&cfg);
@@ -133,19 +143,20 @@ static void test_module_isolation(void) {
 
 /* ── Basic instance logging ── */
 
-static void test_instance_logging(void) {
+static void test_instance_logging(void)
+{
     g_sink_write_count = 0;
 
     logger_t *logger = logger_create_from_config(NULL);
     assert(logger == NULL);
 
     /* Create a logger with a custom sink so we can count writes. */
-    log_config_t cfg = {0};
-    cfg.level = LOG_LEVEL_TRACE;
-    cfg.async = false;
+    log_config_t cfg   = {0};
+    cfg.level          = LOG_LEVEL_TRACE;
+    cfg.async          = false;
     cfg.console_enable = false;
-    cfg.file_enable = false;
-    cfg.socket_enable = false;
+    cfg.file_enable    = false;
+    cfg.socket_enable  = false;
 
     logger = logger_create_from_config(&cfg);
     assert(logger == NULL); /* no sinks → fails */
@@ -155,12 +166,12 @@ static void test_instance_logging(void) {
        Use console to stderr, then add a custom sink. */
     cfg.console_enable = true;
     cfg.console_stderr = true;
-    logger = logger_create_from_config(&cfg);
+    logger             = logger_create_from_config(&cfg);
     assert(logger != NULL);
 
     /* Add a custom sink */
     log_sink_t *sink = make_test_sink();
-    int ret = logger_add_sink(logger, sink);
+    int         ret  = logger_add_sink(logger, sink);
     assert(ret == CLOG_OK);
 
     /* Log a few messages */
@@ -182,13 +193,14 @@ static void test_instance_logging(void) {
 
 /* ── Instance-level config set/get ── */
 
-static void test_config_set_get(void) {
-    log_config_t cfg = {0};
-    cfg.level = LOG_LEVEL_WARN;
-    cfg.async = false;
+static void test_config_set_get(void)
+{
+    log_config_t cfg   = {0};
+    cfg.level          = LOG_LEVEL_WARN;
+    cfg.async          = false;
     cfg.console_enable = true;
     cfg.console_stderr = true;
-    cfg.color = false;
+    cfg.color          = false;
 
     logger_t *logger = logger_create_from_config(&cfg);
     assert(logger != NULL);
@@ -205,9 +217,9 @@ static void test_config_set_get(void) {
 
     /* Set config */
     log_config_t new_cfg = *got;
-    new_cfg.level = LOG_LEVEL_FATAL;
-    new_cfg.format = "[%level] %msg";
-    int ret = logger_config_set(logger, &new_cfg);
+    new_cfg.level        = LOG_LEVEL_FATAL;
+    new_cfg.format       = "[%level] %msg";
+    int ret              = logger_config_set(logger, &new_cfg);
     assert(ret == 0);
     assert(logger_get_level(logger) == LOG_LEVEL_FATAL);
 
@@ -217,15 +229,16 @@ static void test_config_set_get(void) {
 
 /* ── Stats ── */
 
-static void test_stats(void) {
+static void test_stats(void)
+{
     g_sink_write_count = 0;
 
-    log_config_t cfg = {0};
-    cfg.level = LOG_LEVEL_TRACE;
-    cfg.async = false;
+    log_config_t cfg   = {0};
+    cfg.level          = LOG_LEVEL_TRACE;
+    cfg.async          = false;
     cfg.console_enable = true;
     cfg.console_stderr = true;
-    cfg.color = false;
+    cfg.color          = false;
 
     logger_t *logger = logger_create_from_config(&cfg);
     assert(logger != NULL);
@@ -250,7 +263,8 @@ static void test_stats(void) {
 
 /* ── Default logger still works ── */
 
-static void test_default_logger_unaffected(void) {
+static void test_default_logger_unaffected(void)
+{
     /* Just verify we can call log_init/log_destroy normally
        (other tests cover this in detail). */
     /* Destroy and re-init the default logger (it was destroyed above) */
@@ -264,7 +278,8 @@ static void test_default_logger_unaffected(void) {
     printf("test_default_logger_unaffected PASSED\n");
 }
 
-static void test_null_logger_error_paths(void) {
+static void test_null_logger_error_paths(void)
+{
     logger_set_level(NULL, LOG_LEVEL_INFO);
     assert(logger_get_level(NULL) == LOG_LEVEL_INFO);
 
@@ -289,24 +304,25 @@ static void test_null_logger_error_paths(void) {
     printf("test_null_logger_error_paths PASSED\n");
 }
 
-static void test_dispatcher_multi_instance_gaps(void) {
-    log_config_t cfg = {0};
-    cfg.level = LOG_LEVEL_WARN;
-    cfg.async = false;
+static void test_dispatcher_multi_instance_gaps(void)
+{
+    log_config_t cfg   = {0};
+    cfg.level          = LOG_LEVEL_WARN;
+    cfg.async          = false;
     cfg.console_enable = true;
     cfg.console_stderr = true;
-    cfg.color = true;
+    cfg.color          = true;
 
     logger_t *logger = logger_create_from_config(&cfg);
     assert(logger != NULL);
 
     log_record_t trace_rec = {0};
-    trace_rec.level = LOG_LEVEL_TRACE;
+    trace_rec.level        = LOG_LEVEL_TRACE;
     log_dispatcher_dispatch_for(logger, &trace_rec);
 
     log_record_t warn_rec = {0};
-    warn_rec.level = LOG_LEVEL_WARN;
-    warn_rec.message = "warn test";
+    warn_rec.level        = LOG_LEVEL_WARN;
+    warn_rec.message      = "warn test";
     log_dispatcher_dispatch_for(logger, &warn_rec);
 
     log_sink_t *s1 = make_test_sink();
@@ -323,7 +339,8 @@ static void test_dispatcher_multi_instance_gaps(void) {
     printf("test_dispatcher_multi_instance_gaps PASSED\n");
 }
 
-int main(void) {
+int main(void)
+{
     printf("=== multi-instance tests ===\n");
 
     test_dispatcher_multi_instance_gaps();
