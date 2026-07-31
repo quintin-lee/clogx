@@ -62,6 +62,7 @@ endif
 CORE_SRCS = config.c formatter.c dispatcher.c queue.c async.c log.c rotate.c rate_limit.c signal_handler.c plugin_loader.c prometheus_exporter.c
 SINK_SRCS = console_sink.c file_sink.c socket_sink.c custom_sink.c syslog_sink.c otlp_sink.c
 CLOG_SRCS = $(addprefix core/,$(CORE_SRCS)) $(addprefix sinks/,$(SINK_SRCS))
+EXAMPLE_SRCS = example/main.c
 CORE_OBJS = $(addprefix $(BUILD_DIR)/,$(CORE_SRCS:.c=.o))
 SINK_OBJS = $(addprefix $(BUILD_DIR)/,$(SINK_SRCS:.c=.o))
 ALL_OBJS = $(CORE_OBJS) $(SINK_OBJS)
@@ -258,11 +259,11 @@ check-format:
 
 tidy:
 	@command -v clang-tidy >/dev/null || { echo "clang-tidy not found"; exit 1; }
-	clang-tidy $(CLOG_SRCS) -- -Iinclude -Icore -D_GNU_SOURCE
+	clang-tidy $(CLOG_SRCS) $(EXAMPLE_SRCS) -- -Iinclude -Icore -D_GNU_SOURCE
 
 check-tidy:
 	@command -v clang-tidy >/dev/null || { echo "clang-tidy not found; check-tidy skipped"; exit 0; }
-	clang-tidy $(CLOG_SRCS) -- -Iinclude -Icore -D_GNU_SOURCE
+	clang-tidy $(CLOG_SRCS) $(EXAMPLE_SRCS) -- -Iinclude -Icore -D_GNU_SOURCE
 
 # Custom clang-tidy checks (clogx-unused-includes)
 # The plugin is compiled directly with clang++ (no CMake required).
@@ -279,7 +280,7 @@ $(TIDY_CHECK_SO): $(TIDY_CHECK_SRC) $(TIDY_CHECK_HDR)
 tidy-check: $(TIDY_CHECK_SO)
 	clang-tidy --load $(TIDY_CHECK_SO) \
 		--checks='-*,clogx-unused-includes' \
-		$(CLOG_SRCS) -- -Iinclude -Icore -D_GNU_SOURCE
+		$(CLOG_SRCS) $(EXAMPLE_SRCS) -- -Iinclude -Icore -D_GNU_SOURCE
 
 install: $(LIB_TARGET) $(SO_TARGET)
 	install -d $(DESTDIR)$(LIBDIR)

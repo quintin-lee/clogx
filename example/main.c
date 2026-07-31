@@ -7,7 +7,6 @@
  * thread context (MDC), and Prometheus statistics.
  */
 #include <stdio.h>
-#include <string.h>
 #include "log.h"
 #include "log_config.h"
 
@@ -70,7 +69,7 @@ int main(void) {
     cfg.console_stderr = false;
     cfg.file_enable = true;
     snprintf(cfg.file_path, sizeof(cfg.file_path), "logs/example_programmatic.log");
-    cfg.file_max_size = 50 * 1024 * 1024;
+    cfg.file_max_size = (size_t)50 * 1024 * 1024;
     cfg.file_backups = 3;
     cfg.socket_enable = false;
 
