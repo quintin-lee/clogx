@@ -147,5 +147,6 @@ All notable changes to this project will be documented in this file.
 - 17 test cases covering lifecycle, reload, rotation, config validation,
   async fallback, and error paths
 
-[Unreleased]: https://github.com/ohmyopenclog/clogx/compare/v0.1.0...HEAD
-[0.1.0]: https://github.com/ohmyopenclog/clogx/releases/tag/v0.1.0
+[Unreleased]: https://github.com/quintin-lee/clogx/compare/v0.2.0...HEAD
+[0.2.0]: https://github.com/quintin-lee/clogx/releases/tag/v0.2.0
+[0.1.0]: https://github.com/quintin-lee/clogx/releases/tag/v0.1.0

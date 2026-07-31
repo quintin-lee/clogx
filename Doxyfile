@@ -1,7 +1,7 @@
 # Doxyfile 1.16.1
 
 PROJECT_NAME           = "clogx"
-PROJECT_NUMBER         = "0.1.0"
+PROJECT_NUMBER         = "0.2.0"
 PROJECT_BRIEF          = "Lightweight C99 logging library"
 OUTPUT_DIRECTORY       = docs/api
 

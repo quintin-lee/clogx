@@ -4,7 +4,7 @@ from conan.tools.cmake import CMake, CMakeDeps, CMakeToolchain, cmake_layout
 
 class ClogxConan(ConanFile):
     name = "clogx"
-    version = "0.1.0"
+    version = "0.2.0"
     license = "MIT"
     author = "quintin"
     url = "https://github.com/quintin-lee/clogx"

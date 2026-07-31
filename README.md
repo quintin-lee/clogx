@@ -11,7 +11,10 @@ Lightweight C99 logging library: config-driven, multi-sink output, optional asyn
 ## Features
 
 - Macro API: `LOG_INFO` / `LOG_DEBUG` / `LOG_WARN` / `LOG_ERROR` / `LOG_FATAL` / `LOG_TRACE` (`TRACE` kept as alias)
-- Multi-sink: console (optional ANSI color), file (auto-create directories + rotation), TCP socket (optional OpenSSL TLS encryption), native POSIX syslog sink (`syslog_sink_create`)
+- Multi-sink: console (optional ANSI color), file (auto-create directories + rotation), TCP socket (optional OpenSSL TLS encryption), native POSIX syslog sink (`syslog_sink_create`), OpenTelemetry OTLP JSON log sink (`otlp_sink`), custom sink API
+- Plugin ABI: runtime dlopen-based plugin system with ABI versioning, directory scanning (`log_plugin_scan`), and handle caching for dynamically-loadable sink modules
+- Multi-Instance Logger API: independent `logger_t` instances via `logger_create()` / `LOGGER_INFO()` / `logger_destroy()` — each with isolated config, sinks, module, and async worker
+- Prometheus Metrics Exporter: built-in HTTP /metrics server (`clog_prometheus_exporter_start`) exposing per-level counters, async queue depth, and suppressed/dropped event gauges in Prometheus Text Format
 - Mapped Diagnostic Context (MDC): thread-local context key-values (`log_set_thread_context`, `log_get_thread_context`, `log_clear_thread_context`), `%context` token formatting, and top-level JSON injection
 - Structured Logging: native single-line JSON format (`format: "json"`) with RFC 8259 string escaping & thread-local context injection
 - Operational Observability: `log_get_stats(&stats)` API tracking total logs, async queue drops, rate limiter suppressions, and active queue depth
@@ -32,17 +35,21 @@ Lightweight C99 logging library: config-driven, multi-sink output, optional asyn
 - Build: Makefile and CMake (with CTest, `find_package(clogx)`); ASan/UBSan/Valgrind/clang-tidy check targets
 - Static Analysis: zero-warning `clang-tidy` policy (`make check-tidy` / `CLOG_ENABLE_CLANG_TIDY=ON`)
 - Fuzz Testing: focused AFL / libFuzzer test harnesses for config, formatter, and pipeline (`fuzz/fuzz_pipeline.c`)
+- C-Source Branch Coverage: POSIX shell/AWK gcov branch coverage tool (`make coverage-gcov`) with **96%+** branch coverage across core C files and 75% CI gate
+- Signal Safety: POSIX self-pipe signal handler with zero-lock design (`log_get_signal_fd()`) for event loop integration, plus graceful `SIGTERM`/`SIGINT` handling
 
 ## Directory Layout
 
 ```
-include/     public headers (log.h, log_config.h, log_limits.h, log_record.h, log_sink.h, clog_port.h)
-core/        config, formatting, dispatch, queue, async, rotation, rate limiter, signal handler
-sinks/       console / file / socket (with TLS support) / syslog
+include/     public headers (log.h, log_config.h, log_limits.h, log_record.h, log_sink.h, log_prometheus.h, clogx_plugin.h, clog_port.h)
+core/        config, formatting, dispatch, queue, async, rotation, rate limiter, signal handler, plugin loader, Prometheus exporter
+sinks/       console / file / socket (TLS) / syslog / OTLP / custom
 fuzz/        AFL fuzzing harnesses (fuzz_config.c, fuzz_formatter.c, fuzz_pipeline.c)
 example/     example programs
-tests/       regression tests (36 test suites)
+tests/       regression tests (39 test suites)
+benchmarks/  throughput & async-vs-sync benchmarks
 cmake/       CMake package config templates
+scripts/     gcov branch coverage analysis tooling
 ```
 
 ## Quick Start
@@ -100,8 +107,8 @@ make TLS=1        # builds with OpenSSL TLS socket sink support
 make test         # compiles and runs all regression tests
 make asan         # build + test with AddressSanitizer
 make ubsan        # build + test with UndefinedBehaviorSanitizer
-make coverage     # generate gcov C-source branch summary (>96%) + lcov report
-make coverage-gcov# run POSIX bash/awk gcov -b branch coverage gate (scripts/gcov_branch_summary.sh)
+make coverage     # generate gcov branch summary (>96%) + lcov HTML report
+make coverage-gcov# run gcov -b branch coverage gate via scripts/gcov_branch_summary.sh (CI-enforced, 75% threshold)
 make tidy         # run clang-tidy static analysis
 make check-tidy   # enforce clang-tidy warnings-as-errors
 make check        # full quality gate: format check → clang-tidy → clean → build → test
@@ -128,6 +135,7 @@ Common CMake options:
 |--------|---------|-------------|
 | `CLOG_BUILD_EXAMPLES` | ON | build examples |
 | `CLOG_BUILD_TESTS` | ON | build and register CTest |
+| `CLOG_BUILD_BENCHMARKS` | OFF | build benchmark programs |
 | `CLOG_BUILD_SHARED` | OFF | build shared library when ON |
 | `CLOG_USE_SYSTEM_YAML` | OFF | use system libyaml instead of auto-downloading |
 | `CLOG_ENABLE_TLS` | OFF | enable OpenSSL TLS support for socket sink |
@@ -201,6 +209,14 @@ log:
   socket_tls: true
   socket_tls_ca_file: "certs/ca.crt"
   socket_tls_skip_verify: false
+  rate_limit_enable: true
+  rate_limit_max_per_sec: 1000
+  rate_limit_burst: 100
+  otlp_enable: true
+  otlp_endpoint: "logs/otel.json"
+  otlp_service_name: "my-service"
+  prometheus_enable: true
+  prometheus_port: 9090
 ```
 
 | Key | Meaning |
@@ -223,6 +239,8 @@ log:
 | `rate_limit_enable` | enable global token bucket rate limiting (`true`/`false`) |
 | `rate_limit_max_per_sec` | max allowed log messages per second (e.g. `1000`) |
 | `rate_limit_burst` | maximum burst capacity (e.g. `100`) |
+| `otlp_enable` / `otlp_endpoint` / `otlp_service_name` | OpenTelemetry OTLP JSON log sink |
+| `prometheus_enable` / `prometheus_port` | Prometheus HTTP /metrics exporter |
 
 ## Structured Logging (JSON)
 
@@ -331,16 +349,58 @@ LOGGER_FATAL(logger, "...");
 
 *Note on Rate Limiter Performance*: When rate limiting is disabled (`rate_limit_enable: false`), a lock-free fast-path bypasses mutex overhead. When enabled, a mutex protects the token bucket calculations.
 
-Installed public headers: `log.h`, `log_config.h`, `log_limits.h`, `log_record.h`, `log_sink.h` under `include/clogx/`.
+Installed public headers: `log.h`, `log_config.h`, `log_limits.h`, `log_record.h`, `log_sink.h`, `log_prometheus.h`, `clog_port.h`, `clogx_plugin.h` under `include/clogx/`.
+
+## Prometheus Metrics
+
+Built-in HTTP /metrics server for Prometheus scraping. Enable via YAML or programmatically:
+
+```c
+#include "log_prometheus.h"
+
+/* Start HTTP server on port 9090 */
+clog_prometheus_exporter_start(9090);
+
+/* Render metrics to a buffer manually */
+char buf[4096];
+clog_prometheus_render_metrics(buf, sizeof(buf));
+
+/* Stop the server */
+clog_prometheus_exporter_stop();
+```
+
+Exposed metrics include `clogx_log_total{level="info"}`, `clogx_queue_depth`, `clogx_dropped_total`, and `clogx_suppressed_total`.
+
+## Plugin ABI (`clogx_plugin.h`)
+
+Runtime plugin system for dynamically-loadable sink modules via `dlopen(3)`:
+
+```c
+/* Scan a directory for plugin .so files */
+clogx_plugin_handle_t *handles[16];
+int n = log_plugin_scan("/usr/lib/clogx/plugins", handles, 16);
+
+/* Create a sink from a loaded plugin */
+log_sink_t *sink = log_plugin_create_sink(handles[0], "{\"topic\":\"logs\"}");
+log_add_sink(sink);
+
+/* Or load a single plugin directly */
+clogx_plugin_handle_t *h = log_plugin_load("./my_sink.so");
+log_sink_t *s = log_plugin_create_sink(h, NULL);
+log_add_sink(s);
+```
+
+Plugins export `clogx_plugin_desc()` (metadata) and `clogx_plugin_create()` (factory) symbols; see `include/clogx_plugin.h` for the ABI contract.
 
 ## Fuzzing
 
 AFL / libFuzzer test targets:
 
 ```bash
-make fuzz-build      # builds build/fuzz_config and build/fuzz_formatter
+make fuzz-build      # builds build/fuzz_config, fuzz_formatter, and fuzz_pipeline
 make fuzz-config     # launches afl-fuzz on config parser
 make fuzz-formatter  # launches afl-fuzz on log line formatter
+make fuzz-pipeline   # launches afl-fuzz on formatting, truncation, and boundaries
 ```
 
 ## License
