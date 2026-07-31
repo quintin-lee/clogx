@@ -1,10 +1,10 @@
 from conan import ConanFile
 from conan.tools.cmake import CMake, CMakeDeps, CMakeToolchain, cmake_layout
+import os
 
 
 class ClogxConan(ConanFile):
     name = "clogx"
-    version = "0.2.0"
     license = "MIT"
     author = "quintin"
     url = "https://github.com/quintin-lee/clogx"
@@ -23,6 +23,14 @@ class ClogxConan(ConanFile):
         "with_tls": False,
         "with_yaml": False,
     }
+
+    def set_name(self):
+        self.name = "clogx"
+
+    def set_version(self):
+        version_file = os.path.join(self.recipe_folder, "VERSION")
+        with open(version_file) as f:
+            self.version = f.read().strip()
 
     def config_options(self):
         if self.settings.os == "Windows":

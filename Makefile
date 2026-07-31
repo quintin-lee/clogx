@@ -87,11 +87,30 @@ BENCHMARK_BINS = $(patsubst benchmarks/%.c,$(BUILD_DIR)/%,$(BENCHMARK_SOURCES))
 ASAN_CFLAGS = -std=c99 -Wall -Wextra -Wconversion -Iinclude -Icore -O1 -g -D_GNU_SOURCE -fPIC -fvisibility=hidden -fsanitize=address -fno-omit-frame-pointer -fno-optimize-sibling-calls
 UBSAN_CFLAGS = -std=c99 -Wall -Wextra -Wconversion -Iinclude -Icore -O1 -g -D_GNU_SOURCE -fPIC -fvisibility=hidden -fsanitize=undefined
 
-VERSION = 0.1.0
+VERSION := $(shell if [ -f VERSION ]; then head -n 1 VERSION; else echo "0.2.0"; fi)
+VERSION_MAJOR := $(shell echo $(VERSION) | cut -d. -f1)
+VERSION_MINOR := $(shell echo $(VERSION) | cut -d. -f2)
+VERSION_PATCH := $(shell echo $(VERSION) | cut -d. -f3)
 SO_VERSION = 0
 PREFIX ?= /usr/local
 LIBDIR ?= $(PREFIX)/lib
 INCLUDEDIR ?= $(PREFIX)/include
+
+VERSION_H := include/clogx_version.h
+$(VERSION_H): VERSION | include
+	@if [ ! -f $@ ] || ! grep -q "CLOGX_VERSION_STRING \"$(VERSION)\"" $@; then \
+		printf '%s\n' \
+			'#ifndef CLOGX_VERSION_H' \
+			'#define CLOGX_VERSION_H' \
+			'' \
+			'#define CLOGX_VERSION_MAJOR $(VERSION_MAJOR)' \
+			'#define CLOGX_VERSION_MINOR $(VERSION_MINOR)' \
+			'#define CLOGX_VERSION_PATCH $(VERSION_PATCH)' \
+			'#define CLOGX_VERSION_STRING "$(VERSION)"' \
+			'' \
+			'#endif' > $@; \
+		echo "Generated $@ from VERSION=$(VERSION)"; \
+	fi
 
 PUBLIC_HEADERS := include/log.h include/log_config.h include/log_limits.h include/log_record.h include/log_sink.h include/clogx_plugin.h
 
@@ -99,7 +118,7 @@ PUBLIC_HEADERS := include/log.h include/log_config.h include/log_limits.h includ
 
 FORMAT_FILES := $(shell find include core sinks example tests fuzz benchmarks -name '*.c' -o -name '*.h' 2>/dev/null)
 
-all: $(LIB_TARGET) $(SO_TARGET) $(EXAMPLE_BIN)
+all: $(VERSION_H) $(LIB_TARGET) $(SO_TARGET) $(EXAMPLE_BIN)
 
 $(BUILD_DIR):
 	mkdir -p $@
