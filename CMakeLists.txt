@@ -101,6 +101,7 @@ set(CLOG_SOURCES
     sinks/otlp_sink.c
     core/plugin_loader.c
     core/prometheus_exporter.c
+    core/socket_async.c
 )
 
 # Object library — all sources compiled once, shared across library and internal-symbol tests
@@ -217,10 +218,11 @@ if(CLOG_BUILD_TESTS)
         test_prometheus
         test_multi_instance
         test_coverage_gaps
+        test_socket_async
     )
 
     # Tests that directly reference internal symbols (not exported from shared lib)
-    set(CLOG_INTERNAL_TESTS test_queue_try_put test_async_fallback test_async_reload test_coverage_gaps)
+    set(CLOG_INTERNAL_TESTS test_queue_try_put test_async_fallback test_async_reload test_coverage_gaps test_socket_async)
 
     foreach(test_name IN LISTS CLOG_TEST_SOURCES)
         if(CLOG_BUILD_SHARED AND test_name IN_LIST CLOG_INTERNAL_TESTS)

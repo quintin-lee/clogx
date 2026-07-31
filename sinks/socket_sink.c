@@ -1,6 +1,7 @@
 /**
  * @file socket_sink.c
- * @brief TCP / TLS socket sink with lazy connect and reconnect-on-send-failure.
+ * @brief TCP / TLS socket sink with lazy connect, reconnect-on-send-failure,
+ *        and optional async non-blocking mode with ring buffer.
  *
  * ## Design
  *
@@ -9,6 +10,19 @@
  * established lazily on the first write and automatically reconnected
  * on send failure.
  *
+ * ## Modes
+ *
+ * ### Synchronous (default)
+ * `socket_write()` calls `send()` directly. If the send fails, the socket
+ * is closed and reconnected once. Simple and predictable.
+ *
+ * ### Asynchronous (socket_async: true in config)
+ * `socket_write()` enqueues the line into a ring buffer and returns
+ * immediately. A background writer thread drains the buffer and sends
+ * over a non-blocking socket with exponential backoff reconnection.
+ * Lines are dropped (lossy) when the buffer is full — logging must
+ * never block the application.
+ *
  * ## Connection Lifecycle
  *
  * ```
@@ -16,10 +30,14 @@
  *   ├─ store host/port (no connect yet)
  *   └─ sink->write = socket_write
  *
- * socket_write()
+ * socket_write() [sync]
  *   ├─ if sockfd == INVALID: socket_connect()
  *   ├─ send(buf, len)
  *   └─ on failure: close + reconnect + retry once
+ *
+ * socket_write() [async]
+ *   ├─ ring_put(buf)  (non-blocking, lossy)
+ *   └─ return immediately
  * ```
  *
  * ## TLS Support (compile-time)
@@ -29,11 +47,14 @@
  * connect phase. Certificate verification can be skipped via
  * `skip_verify` for development environments.
  *
- * ## Reconnect Backoff
+ * ## Reconnect Backoff (async mode)
  *
- * After a failed reconnect, the sink sleeps for 1 second before
- * retrying. This prevents tight reconnect loops when the receiver
- * is down. Future versions may add exponential backoff.
+ * The background writer uses exponential backoff with jitter:
+ *   - Initial delay: configurable (default 1000ms)
+ *   - Multiplier: 2x on each failure
+ *   - Max delay: configurable (default 60000ms)
+ *   - Jitter: ±10% to prevent thundering herd
+ *   - Reset: backoff resets to minimum on successful send
  *
  * ## Plugin Interface
  *
@@ -43,6 +64,7 @@
 #include "clogx_plugin.h"
 #include "log_record.h"
 #include "log_sink.h"
+#include "socket_async.h"
 #include <stdio.h>
 #include <stdlib.h>
 #include <string.h>
@@ -64,6 +86,10 @@ typedef struct {
     SSL_CTX *ssl_ctx;
     SSL     *ssl;
 #endif
+    /* Async mode fields. */
+    bool                  async_enabled;
+    socket_writer_t      *async_writer; /**< Background writer (NULL if sync). */
+    socket_ring_buffer_t *async_ring;   /**< Ring buffer (NULL if sync). */
 } socket_sink_data_t;
 
 static int socket_connect(log_sink_t *sink)
@@ -160,6 +186,13 @@ static int socket_connect(log_sink_t *sink)
 static int socket_write(log_sink_t *sink, const char *buf, size_t len)
 {
     socket_sink_data_t *data = (socket_sink_data_t *)sink->private_data;
+
+    /* Async mode: enqueue into ring buffer and return immediately. */
+    if (data->async_enabled && data->async_ring) {
+        return socket_ring_put(data->async_ring, buf, len);
+    }
+
+    /* Synchronous mode: blocking send. */
     if (clog_is_invalid_socket(data->sockfd)) {
         if (socket_connect(sink) != 0 || clog_is_invalid_socket(data->sockfd)) {
             return -1;
@@ -205,12 +238,23 @@ static int socket_write(log_sink_t *sink, const char *buf, size_t len)
 static void socket_flush(log_sink_t *sink)
 {
     (void)sink;
+    /* In async mode, the writer thread handles flushing continuously.
+     * In sync mode, TCP is byte-stream (no explicit flush needed). */
 }
 
 static void socket_destroy(log_sink_t *sink)
 {
     socket_sink_data_t *data = (socket_sink_data_t *)sink->private_data;
     if (data) {
+        /* Stop async writer if running. */
+        if (data->async_enabled && data->async_writer) {
+            socket_writer_stop(data->async_writer);
+            socket_ring_destroy(data->async_ring);
+            free(data->async_writer);
+            data->async_writer = NULL;
+            data->async_ring   = NULL;
+        }
+
 #ifdef CLOG_USE_TLS
         if (data->ssl) {
             SSL_shutdown(data->ssl);
@@ -236,6 +280,16 @@ static void socket_atfork_child(log_sink_t *sink)
         return;
     }
     socket_sink_data_t *data = (socket_sink_data_t *)sink->private_data;
+
+    /* In async mode, the writer thread doesn't survive fork.
+     * Stop it and mark as disconnected so a new thread can be started. */
+    if (data->async_enabled && data->async_writer) {
+        socket_writer_stop(data->async_writer);
+        free(data->async_writer);
+        data->async_writer = NULL;
+        data->async_ring   = NULL;
+    }
+
 #ifdef CLOG_USE_TLS
     if (data->ssl) {
         SSL_free(data->ssl);
@@ -289,12 +343,15 @@ log_sink_t *socket_sink_create_tls(
         return NULL;
     }
     /* LCOV_EXCL_STOP */
-    data->port        = port;
-    data->sockfd      = CLOG_INVALID_SOCKET;
-    data->connected   = 0;
-    data->use_tls     = use_tls;
-    data->ca_file     = ca_file ? strdup(ca_file) : NULL;
-    data->skip_verify = skip_verify;
+    data->port          = port;
+    data->sockfd        = CLOG_INVALID_SOCKET;
+    data->connected     = 0;
+    data->use_tls       = use_tls;
+    data->ca_file       = ca_file ? strdup(ca_file) : NULL;
+    data->skip_verify   = skip_verify;
+    data->async_enabled = false;
+    data->async_writer  = NULL;
+    data->async_ring    = NULL;
 #ifdef CLOG_USE_TLS
     data->ssl_ctx = NULL;
     data->ssl     = NULL;
@@ -307,6 +364,62 @@ log_sink_t *socket_sink_create_tls(
     sink->atfork_child = socket_atfork_child;
     sink->private_data = data;
     sink->min_level    = LOG_LEVEL_TRACE;
+    return sink;
+}
+
+/**
+ * @brief Create an async TCP/TLS socket sink with ring buffer and backoff.
+ *
+ * The writer thread connects lazily and drains the ring buffer with
+ * non-blocking sends. Reconnection uses exponential backoff with jitter.
+ *
+ * @param host            Remote host. Non-NULL, non-empty, port 1–65535.
+ * @param port            Remote port.
+ * @param use_tls         Enable OpenSSL TLS transport (requires CLOG_USE_TLS).
+ * @param ca_file         CA certificate path for TLS verification, or NULL.
+ * @param skip_verify     Skip server certificate verification when true.
+ * @param ring_capacity   Ring buffer capacity (number of lines). 0 = 8192 default.
+ * @param backoff_min_ms  Initial backoff delay in ms. 0 = 1000 default.
+ * @param backoff_max_ms  Maximum backoff delay in ms. 0 = 60000 default.
+ * @return New sink, or NULL on error.
+ */
+log_sink_t *socket_sink_create_async(const char *host,
+                                     int         port,
+                                     bool        use_tls,
+                                     const char *ca_file,
+                                     bool        skip_verify,
+                                     size_t      ring_capacity,
+                                     uint32_t    backoff_min_ms,
+                                     uint32_t    backoff_max_ms)
+{
+    log_sink_t *sink = socket_sink_create_tls(host, port, use_tls, ca_file, skip_verify);
+    if (!sink) {
+        return NULL;
+    }
+
+    socket_sink_data_t *data = (socket_sink_data_t *)sink->private_data;
+
+    socket_writer_config_t wconfig;
+    memset(&wconfig, 0, sizeof(wconfig));
+    wconfig.host           = data->host;
+    wconfig.port           = data->port;
+    wconfig.use_tls        = data->use_tls;
+    wconfig.ca_file        = data->ca_file;
+    wconfig.skip_verify    = data->skip_verify;
+    wconfig.ring_capacity  = ring_capacity > 0 ? ring_capacity : 8192;
+    wconfig.backoff_min_ms = backoff_min_ms > 0 ? backoff_min_ms : 1000;
+    wconfig.backoff_max_ms = backoff_max_ms > 0 ? backoff_max_ms : 60000;
+
+    socket_writer_t *writer = socket_writer_start(&wconfig);
+    if (!writer) {
+        /* Fall back to sync mode. */
+        return sink;
+    }
+
+    data->async_enabled = true;
+    data->async_writer  = writer;
+    data->async_ring    = socket_writer_ring(writer);
+
     return sink;
 }
 

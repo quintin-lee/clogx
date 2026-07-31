@@ -78,8 +78,8 @@
 #endif
 #endif
 
-    /** @brief Forward declaration used by @ref clogx_plugin_t. */
-    struct clogx_plugin_t;
+/** @brief Forward declaration used by @ref clogx_plugin_t. */
+struct clogx_plugin_t;
 
 /**
  * @struct log_sink
@@ -320,6 +320,33 @@ CLOGX_API log_sink_t *socket_sink_create(const char *host, int port);
  */
 CLOGX_API log_sink_t *socket_sink_create_tls(
     const char *host, int port, bool use_tls, const char *ca_file, bool skip_verify);
+
+/**
+ * @brief Create an async TCP/TLS socket sink with ring buffer and exponential backoff.
+ *
+ * Same as socket_sink_create_tls but the writer runs in a background thread.
+ * Log lines are enqueued into a ring buffer (non-blocking, lossy on overflow)
+ * and sent over a non-blocking socket. Reconnection uses exponential backoff
+ * with jitter to avoid tight reconnect loops when the receiver is down.
+ *
+ * @param host            Remote host. Non-NULL, non-empty, port 1–65535.
+ * @param port            Remote port.
+ * @param use_tls         Enable OpenSSL TLS transport (requires CLOG_USE_TLS).
+ * @param ca_file         CA certificate path for TLS verification, or NULL.
+ * @param skip_verify     Skip server certificate verification when true.
+ * @param ring_capacity   Ring buffer capacity (number of lines). 0 = 8192 default.
+ * @param backoff_min_ms  Initial backoff delay in ms. 0 = 1000 default.
+ * @param backoff_max_ms  Maximum backoff delay in ms. 0 = 60000 default.
+ * @return New sink, or NULL on error.
+ */
+CLOGX_API log_sink_t *socket_sink_create_async(const char *host,
+                                               int         port,
+                                               bool        use_tls,
+                                               const char *ca_file,
+                                               bool        skip_verify,
+                                               size_t      ring_capacity,
+                                               uint32_t    backoff_min_ms,
+                                               uint32_t    backoff_max_ms);
 
 /**
  * @brief Create a custom user-defined sink plugin.

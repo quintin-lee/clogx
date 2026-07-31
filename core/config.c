@@ -79,6 +79,10 @@ typedef enum {
     HANDLER_SOCKET_TLS,
     HANDLER_SOCKET_TLS_CA_FILE,
     HANDLER_SOCKET_TLS_SKIP_VERIFY,
+    HANDLER_SOCKET_ASYNC,
+    HANDLER_SOCKET_RING_CAPACITY,
+    HANDLER_SOCKET_BACKOFF_MIN_MS,
+    HANDLER_SOCKET_BACKOFF_MAX_MS,
     HANDLER_TIME_FORMAT,
     HANDLER_PROMETHEUS_ENABLE,
     HANDLER_PROMETHEUS_PORT,
@@ -122,6 +126,10 @@ static const config_key_t g_config_keys[] = {
     {"socket_tls", HANDLER_SOCKET_TLS},
     {"socket_tls_ca_file", HANDLER_SOCKET_TLS_CA_FILE},
     {"socket_tls_skip_verify", HANDLER_SOCKET_TLS_SKIP_VERIFY},
+    {"socket_async", HANDLER_SOCKET_ASYNC},
+    {"socket_ring_capacity", HANDLER_SOCKET_RING_CAPACITY},
+    {"socket_backoff_min_ms", HANDLER_SOCKET_BACKOFF_MIN_MS},
+    {"socket_backoff_max_ms", HANDLER_SOCKET_BACKOFF_MAX_MS},
     {"time_format", HANDLER_TIME_FORMAT},
     {"tls_ca_file", HANDLER_SOCKET_TLS_CA_FILE},
     {"tls_enable", HANDLER_SOCKET_TLS},
@@ -435,6 +443,45 @@ static int parse_config_file(const char *filepath, log_config_t *cfg)
                     case HANDLER_SOCKET_TLS_SKIP_VERIFY:
                         cfg->socket_tls_skip_verify = (strcmp(val, "true") == 0);
                         break;
+                    case HANDLER_SOCKET_ASYNC:
+                        cfg->socket_async = (strcmp(val, "true") == 0);
+                        break;
+                    case HANDLER_SOCKET_RING_CAPACITY: {
+                        char *end       = NULL;
+                        errno           = 0;
+                        unsigned long v = strtoul(val, &end, 10);
+                        if (end == val || *end != '\0' || errno == ERANGE) {
+                            fprintf(stderr, "Invalid socket_ring_capacity: %s\n", val);
+                            has_errors = 1;
+                        } else {
+                            cfg->socket_ring_capacity = (size_t)v;
+                        }
+                        break;
+                    }
+                    case HANDLER_SOCKET_BACKOFF_MIN_MS: {
+                        char *end       = NULL;
+                        errno           = 0;
+                        unsigned long v = strtoul(val, &end, 10);
+                        if (end == val || *end != '\0' || errno == ERANGE) {
+                            fprintf(stderr, "Invalid socket_backoff_min_ms: %s\n", val);
+                            has_errors = 1;
+                        } else {
+                            cfg->socket_backoff_min_ms = (uint32_t)v;
+                        }
+                        break;
+                    }
+                    case HANDLER_SOCKET_BACKOFF_MAX_MS: {
+                        char *end       = NULL;
+                        errno           = 0;
+                        unsigned long v = strtoul(val, &end, 10);
+                        if (end == val || *end != '\0' || errno == ERANGE) {
+                            fprintf(stderr, "Invalid socket_backoff_max_ms: %s\n", val);
+                            has_errors = 1;
+                        } else {
+                            cfg->socket_backoff_max_ms = (uint32_t)v;
+                        }
+                        break;
+                    }
                     case HANDLER_RATE_LIMIT_ENABLE:
                         cfg->rate_limit_enable = (strcmp(val, "true") == 0);
                         break;
@@ -605,6 +652,10 @@ int log_config_load_into(logger_t *logger, const char *yaml_path)
     logger->config.socket_tls             = false;
     logger->config.socket_tls_ca_file[0]  = '\0';
     logger->config.socket_tls_skip_verify = false;
+    logger->config.socket_async           = false;
+    logger->config.socket_ring_capacity   = 0;
+    logger->config.socket_backoff_min_ms  = 0;
+    logger->config.socket_backoff_max_ms  = 0;
     logger->config.rate_limit_enable      = false;
     logger->config.rate_limit_max_per_sec = 0;
     logger->config.rate_limit_burst       = 0;
@@ -690,6 +741,10 @@ static int apply_config(const log_config_t *cfg)
              "%s",
              cfg->socket_tls_ca_file);
     g_default_logger.config.socket_tls_skip_verify = cfg->socket_tls_skip_verify;
+    g_default_logger.config.socket_async           = cfg->socket_async;
+    g_default_logger.config.socket_ring_capacity   = cfg->socket_ring_capacity;
+    g_default_logger.config.socket_backoff_min_ms  = cfg->socket_backoff_min_ms;
+    g_default_logger.config.socket_backoff_max_ms  = cfg->socket_backoff_max_ms;
     g_default_logger.config.rate_limit_enable      = cfg->rate_limit_enable;
     g_default_logger.config.rate_limit_max_per_sec = cfg->rate_limit_max_per_sec;
     g_default_logger.config.rate_limit_burst       = cfg->rate_limit_burst;

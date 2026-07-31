@@ -17,6 +17,7 @@
 #include "log_limits.h"
 #include "log_record.h"
 #include <stdbool.h>
+#include <stddef.h>
 #include <stdint.h>
 
 /* Reuse CLOGX_API from log.h if already included, otherwise define it. */
@@ -97,13 +98,17 @@ typedef struct {
     int  socket_port;                     /**< Socket peer port in host byte order (1..65535). */
     bool socket_tls; /**< Enable TLS encryption for socket sink (requires OpenSSL). */
     char socket_tls_ca_file[CLOG_MAX_PATH_SIZE]; /**< Path to CA certificate file for TLS
-                                                    verification. */
-    bool socket_tls_skip_verify; /**< Skip server certificate verification (insecure, for testing
-                                    only). */
-    bool rate_limit_enable;      /**< Enable global token bucket rate limiting. */
-    int  rate_limit_max_per_sec; /**< Maximum allowed log events per second. */
-    int  rate_limit_burst;       /**< Maximum burst capacity for the token bucket. */
-    bool catch_signals;          /**< Catch SIGTERM/SIGINT for graceful shutdown via self-pipe. */
+                                                     verification. */
+    bool socket_tls_skip_verify;    /**< Skip server certificate verification (insecure, for testing
+                                        only). */
+    bool     socket_async;          /**< Enable async non-blocking socket with ring buffer. */
+    size_t   socket_ring_capacity;  /**< Ring buffer capacity for async socket (lines). 0 = 8192. */
+    uint32_t socket_backoff_min_ms; /**< Initial reconnect backoff in ms. 0 = 1000. */
+    uint32_t socket_backoff_max_ms; /**< Max reconnect backoff in ms. 0 = 60000. */
+    bool     rate_limit_enable;     /**< Enable global token bucket rate limiting. */
+    int      rate_limit_max_per_sec; /**< Maximum allowed log events per second. */
+    int      rate_limit_burst;       /**< Maximum burst capacity for the token bucket. */
+    bool     catch_signals; /**< Catch SIGTERM/SIGINT for graceful shutdown via self-pipe. */
 
     /* ---- Prometheus /metrics endpoint ---- */
 
