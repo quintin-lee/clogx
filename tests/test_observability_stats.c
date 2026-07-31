@@ -59,8 +59,7 @@ static void test_concurrent_stats_increment(void)
                 (unsigned long long)added);
         exit(1);
     }
-    printf("test_concurrent_stats_increment PASSED (%llu logs added)\n",
-           (unsigned long long)added);
+    printf("test_concurrent_stats_increment PASSED (%llu logs added)\n", (unsigned long long)added);
 }
 
 int main(void)

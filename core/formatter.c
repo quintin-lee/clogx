@@ -720,9 +720,9 @@ static int format_impl(log_record_t *restrict record,
     int         op_count = fmt_compile(fmt, ops, FMT_MAX_OPS);
     const char *tf       = (time_format && time_format[0]) ? time_format : "%Y-%m-%d %H:%M:%S";
 
-    char     *out       = buf;
-    size_t    remaining = buf_size;
-    int       total     = 0;
+    char  *out       = buf;
+    size_t remaining = buf_size;
+    int    total     = 0;
 
     for (int i = 0; i < op_count; i++) {
         switch (ops[i].op) {
@@ -733,7 +733,7 @@ static int format_impl(log_record_t *restrict record,
 
         case FMT_OP_TIME: {
             time_t sec = (time_t)(record->timestamp / 1000000);
-            char time_buf[TIME_BUF_SIZE];
+            char   time_buf[TIME_BUF_SIZE];
             format_sec_cached(sec, tf, time_buf, sizeof(time_buf));
             total += append_token(&out, &remaining, time_buf, strlen(time_buf));
             break;

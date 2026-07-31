@@ -38,19 +38,19 @@ static int write_config(void)
 static void test_timestamp_cache_formatting(void)
 {
     log_record_t rec = {0};
-    rec.level     = LOG_LEVEL_INFO;
-    rec.timestamp = 1700000000000000ULL; /* fixed epoch time in microseconds */
-    rec.message   = "cache time test";
-    rec.module    = "main";
-    rec.file      = "test.c";
-    rec.line      = 10;
-    rec.func      = "test_fn";
+    rec.level        = LOG_LEVEL_INFO;
+    rec.timestamp    = 1700000000000000ULL; /* fixed epoch time in microseconds */
+    rec.message      = "cache time test";
+    rec.module       = "main";
+    rec.file         = "test.c";
+    rec.line         = 10;
+    rec.func         = "test_fn";
 
     char buf1[256];
     char buf2[256];
 
-    logger_t logger = {0};
-    logger.config.level = LOG_LEVEL_DEBUG;
+    logger_t logger      = {0};
+    logger.config.level  = LOG_LEVEL_DEBUG;
     logger.config.format = "[%time] %msg";
 
     int len1 = log_formatter_format_for(&logger, &rec, buf1, sizeof(buf1));
