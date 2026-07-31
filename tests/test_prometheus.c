@@ -6,22 +6,9 @@
 #include <assert.h>
 #include <stdio.h>
 #include <string.h>
+#include "clog_port.h"
 #include "log.h"
 #include "log_prometheus.h"
-
-#ifdef _WIN32
-#include <winsock2.h>
-#include <ws2tcpip.h>
-typedef SOCKET sockfd_t;
-#define CLOSE_SOCKET closesocket
-#else
-#include <sys/socket.h>
-#include <netinet/in.h>
-#include <arpa/inet.h>
-#include <unistd.h>
-typedef int sockfd_t;
-#define CLOSE_SOCKET close
-#endif
 
 static void test_prometheus_render(void) {
     char buf[2048];
@@ -68,7 +55,7 @@ static void test_prometheus_http_socket(void) {
     }
     assert(ret == CLOG_OK);
 
-    sockfd_t fd = socket(AF_INET, SOCK_STREAM, 0);
+    clog_socket_t fd = socket(AF_INET, SOCK_STREAM, 0);
     assert(fd >= 0);
 
     struct sockaddr_in addr;
@@ -92,7 +79,7 @@ static void test_prometheus_http_socket(void) {
             break;
     }
     resp[total] = '\0';
-    CLOSE_SOCKET(fd);
+    clog_close_socket(fd);
 
     assert(strstr(resp, "HTTP/1.1 200 OK") != NULL);
     assert(strstr(resp, "Content-Type: text/plain; version=0.0.4; charset=utf-8") != NULL);
