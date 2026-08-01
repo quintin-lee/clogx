@@ -628,39 +628,78 @@ static inline void clog_sem_post(clog_sem_t *sem)
 
 /*
  * macOS does not implement POSIX unnamed semaphores: sem_init() always
- * returns -1 with ENOSYS. Use Grand Central Dispatch semaphores instead.
+ * returns -1 with ENOSYS. Named semaphores (sem_open) ARE supported and are
+ * the fork-safe choice: they live in the kernel and a pthread_atfork child
+ * handler may close + re-open them to obtain a fresh, independent object.
+ *
+ * (Grand Central Dispatch semaphores are NOT fork-safe: using a
+ * dispatch_semaphore_t from a child process after fork() traps with
+ * __builtin_trap → SIGTRAP. That broke log_async_atfork_child_for().)
  */
-#include <dispatch/dispatch.h>
+#include <fcntl.h>
+#include <semaphore.h>
+#include <sys/stat.h>
+#include <unistd.h>
 
-typedef dispatch_semaphore_t clog_sem_t;
+/*
+ * Named semaphore wrapper. The name embeds the pid (isolation between
+ * processes) and the address of this object (isolation between the multiple
+ * queues a single process may own). macOS limits names to PSEMNAMLEN (31).
+ */
+typedef struct {
+    sem_t *ptr;      /**< Kernel semaphore handle (NULL when uninitialised). */
+    char   name[32]; /**< Registered name, used by sem_unlink(). */
+} clog_sem_t;
 
 static inline int clog_sem_init(clog_sem_t *sem, long initial)
 {
-    *sem = dispatch_semaphore_create(initial);
-    return *sem ? 0 : -1;
+    if (!sem) {
+        return -1;
+    }
+    snprintf(sem->name,
+             sizeof(sem->name),
+             "/clogx%ld%lx",
+             (long)getpid(),
+             (unsigned long)(uintptr_t)sem & 0xFFFFFFFFu);
+    /* Clear any stale object left behind by a crashed process. */
+    sem_unlink(sem->name);
+    sem->ptr = sem_open(sem->name, O_CREAT | O_EXCL, 0600, (unsigned int)initial);
+    if (sem->ptr == SEM_FAILED) {
+        sem->ptr = NULL;
+        return -1;
+    }
+    return 0;
 }
 
 static inline void clog_sem_destroy(clog_sem_t *sem)
 {
-    if (sem && *sem) {
-        dispatch_release(*sem);
-        *sem = NULL;
+    if (sem && sem->ptr) {
+        sem_close(sem->ptr);
+        sem_unlink(sem->name);
+        sem->ptr = NULL;
     }
 }
 
 static inline void clog_sem_wait(clog_sem_t *sem)
 {
-    dispatch_semaphore_wait(*sem, DISPATCH_TIME_FOREVER);
+    while (sem->ptr && sem_wait(sem->ptr) != 0) {
+        /* Retry on EINTR. */
+    }
 }
 
 static inline int clog_sem_trywait(clog_sem_t *sem)
 {
-    return (dispatch_semaphore_wait(*sem, DISPATCH_TIME_NOW) == 0) ? 0 : -1;
+    if (!sem || !sem->ptr) {
+        return -1;
+    }
+    return sem_trywait(sem->ptr);
 }
 
 static inline void clog_sem_post(clog_sem_t *sem)
 {
-    dispatch_semaphore_signal(*sem);
+    if (sem && sem->ptr) {
+        sem_post(sem->ptr);
+    }
 }
 
 #else /* POSIX */
