@@ -49,6 +49,10 @@ static void test_ring_put_get(void)
     assert(memcmp(lines[1], "line2", 5) == 0);
     assert(ring->count == 0);
 
+    for (int i = 0; i < n; i++) {
+        free((void *)lines[i]);
+    }
+
     socket_ring_destroy(ring);
     printf("  test_ring_put_get PASSED\n");
 }
@@ -72,6 +76,10 @@ static void test_ring_overflow_drops(void)
     /* oldest (aaa) was dropped, so we get bbb then ccc */
     assert(memcmp(lines[0], "bbb", 3) == 0);
     assert(memcmp(lines[1], "ccc", 3) == 0);
+
+    for (int i = 0; i < n; i++) {
+        free((void *)lines[i]);
+    }
 
     socket_ring_destroy(ring);
     printf("  test_ring_overflow_drops PASSED\n");
@@ -100,6 +108,7 @@ static void test_ring_close_rejects_puts(void)
     size_t      lengths[1];
     int         n = socket_ring_get_batch(ring, lines, lengths, 1);
     assert(n == 1);
+    free((void *)lines[0]);
     /* drained + closed → -1 */
     n = socket_ring_get_batch(ring, lines, lengths, 1);
     assert(n == -1);
@@ -136,10 +145,16 @@ static void test_ring_get_batch_limit(void)
     int n = socket_ring_get_batch(ring, lines, lengths, 3);
     assert(n == 3);
     assert(ring->count == 3);
+    for (int i = 0; i < n; i++) {
+        free((void *)lines[i]);
+    }
     /* get the rest */
     n = socket_ring_get_batch(ring, lines, lengths, 8);
     assert(n == 3);
     assert(ring->count == 0);
+    for (int i = 0; i < n; i++) {
+        free((void *)lines[i]);
+    }
     socket_ring_destroy(ring);
     printf("  test_ring_get_batch_limit PASSED\n");
 }
