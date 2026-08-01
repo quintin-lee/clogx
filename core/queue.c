@@ -119,7 +119,7 @@ int mpsc_queue_try_put(mpsc_queue_t *restrict q, log_record_t *restrict record)
     }
 
     /* Fast check: if the queue has been closed, give up immediately. */
-    if (__atomic_load_n(&q->closed, __ATOMIC_ACQUIRE)) {
+    if (clog_atomic_load_int(&q->closed)) {
         return -1;
     }
 
@@ -144,7 +144,7 @@ int mpsc_queue_try_put(mpsc_queue_t *restrict q, log_record_t *restrict record)
              */
             mpsc_slot_t *slot = &q->buffer[head & q->mask];
             slot->rec         = *record;
-            __atomic_store_n(&slot->seq, (uint64_t)head + 1, __ATOMIC_RELEASE);
+            clog_atomic_store_u64(&slot->seq, (uint64_t)head + 1);
             clog_atomic_fetch_add_sz(&q->count, 1);
             clog_sem_post(&q->items_sem);
             return 0;
@@ -169,7 +169,7 @@ int mpsc_queue_put(mpsc_queue_t *restrict q, log_record_t *restrict record)
          * try_put failed. If the queue is closed, propagate the failure.
          * Otherwise it was full — wait for a free slot, then retry.
          */
-        if (__atomic_load_n(&q->closed, __ATOMIC_ACQUIRE)) {
+        if (clog_atomic_load_int(&q->closed)) {
             return -1;
         }
 
@@ -209,7 +209,7 @@ int mpsc_queue_get_batch(mpsc_queue_t *restrict q,
          * again).
          */
         if (head - tail == 0) {
-            if (__atomic_load_n(&q->closed, __ATOMIC_ACQUIRE)) {
+            if (clog_atomic_load_int(&q->closed)) {
                 return -1;
             }
             continue; /* Spurious wake-up — re-block. */
@@ -226,7 +226,7 @@ int mpsc_queue_get_batch(mpsc_queue_t *restrict q,
              * CAS but was preempted before writing has *committed* — it will
              * finish writing and post items_sem, so waiting is safe.
              */
-            if (__atomic_load_n(&slot->seq, __ATOMIC_ACQUIRE) != (uint64_t)pos + 1) {
+            if (clog_atomic_load_u64(&slot->seq) != (uint64_t)pos + 1) {
                 break;
             }
             records[n] = slot->rec;
@@ -277,7 +277,7 @@ void mpsc_queue_close(mpsc_queue_t *q)
         return;
     }
 
-    __atomic_store_n(&q->closed, 1, __ATOMIC_RELEASE);
+    clog_atomic_store_int(&q->closed, 1);
 
     /*
      * Wake at least one consumer and unblock all producers. We post to
@@ -323,7 +323,7 @@ void mpsc_queue_destroy(mpsc_queue_t *q)
      * Wake any threads that might still be blocked on the semaphores so
      * they can observe the closed state and exit.
      */
-    __atomic_store_n(&q->closed, 1, __ATOMIC_RELEASE);
+    clog_atomic_store_int(&q->closed, 1);
     for (size_t i = 0; i < q->capacity + 2; i++) {
         clog_sem_post(&q->items_sem);
         clog_sem_post(&q->slots_sem);

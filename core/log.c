@@ -287,6 +287,7 @@ static void logger_writevprintf_internal(logger_t   *logger,
     clog_mutex_unlock(&logger->module_mutex);
 
     log_record_t record;
+    memset(&record, 0, sizeof(record));
     record.level     = level;
     record.timestamp = clog_get_timestamp_us();
     record.tid       = clog_get_thread_id();
@@ -319,6 +320,7 @@ static void logger_writevprintf_internal(logger_t   *logger,
         log_record_t supp_rec = record;
         supp_rec.level        = LOG_LEVEL_WARN;
         supp_rec.message      = supp_msg;
+        supp_rec.kv_count     = 0;
         if (logger->config.async) {
             if (log_async_write_for(logger, &supp_rec) != 0) {
                 void (*cb)(void) = logger->async_fallback_cb;

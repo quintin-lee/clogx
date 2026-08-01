@@ -86,7 +86,7 @@ static void *producer_thread(void *arg)
         /* try_put may fail when the queue is briefly full — retry. */
         int retries = 0;
         while (mpsc_queue_try_put(ctx->q, &rec) != 0) {
-            if (__atomic_load_n(&ctx->q->closed, __ATOMIC_ACQUIRE)) {
+            if (clog_atomic_load_int(&ctx->q->closed)) {
                 ctx->errors++;
                 break;
             }

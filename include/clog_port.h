@@ -540,6 +540,54 @@ static inline int clog_atomic_cas_sz(volatile size_t *ptr, size_t *expected, siz
 #endif
 }
 
+/* ── Atomic int operations (for closed flags in ring buffers) ── */
+
+static inline int clog_atomic_load_int(const volatile int *ptr)
+{
+#if defined(__GNUC__) || defined(__clang__)
+    return __atomic_load_n(ptr, __ATOMIC_ACQUIRE);
+#elif defined(_WIN32) || defined(_WIN64)
+    return (int)InterlockedCompareExchange((LONG *)ptr, 0, 0);
+#else
+    return *ptr;
+#endif
+}
+
+static inline void clog_atomic_store_int(volatile int *ptr, int val)
+{
+#if defined(__GNUC__) || defined(__clang__)
+    __atomic_store_n(ptr, val, __ATOMIC_RELEASE);
+#elif defined(_WIN32) || defined(_WIN64)
+    InterlockedExchange((LONG *)ptr, (LONG)val);
+#else
+    *ptr = val;
+#endif
+}
+
+/* ── Atomic uint64_t operations with acquire/release ordering (for seq counters) ── */
+
+static inline uint64_t clog_atomic_load_u64(const volatile uint64_t *ptr)
+{
+#if defined(__GNUC__) || defined(__clang__)
+    return __atomic_load_n(ptr, __ATOMIC_ACQUIRE);
+#elif defined(_WIN32) || defined(_WIN64)
+    return (uint64_t)InterlockedCompareExchange64((volatile LONG64 *)ptr, 0, 0);
+#else
+    return *ptr;
+#endif
+}
+
+static inline void clog_atomic_store_u64(volatile uint64_t *ptr, uint64_t val)
+{
+#if defined(__GNUC__) || defined(__clang__)
+    __atomic_store_n(ptr, val, __ATOMIC_RELEASE);
+#elif defined(_WIN32) || defined(_WIN64)
+    InterlockedExchange64((volatile LONG64 *)ptr, (LONG64)val);
+#else
+    *ptr = val;
+#endif
+}
+
 /* ── Semaphore ── */
 
 #if defined(_WIN32) || defined(_WIN64)

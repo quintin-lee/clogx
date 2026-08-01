@@ -114,7 +114,7 @@ int socket_ring_put(socket_ring_buffer_t *ring, const char *line, size_t len)
     }
 
     /* Fast check: closed ring rejects puts. */
-    if (__atomic_load_n(&ring->closed, __ATOMIC_ACQUIRE)) {
+    if (clog_atomic_load_int(&ring->closed)) {
         return -1;
     }
 
@@ -132,7 +132,7 @@ int socket_ring_put(socket_ring_buffer_t *ring, const char *line, size_t len)
              * This is intentional for a logging ring buffer: blocking the
              * caller would be worse than dropping a message.
              */
-            __atomic_fetch_add(&ring->dropped, 1, __ATOMIC_RELAXED);
+            clog_atomic_inc64(&ring->dropped);
             return 0;
         }
 
@@ -153,10 +153,10 @@ int socket_ring_put(socket_ring_buffer_t *ring, const char *line, size_t len)
                  */
                 slot->line = NULL;
                 slot->len  = 0;
-                __atomic_store_n(&slot->seq, (uint64_t)head + 1, __ATOMIC_RELEASE);
+                clog_atomic_store_u64(&slot->seq, (uint64_t)head + 1);
                 clog_atomic_fetch_add_sz(&ring->count, 1);
                 clog_sem_post(&ring->items_sem);
-                __atomic_fetch_add(&ring->dropped, 1, __ATOMIC_RELAXED);
+                clog_atomic_inc64(&ring->dropped);
                 return -1;
             }
             memcpy(copy, line, len);
@@ -165,7 +165,7 @@ int socket_ring_put(socket_ring_buffer_t *ring, const char *line, size_t len)
             slot->line = copy;
             slot->len  = len;
 
-            __atomic_store_n(&slot->seq, (uint64_t)head + 1, __ATOMIC_RELEASE);
+            clog_atomic_store_u64(&slot->seq, (uint64_t)head + 1);
             clog_atomic_fetch_add_sz(&ring->count, 1);
             clog_sem_post(&ring->items_sem);
             return 0;
@@ -201,7 +201,7 @@ int socket_ring_get_batch(socket_ring_buffer_t *ring,
          * Woken by close/signal with no actual items to read.
          * If closed, signal shutdown.
          */
-        if (__atomic_load_n(&ring->closed, __ATOMIC_ACQUIRE)) {
+        if (clog_atomic_load_int(&ring->closed)) {
             return -1;
         }
         return 0;
@@ -217,7 +217,7 @@ int socket_ring_get_batch(socket_ring_buffer_t *ring,
     while (n < available && n < max_lines) {
         size_t              pos  = tail + n;
         socket_ring_slot_t *slot = &ring->slots[pos & ring->mask];
-        if (__atomic_load_n(&slot->seq, __ATOMIC_ACQUIRE) != (uint64_t)pos + 1) {
+        if (clog_atomic_load_u64(&slot->seq) != (uint64_t)pos + 1) {
             break;
         }
         lines[n]   = slot->line;
@@ -247,7 +247,7 @@ void socket_ring_close(socket_ring_buffer_t *ring)
         return;
     }
 
-    __atomic_store_n(&ring->closed, 1, __ATOMIC_RELEASE);
+    clog_atomic_store_int(&ring->closed, 1);
 
     /*
      * Post to the semaphore so any blocked consumer wakes up and can
@@ -276,7 +276,7 @@ void socket_ring_destroy(socket_ring_buffer_t *ring)
     }
 
     /* Wake any blocked consumer so it can observe closed state. */
-    __atomic_store_n(&ring->closed, 1, __ATOMIC_RELEASE);
+    clog_atomic_store_int(&ring->closed, 1);
     clog_sem_post(&ring->items_sem);
 
     /* Free any remaining lines. */
@@ -764,5 +764,5 @@ uint64_t socket_writer_dropped(const socket_writer_t *writer)
     if (!writer || !writer->ring) {
         return 0;
     }
-    return __atomic_load_n(&writer->ring->dropped, __ATOMIC_RELAXED);
+    return clog_atomic_get64(&writer->ring->dropped);
 }
