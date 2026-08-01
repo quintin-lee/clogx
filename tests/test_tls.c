@@ -33,6 +33,7 @@ typedef struct {
     const char  *key_path;
 } tls_server_ctx_t;
 
+#ifdef CLOG_USE_TLS
 static int generate_cert_files(const char *cert_path, const char *key_path)
 {
     char cmd[512];
@@ -162,6 +163,7 @@ static void *tls_server_thread_func(void *arg)
     ctx->received_lines = lines;
     return NULL;
 }
+#endif /* CLOG_USE_TLS */
 
 static void test_tls_config_parsing(void)
 {
@@ -363,6 +365,7 @@ static void test_async_socket_tls(void)
 #endif
 }
 
+#ifdef CLOG_USE_TLS
 static void *accept_and_close_thread(void *arg)
 {
     clog_socket_t server_fd = *(clog_socket_t *)arg;
@@ -374,6 +377,7 @@ static void *accept_and_close_thread(void *arg)
     }
     return NULL;
 }
+#endif /* CLOG_USE_TLS */
 
 static void test_tls_error_paths(void)
 {

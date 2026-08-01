@@ -279,7 +279,7 @@ static int json_close_object(char *buf, char **out, size_t *remaining, const cha
     return (int)(*out - buf);
 }
 
-static const char g_hex_lut[16] = "0123456789abcdef";
+static const char g_hex_lut[] = "0123456789abcdef";
 
 /** @brief Encode a 16-byte trace ID as a 32-char hex string. */
 static void trace_id_hex(const uint8_t trace_id[16], char *out)
