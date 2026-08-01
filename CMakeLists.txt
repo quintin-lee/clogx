@@ -221,6 +221,7 @@ if(CLOG_BUILD_TESTS)
         test_socket_async
         test_tls
         test_fast_ascii
+        test_kv_logging
     )
 
     # Tests that directly reference internal symbols (not exported from shared lib)

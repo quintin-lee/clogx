@@ -104,4 +104,12 @@
 #define CLOG_MAX_PLUGIN_CONFIG_SIZE 4096
 #endif
 
+/**
+ * @def CLOG_MAX_KV
+ * @brief Maximum number of structured key-value attributes per log record.
+ */
+#ifndef CLOG_MAX_KV
+#define CLOG_MAX_KV 16
+#endif
+
 #endif /* LOG_LIMITS_H */

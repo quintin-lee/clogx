@@ -55,15 +55,22 @@ static void log_record_free_owned(log_record_t *record)
         return;
     }
     const char *block =
-        record->message ? record->message : (record->module ? record->module : record->tag);
+        record->message
+            ? record->message
+            : (record->module
+                   ? record->module
+                   : (record->tag ? record->tag
+                                  : (record->kv_count > 0 && record->kv[0].key ? record->kv[0].key
+                                                                               : NULL)));
     if (block) {
         free((void *)block);
     }
-    record->message = NULL;
-    record->file    = NULL;
-    record->func    = NULL;
-    record->module  = NULL;
-    record->tag     = NULL;
+    record->message  = NULL;
+    record->file     = NULL;
+    record->func     = NULL;
+    record->module   = NULL;
+    record->tag      = NULL;
+    record->kv_count = 0;
 }
 
 /**
@@ -71,7 +78,7 @@ static void log_record_free_owned(log_record_t *record)
  *
  * A naive memcpy would create dangling pointers when the original
  * record's stack-allocated strings go out of scope. This function
- * allocates a single contiguous block for message + module + tag,
+ * allocates a single contiguous block for message + module + tag + KV strings,
  * copies them, and points the destination fields into that block.
  * file and func are compile-time constants (no copy needed).
  *
@@ -93,6 +100,15 @@ static int log_record_clone(log_record_t *restrict dst, const log_record_t *rest
     size_t tag_len     = src->tag ? strlen(src->tag) : 0;
     size_t total_bytes = (src->message ? msg_len + 1 : 0) + (src->module ? mod_len + 1 : 0) +
                          (src->tag ? tag_len + 1 : 0);
+
+    for (size_t i = 0; i < src->kv_count; i++) {
+        if (src->kv[i].key) {
+            total_bytes += strlen(src->kv[i].key) + 1;
+        }
+        if (src->kv[i].type == CLOG_KV_TYPE_STR && src->kv[i].val.str) {
+            total_bytes += strlen(src->kv[i].val.str) + 1;
+        }
+    }
 
     if (total_bytes == 0) {
         dst->message = NULL;
@@ -126,8 +142,24 @@ static int log_record_clone(log_record_t *restrict dst, const log_record_t *rest
     if (src->tag) {
         memcpy(p, src->tag, tag_len + 1);
         dst->tag = p;
+        p += tag_len + 1;
     } else {
         dst->tag = NULL;
+    }
+
+    for (size_t i = 0; i < src->kv_count; i++) {
+        if (src->kv[i].key) {
+            size_t klen = strlen(src->kv[i].key);
+            memcpy(p, src->kv[i].key, klen + 1);
+            dst->kv[i].key = p;
+            p += klen + 1;
+        }
+        if (src->kv[i].type == CLOG_KV_TYPE_STR && src->kv[i].val.str) {
+            size_t vlen = strlen(src->kv[i].val.str);
+            memcpy(p, src->kv[i].val.str, vlen + 1);
+            dst->kv[i].val.str = p;
+            p += vlen + 1;
+        }
     }
     return 0;
 }

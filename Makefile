@@ -77,7 +77,7 @@ TESTS = test_async_lifecycle test_async_reload test_dispatcher_lifecycle \
         test_socket_sink test_sink_level test_log_level test_json_formatter \
         test_rate_limit test_fork_safety test_signal_handler test_custom_sink \
         test_observability_stats test_syslog_sink test_thread_context test_coverage_boost test_mutex_guard_raii test_coverage_deep \
-        test_plugin_abi test_otel test_prometheus test_multi_instance test_coverage_gaps test_async_edge test_socket_async test_tls test_fast_ascii
+        test_plugin_abi test_otel test_prometheus test_multi_instance test_coverage_gaps test_async_edge test_socket_async test_tls test_fast_ascii test_kv_logging
 TEST_BINS = $(addprefix $(BUILD_DIR)/,$(TESTS))
 
 BENCHMARK_SOURCES = $(wildcard benchmarks/*.c)

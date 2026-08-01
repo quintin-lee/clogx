@@ -116,6 +116,53 @@ static inline size_t clog_i32toa(int32_t val, char *buf)
 }
 
 /**
+ * @brief Fast uint64_t to ASCII string conversion.
+ * Writes output to @p buf. Does NOT write a null-terminator.
+ * @return Number of ASCII characters written.
+ */
+static inline size_t clog_u64toa(uint64_t val, char *buf)
+{
+    if (val <= 0xFFFFFFFFULL) {
+        return clog_u32toa((uint32_t)val, buf);
+    }
+    char  tmp[24];
+    char *p = tmp + sizeof(tmp);
+    while (val >= 100) {
+        uint32_t idx = (uint32_t)(val % 100) * 2;
+        val /= 100;
+        p -= 2;
+        p[0] = g_clog_digits_lut[idx];
+        p[1] = g_clog_digits_lut[idx + 1];
+    }
+    if (val < 10) {
+        *--p = (char)('0' + val);
+    } else {
+        uint32_t idx = (uint32_t)val * 2;
+        p -= 2;
+        p[0] = g_clog_digits_lut[idx];
+        p[1] = g_clog_digits_lut[idx + 1];
+    }
+    size_t len = (size_t)(tmp + sizeof(tmp) - p);
+    memcpy(buf, p, len);
+    return len;
+}
+
+/**
+ * @brief Fast int64_t to ASCII string conversion.
+ * Writes output to @p buf. Does NOT write a null-terminator.
+ * @return Number of ASCII characters written.
+ */
+static inline size_t clog_i64toa(int64_t val, char *buf)
+{
+    if (val < 0) {
+        buf[0]        = '-';
+        uint64_t uval = (uint64_t)(-(val + 1)) + 1;
+        return 1 + clog_u64toa(uval, buf + 1);
+    }
+    return clog_u64toa((uint64_t)val, buf);
+}
+
+/**
  * @brief Fast timestamp renderer for default format "%Y-%m-%d %H:%M:%S".
  * Writes 19 ASCII characters plus null-terminator into @p out_buf (must be >= 20 bytes).
  */

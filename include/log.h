@@ -690,6 +690,36 @@ CLOGX_API void log_writevprintf(
     CLOGX_PRINTF_FMT(5, 6);
 
 /**
+ * @brief Helper constructor macros for structured key-value attributes.
+ * @{
+ */
+#define CLOG_KV_INT(k, v) ((clog_kv_t){(k), CLOG_KV_TYPE_INT, {.i64 = (int64_t)(v)}})
+#define CLOG_KV_UINT(k, v) ((clog_kv_t){(k), CLOG_KV_TYPE_UINT, {.u64 = (uint64_t)(v)}})
+#define CLOG_KV_FLOAT(k, v) ((clog_kv_t){(k), CLOG_KV_TYPE_FLOAT, {.f64 = (double)(v)}})
+#define CLOG_KV_STR(k, v) ((clog_kv_t){(k), CLOG_KV_TYPE_STR, {.str = (const char *)(v)}})
+#define CLOG_KV_BOOL(k, v) ((clog_kv_t){(k), CLOG_KV_TYPE_BOOL, {.b = (bool)(v)}})
+/** @} */
+
+/**
+ * @brief Write a log record with structured key-value attributes (global singleton).
+ *
+ * @param[in] level     Severity level (LOG_LEVEL_TRACE .. LOG_LEVEL_FATAL).
+ * @param[in] file      Source file name (typically from LOG_FILENAME_ONLY()).
+ * @param[in] line      Source line number (__LINE__).
+ * @param[in] func      Source function name (__func__).
+ * @param[in] msg       Message text string (or format title).
+ * @param[in] kvs       Pointer to array of clog_kv_t key-value attributes.
+ * @param[in] kv_count  Number of entries in @p kvs array.
+ */
+CLOGX_API void log_write_kv(log_level_t      level,
+                            const char      *file,
+                            int              line,
+                            const char      *func,
+                            const char      *msg,
+                            const clog_kv_t *kvs,
+                            size_t           kv_count);
+
+/**
  * @brief Extract the basename portion of a file path.
  *
  * Given a full path string (e.g., "/home/user/src/main.c"), returns a pointer
@@ -881,6 +911,54 @@ static inline const char *clogx_filename_only(const char *path)
     log_writevprintf(LOG_LEVEL_FATAL, LOG_FILENAME_ONLY(), __LINE__, __func__, __VA_ARGS__)
 #define LOG_TRACE(...)                                                                             \
     log_writevprintf(LOG_LEVEL_TRACE, LOG_FILENAME_ONLY(), __LINE__, __func__, __VA_ARGS__)
+
+#define LOG_INFO_KV(msg, ...)                                                                      \
+    do {                                                                                           \
+        const clog_kv_t _clog_kvs[] = {__VA_ARGS__};                                               \
+        size_t          _clog_n     = sizeof(_clog_kvs) / sizeof(_clog_kvs[0]);                    \
+        log_write_kv(                                                                              \
+            LOG_LEVEL_INFO, LOG_FILENAME_ONLY(), __LINE__, __func__, (msg), _clog_kvs, _clog_n);   \
+    } while (0)
+
+#define LOG_DEBUG_KV(msg, ...)                                                                     \
+    do {                                                                                           \
+        const clog_kv_t _clog_kvs[] = {__VA_ARGS__};                                               \
+        size_t          _clog_n     = sizeof(_clog_kvs) / sizeof(_clog_kvs[0]);                    \
+        log_write_kv(                                                                              \
+            LOG_LEVEL_DEBUG, LOG_FILENAME_ONLY(), __LINE__, __func__, (msg), _clog_kvs, _clog_n);  \
+    } while (0)
+
+#define LOG_WARN_KV(msg, ...)                                                                      \
+    do {                                                                                           \
+        const clog_kv_t _clog_kvs[] = {__VA_ARGS__};                                               \
+        size_t          _clog_n     = sizeof(_clog_kvs) / sizeof(_clog_kvs[0]);                    \
+        log_write_kv(                                                                              \
+            LOG_LEVEL_WARN, LOG_FILENAME_ONLY(), __LINE__, __func__, (msg), _clog_kvs, _clog_n);   \
+    } while (0)
+
+#define LOG_ERROR_KV(msg, ...)                                                                     \
+    do {                                                                                           \
+        const clog_kv_t _clog_kvs[] = {__VA_ARGS__};                                               \
+        size_t          _clog_n     = sizeof(_clog_kvs) / sizeof(_clog_kvs[0]);                    \
+        log_write_kv(                                                                              \
+            LOG_LEVEL_ERROR, LOG_FILENAME_ONLY(), __LINE__, __func__, (msg), _clog_kvs, _clog_n);  \
+    } while (0)
+
+#define LOG_FATAL_KV(msg, ...)                                                                     \
+    do {                                                                                           \
+        const clog_kv_t _clog_kvs[] = {__VA_ARGS__};                                               \
+        size_t          _clog_n     = sizeof(_clog_kvs) / sizeof(_clog_kvs[0]);                    \
+        log_write_kv(                                                                              \
+            LOG_LEVEL_FATAL, LOG_FILENAME_ONLY(), __LINE__, __func__, (msg), _clog_kvs, _clog_n);  \
+    } while (0)
+
+#define LOG_TRACE_KV(msg, ...)                                                                     \
+    do {                                                                                           \
+        const clog_kv_t _clog_kvs[] = {__VA_ARGS__};                                               \
+        size_t          _clog_n     = sizeof(_clog_kvs) / sizeof(_clog_kvs[0]);                    \
+        log_write_kv(                                                                              \
+            LOG_LEVEL_TRACE, LOG_FILENAME_ONLY(), __LINE__, __func__, (msg), _clog_kvs, _clog_n);  \
+    } while (0)
 
 /* ════════════════════════════════════════════════════════════════════════
  *  Multi-instance API (Phase 2)
@@ -1321,6 +1399,112 @@ CLOGX_API log_config_t *logger_config_get(const logger_t *logger);
 #define LOGGER_FATAL(logger, ...)                                                                  \
     logger_writevprintf(                                                                           \
         (logger), LOG_LEVEL_FATAL, LOG_FILENAME_ONLY(), __LINE__, __func__, __VA_ARGS__)
+
+/**
+ * @brief Write a log record with structured key-value attributes (logger instance).
+ *
+ * @param[in] logger    Target logger instance.
+ * @param[in] level     Severity level.
+ * @param[in] file      Source file name.
+ * @param[in] line      Source line number.
+ * @param[in] func      Source function name.
+ * @param[in] msg       Message text string.
+ * @param[in] kvs       Pointer to array of clog_kv_t key-value attributes.
+ * @param[in] kv_count  Number of entries in @p kvs array.
+ */
+CLOGX_API void logger_write_kv(logger_t        *logger,
+                               log_level_t      level,
+                               const char      *file,
+                               int              line,
+                               const char      *func,
+                               const char      *msg,
+                               const clog_kv_t *kvs,
+                               size_t           kv_count);
+
+#define LOGGER_INFO_KV(logger, msg, ...)                                                           \
+    do {                                                                                           \
+        const clog_kv_t _clog_kvs[] = {__VA_ARGS__};                                               \
+        size_t          _clog_n     = sizeof(_clog_kvs) / sizeof(_clog_kvs[0]);                    \
+        logger_write_kv((logger),                                                                  \
+                        LOG_LEVEL_INFO,                                                            \
+                        LOG_FILENAME_ONLY(),                                                       \
+                        __LINE__,                                                                  \
+                        __func__,                                                                  \
+                        (msg),                                                                     \
+                        _clog_kvs,                                                                 \
+                        _clog_n);                                                                  \
+    } while (0)
+
+#define LOGGER_DEBUG_KV(logger, msg, ...)                                                          \
+    do {                                                                                           \
+        const clog_kv_t _clog_kvs[] = {__VA_ARGS__};                                               \
+        size_t          _clog_n     = sizeof(_clog_kvs) / sizeof(_clog_kvs[0]);                    \
+        logger_write_kv((logger),                                                                  \
+                        LOG_LEVEL_DEBUG,                                                           \
+                        LOG_FILENAME_ONLY(),                                                       \
+                        __LINE__,                                                                  \
+                        __func__,                                                                  \
+                        (msg),                                                                     \
+                        _clog_kvs,                                                                 \
+                        _clog_n);                                                                  \
+    } while (0)
+
+#define LOGGER_WARN_KV(logger, msg, ...)                                                           \
+    do {                                                                                           \
+        const clog_kv_t _clog_kvs[] = {__VA_ARGS__};                                               \
+        size_t          _clog_n     = sizeof(_clog_kvs) / sizeof(_clog_kvs[0]);                    \
+        logger_write_kv((logger),                                                                  \
+                        LOG_LEVEL_WARN,                                                            \
+                        LOG_FILENAME_ONLY(),                                                       \
+                        __LINE__,                                                                  \
+                        __func__,                                                                  \
+                        (msg),                                                                     \
+                        _clog_kvs,                                                                 \
+                        _clog_n);                                                                  \
+    } while (0)
+
+#define LOGGER_ERROR_KV(logger, msg, ...)                                                          \
+    do {                                                                                           \
+        const clog_kv_t _clog_kvs[] = {__VA_ARGS__};                                               \
+        size_t          _clog_n     = sizeof(_clog_kvs) / sizeof(_clog_kvs[0]);                    \
+        logger_write_kv((logger),                                                                  \
+                        LOG_LEVEL_ERROR,                                                           \
+                        LOG_FILENAME_ONLY(),                                                       \
+                        __LINE__,                                                                  \
+                        __func__,                                                                  \
+                        (msg),                                                                     \
+                        _clog_kvs,                                                                 \
+                        _clog_n);                                                                  \
+    } while (0)
+
+#define LOGGER_FATAL_KV(logger, msg, ...)                                                          \
+    do {                                                                                           \
+        const clog_kv_t _clog_kvs[] = {__VA_ARGS__};                                               \
+        size_t          _clog_n     = sizeof(_clog_kvs) / sizeof(_clog_kvs[0]);                    \
+        logger_write_kv((logger),                                                                  \
+                        LOG_LEVEL_FATAL,                                                           \
+                        LOG_FILENAME_ONLY(),                                                       \
+                        __LINE__,                                                                  \
+                        __func__,                                                                  \
+                        (msg),                                                                     \
+                        _clog_kvs,                                                                 \
+                        _clog_n);                                                                  \
+    } while (0)
+
+#define LOGGER_TRACE_KV(logger, msg, ...)                                                          \
+    do {                                                                                           \
+        const clog_kv_t _clog_kvs[] = {__VA_ARGS__};                                               \
+        size_t          _clog_n     = sizeof(_clog_kvs) / sizeof(_clog_kvs[0]);                    \
+        logger_write_kv((logger),                                                                  \
+                        LOG_LEVEL_TRACE,                                                           \
+                        LOG_FILENAME_ONLY(),                                                       \
+                        __LINE__,                                                                  \
+                        __func__,                                                                  \
+                        (msg),                                                                     \
+                        _clog_kvs,                                                                 \
+                        _clog_n);                                                                  \
+    } while (0)
+
 /** @} */
 
 #endif /* LOG_H */

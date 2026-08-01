@@ -368,6 +368,128 @@ void logger_writevprintf(logger_t   *logger,
     va_end(args);
 }
 
+static void logger_write_kv_internal(logger_t        *logger,
+                                     log_level_t      level,
+                                     const char      *file,
+                                     int              line,
+                                     const char      *func,
+                                     const char      *msg,
+                                     const clog_kv_t *kvs,
+                                     size_t           kv_count)
+{
+    if (!logger || !logger->initialized) {
+        return;
+    }
+
+    if (logger == &g_default_logger && log_get_pending_signal() != 0) {
+        log_process_pending_signals();
+    }
+
+    if (level < logger->config.level) {
+        return;
+    }
+
+    clog_atomic_inc64(&logger->total_logged);
+    if ((int)level >= 0 && (int)level < 6) {
+        clog_atomic_inc64(&g_prometheus_level_counts[(int)level]);
+    }
+
+    char module_buf[64];
+    clog_mutex_lock(&logger->module_mutex);
+    snprintf(module_buf, sizeof(module_buf), "%s", logger->module);
+    clog_mutex_unlock(&logger->module_mutex);
+
+    log_record_t record;
+    memset(&record, 0, sizeof(record));
+    record.level     = level;
+    record.timestamp = clog_get_timestamp_us();
+    record.tid       = clog_get_thread_id();
+    record.pid       = clog_getpid();
+    record.file      = file;
+    record.func      = func;
+    record.line      = line;
+    record.module    = module_buf;
+    record.tag       = NULL;
+    record.message   = msg ? msg : "";
+
+    size_t count    = kv_count > CLOG_MAX_KV ? CLOG_MAX_KV : kv_count;
+    record.kv_count = count;
+    for (size_t i = 0; i < count; i++) {
+        record.kv[i] = kvs[i];
+    }
+
+    if (g_has_thread_trace_context) {
+        memcpy(record.trace_id, g_thread_trace_id, 16);
+        memcpy(record.span_id, g_thread_span_id, 8);
+    } else {
+        memset(record.trace_id, 0, 16);
+        memset(record.span_id, 0, 8);
+    }
+
+    uint64_t suppressed = 0;
+    if (!log_rate_limit_allow_for(logger, &suppressed)) {
+        return;
+    }
+
+    if (suppressed > 0) {
+        char supp_msg[128];
+        snprintf(supp_msg,
+                 sizeof(supp_msg),
+                 "[clogx] Suppressed %llu log messages due to rate limit",
+                 (unsigned long long)suppressed);
+        log_record_t supp_rec = record;
+        supp_rec.level        = LOG_LEVEL_WARN;
+        supp_rec.message      = supp_msg;
+        supp_rec.kv_count     = 0;
+        if (logger->config.async) {
+            if (log_async_write_for(logger, &supp_rec) != 0) {
+                void (*cb)(void) = logger->async_fallback_cb;
+                if (cb) {
+                    cb();
+                }
+            }
+        } else {
+            log_dispatcher_dispatch_for(logger, &supp_rec);
+        }
+    }
+
+    if (logger->config.async) {
+        int ar = log_async_write_for(logger, &record);
+        if (ar != 0) {
+            clog_atomic_inc64(&logger->dropped_queue_full);
+            void (*cb)(void) = logger->async_fallback_cb;
+            if (cb) {
+                cb();
+            }
+        }
+    } else {
+        log_dispatcher_dispatch_for(logger, &record);
+    }
+}
+
+void log_write_kv(log_level_t      level,
+                  const char      *file,
+                  int              line,
+                  const char      *func,
+                  const char      *msg,
+                  const clog_kv_t *kvs,
+                  size_t           kv_count)
+{
+    logger_write_kv_internal(&g_default_logger, level, file, line, func, msg, kvs, kv_count);
+}
+
+void logger_write_kv(logger_t        *logger,
+                     log_level_t      level,
+                     const char      *file,
+                     int              line,
+                     const char      *func,
+                     const char      *msg,
+                     const clog_kv_t *kvs,
+                     size_t           kv_count)
+{
+    logger_write_kv_internal(logger, level, file, line, func, msg, kvs, kv_count);
+}
+
 void log_get_stats(log_stats_t *stats)
 {
     if (!stats) {

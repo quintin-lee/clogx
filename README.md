@@ -296,6 +296,18 @@ Set `format: "json"` in configuration to emit structured JSON log lines:
 
 String fields (`message`, `file`, `func`, `module`, `tag`) are automatically escaped per RFC 8259 (`"`, `\`, `\n`, `\r`, `\t`, control bytes).
 
+### Native Key-Value Logging API (`LOG_INFO_KV`)
+
+For high-performance structured logging without printf-string parsing overhead:
+
+```c
+LOG_INFO_KV("User login", CLOG_KV_STR("user", "admin"), CLOG_KV_INT("code", 200));
+LOG_WARN_KV("High memory usage", CLOG_KV_FLOAT("usage_pct", 87.5), CLOG_KV_BOOL("alert", true));
+```
+
+Typed constructors: `CLOG_KV_INT`, `CLOG_KV_UINT`, `CLOG_KV_FLOAT`, `CLOG_KV_STR`, `CLOG_KV_BOOL`.  
+Logger instance variants: `LOGGER_INFO_KV(logger, "message", ...)` etc.
+
 ## Buffer Limits & Safety (`include/log_limits.h`)
 
 Buffer capacities are centralized and macro-configurable:

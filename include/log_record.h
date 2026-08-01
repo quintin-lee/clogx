@@ -46,7 +46,38 @@
 #ifndef LOG_RECORD_H
 #define LOG_RECORD_H
 
+#include "log_limits.h"
+#include <stdbool.h>
+#include <stddef.h>
 #include <stdint.h>
+
+/**
+ * @enum clog_kv_type_t
+ * @brief Data types supported in structured key-value log attributes.
+ */
+typedef enum {
+    CLOG_KV_TYPE_INT,   /**< 64-bit signed integer value (i64). */
+    CLOG_KV_TYPE_UINT,  /**< 64-bit unsigned integer value (u64). */
+    CLOG_KV_TYPE_FLOAT, /**< Double-precision floating point value (f64). */
+    CLOG_KV_TYPE_STR,   /**< Null-terminated C string value (str). */
+    CLOG_KV_TYPE_BOOL   /**< Boolean value (b). */
+} clog_kv_type_t;
+
+/**
+ * @struct clog_kv_t
+ * @brief A single typed key-value pair for structured logging.
+ */
+typedef struct {
+    const char    *key;  /**< Key identifier string (non-NULL). */
+    clog_kv_type_t type; /**< Value payload type selector. */
+    union {
+        int64_t     i64; /**< Signed integer value payload. */
+        uint64_t    u64; /**< Unsigned integer value payload. */
+        double      f64; /**< Floating point value payload. */
+        const char *str; /**< String value payload pointer. */
+        bool        b;   /**< Boolean value payload. */
+    } val;
+} clog_kv_t;
 
 /**
  * @enum log_level_t
@@ -115,11 +146,13 @@ typedef struct {
     const char *tag;     /**< Optional tag/label for additional categorization; may be NULL. */
     const char *message; /**< Formatted message body (result of printf-style expansion). */
     log_level_t level;   /**< Severity of the log entry (LOG_LEVEL_* enum value). */
-    uint32_t tid;  /**< Thread identifier derived from pthread_t (truncated hash for uniqueness). */
-    uint32_t pid;  /**< Process identifier (getpid()). */
-    int      line; /**< Source line number where the log macro was invoked (__LINE__). */
-    uint8_t  trace_id[16]; /**< W3C TraceContext trace-id; zero bytes indicate no active trace. */
-    uint8_t  span_id[8];   /**< W3C TraceContext span-id; zero bytes indicate no active span. */
+    uint32_t  tid; /**< Thread identifier derived from pthread_t (truncated hash for uniqueness). */
+    uint32_t  pid; /**< Process identifier (getpid()). */
+    int       line;         /**< Source line number where the log macro was invoked (__LINE__). */
+    uint8_t   trace_id[16]; /**< W3C TraceContext trace-id; zero bytes indicate no active trace. */
+    uint8_t   span_id[8];   /**< W3C TraceContext span-id; zero bytes indicate no active span. */
+    clog_kv_t kv[CLOG_MAX_KV]; /**< Structured key-value attributes array. */
+    size_t    kv_count;        /**< Number of valid entries in kv array (0..CLOG_MAX_KV). */
 } log_record_t;
 
 /**

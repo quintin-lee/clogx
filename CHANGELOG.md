@@ -5,6 +5,8 @@ All notable changes to this project will be documented in this file.
 ## [Unreleased]
 
 ### Added
+- Native Structured Key-Value (KV) Logging API (`LOG_INFO_KV`, `LOGGER_INFO_KV`, `log_write_kv`, `logger_write_kv`) with typed attribute constructors (`CLOG_KV_INT`, `CLOG_KV_UINT`, `CLOG_KV_FLOAT`, `CLOG_KV_STR`, `CLOG_KV_BOOL`) for high-efficiency structured JSON and text log attribute serialization
+- Doxygen API automated documentation generation configuration (`Doxyfile`) and GitHub Actions workflow (`.github/workflows/deploy-docs.yml`) for automatic deployment to GitHub Pages
 - Configurable socket connection and TLS handshake timeout (`socket_connect_timeout_ms` YAML key / `connect_timeout_ms` in `socket_writer_config_t` and `socket_sink_create_async_ex`) for non-blocking socket connect and `SSL_connect` select loops
 - Winsock `WSACleanup()` pair calls in `socket_destroy()`, `socket_writer_cleanup()`, and `prometheus_exporter_stop()` to guarantee 1:1 match with `clog_net_init()` (`WSAStartup`) and prevent socket handle reference leaks on Windows
 - Fast Integer-to-ASCII and timestamp formatting utilities (`core/fast_ascii.h`) utilizing a branch-prediction-friendly 2-digit lookup table (LUT) for `uint32_t`, `int32_t`, fixed 6-digit microsecond padding, and 19-char ISO 8601 datetimes (`YYYY-MM-DD HH:MM:SS`), accompanied by unit tests in `tests/test_fast_ascii.c`

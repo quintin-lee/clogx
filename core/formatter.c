@@ -306,11 +306,60 @@ static inline int append_buf_i32(char **out, size_t *remaining, int32_t val)
     return append_buf_str(out, remaining, tmp, len);
 }
 
+static inline int append_buf_i64(char **out, size_t *remaining, int64_t val)
+{
+    char   tmp[32];
+    size_t len = clog_i64toa(val, tmp);
+    return append_buf_str(out, remaining, tmp, len);
+}
+
+static inline int append_buf_u64(char **out, size_t *remaining, uint64_t val)
+{
+    char   tmp[32];
+    size_t len = clog_u64toa(val, tmp);
+    return append_buf_str(out, remaining, tmp, len);
+}
+
 static inline int append_buf_u32_pad6(char **out, size_t *remaining, uint32_t val)
 {
     char tmp[8];
     clog_u32toa_pad6(val, tmp);
     return append_buf_str(out, remaining, tmp, 6);
+}
+
+static int append_json_kv(char **out, size_t *remaining, const clog_kv_t *kv)
+{
+    if (!kv || !kv->key) {
+        return 0;
+    }
+    if (append_buf_str(out, remaining, ",\"", 2) != 0) {
+        return -1;
+    }
+    append_json_escaped_string(out, remaining, kv->key);
+    if (append_buf_str(out, remaining, "\":", 2) != 0) {
+        return -1;
+    }
+    switch (kv->type) {
+    case CLOG_KV_TYPE_INT:
+        return append_buf_i64(out, remaining, kv->val.i64);
+    case CLOG_KV_TYPE_UINT:
+        return append_buf_u64(out, remaining, kv->val.u64);
+    case CLOG_KV_TYPE_FLOAT: {
+        char fbuf[32];
+        snprintf(fbuf, sizeof(fbuf), "%.6g", kv->val.f64);
+        return append_buf_str(out, remaining, fbuf, strlen(fbuf));
+    }
+    case CLOG_KV_TYPE_STR:
+        if (append_buf_str(out, remaining, "\"", 1) != 0) {
+            return -1;
+        }
+        append_json_escaped_string(out, remaining, kv->val.str ? kv->val.str : "");
+        return append_buf_str(out, remaining, "\"", 1);
+    case CLOG_KV_TYPE_BOOL:
+        return append_buf_str(out, remaining, kv->val.b ? "true" : "false", kv->val.b ? 4 : 5);
+    default:
+        return 0;
+    }
 }
 
 /** @brief Check if an ID byte array is all zeros (no active trace/span). */
@@ -406,8 +455,17 @@ static int format_json_ex(log_record_t *restrict record,
         return -1;
     }
     append_json_escaped_string(&out, &remaining, record->message ? record->message : "");
+    if (append_buf_str(&out, &remaining, "\"", 1) != 0) {
+        return -1;
+    }
 
-    if (append_buf_str(&out, &remaining, "\"}", 2) != 0) {
+    for (size_t i = 0; i < record->kv_count; i++) {
+        if (append_json_kv(&out, &remaining, &record->kv[i]) != 0) {
+            return -1;
+        }
+    }
+
+    if (append_buf_str(&out, &remaining, "}", 1) != 0) {
         return -1;
     }
 
@@ -606,7 +664,17 @@ static int format_otel_json(log_record_t *restrict record, char *restrict buf, s
         return -1;
     }
     append_json_escaped_string(&out, &remaining, record->tag ? record->tag : "");
-    if (append_buf_str(&out, &remaining, "\"}}", 3) != 0) {
+    if (append_buf_str(&out, &remaining, "\"", 1) != 0) {
+        return -1;
+    }
+
+    for (size_t i = 0; i < record->kv_count; i++) {
+        if (append_json_kv(&out, &remaining, &record->kv[i]) != 0) {
+            return -1;
+        }
+    }
+
+    if (append_buf_str(&out, &remaining, "}}", 2) != 0) {
         return -1;
     }
 
@@ -845,6 +913,48 @@ static int format_impl(log_record_t *restrict record,
             total += append_token(&out, &remaining, sid_hex, strlen(sid_hex));
             break;
         }
+        }
+    }
+
+    if (record->kv_count > 0) {
+        for (size_t i = 0; i < record->kv_count; i++) {
+            const clog_kv_t *kv = &record->kv[i];
+            if (!kv->key) {
+                continue;
+            }
+            total += append_token(&out, &remaining, " ", 1);
+            total += append_token(&out, &remaining, kv->key, strlen(kv->key));
+            total += append_token(&out, &remaining, "=", 1);
+            switch (kv->type) {
+            case CLOG_KV_TYPE_INT: {
+                char   tmp[32];
+                size_t n = clog_i64toa(kv->val.i64, tmp);
+                total += append_token(&out, &remaining, tmp, n);
+                break;
+            }
+            case CLOG_KV_TYPE_UINT: {
+                char   tmp[32];
+                size_t n = clog_u64toa(kv->val.u64, tmp);
+                total += append_token(&out, &remaining, tmp, n);
+                break;
+            }
+            case CLOG_KV_TYPE_FLOAT: {
+                char tmp[32];
+                snprintf(tmp, sizeof(tmp), "%.6g", kv->val.f64);
+                total += append_token(&out, &remaining, tmp, strlen(tmp));
+                break;
+            }
+            case CLOG_KV_TYPE_STR: {
+                const char *s = kv->val.str ? kv->val.str : "";
+                total += append_token(&out, &remaining, s, strlen(s));
+                break;
+            }
+            case CLOG_KV_TYPE_BOOL: {
+                const char *b = kv->val.b ? "true" : "false";
+                total += append_token(&out, &remaining, b, strlen(b));
+                break;
+            }
+            }
         }
     }
 
