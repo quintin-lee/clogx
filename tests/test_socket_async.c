@@ -16,8 +16,8 @@ static void test_ring_create_destroy(void)
     socket_ring_buffer_t *ring = socket_ring_create(16);
     assert(ring != NULL);
     assert(ring->capacity == 16);
-    assert(ring->count == 0);
-    assert(ring->dropped == 0);
+    assert(clog_atomic_load_sz(&ring->count) == 0);
+    assert(clog_atomic_get64(&ring->dropped) == 0);
     socket_ring_destroy(ring);
     printf("  test_ring_create_destroy PASSED\n");
 }
@@ -36,7 +36,7 @@ static void test_ring_put_get(void)
 
     assert(socket_ring_put(ring, "line1", 5) == 0);
     assert(socket_ring_put(ring, "line2", 5) == 0);
-    assert(ring->count == 2);
+    assert(clog_atomic_load_sz(&ring->count) == 2);
 
     const char *lines[4];
     size_t      lengths[4];
@@ -46,7 +46,7 @@ static void test_ring_put_get(void)
     assert(memcmp(lines[0], "line1", 5) == 0);
     assert(lengths[1] == 5);
     assert(memcmp(lines[1], "line2", 5) == 0);
-    assert(ring->count == 0);
+    assert(clog_atomic_load_sz(&ring->count) == 0);
 
     for (int i = 0; i < n; i++) {
         free((void *)lines[i]);
@@ -63,18 +63,18 @@ static void test_ring_overflow_drops(void)
 
     assert(socket_ring_put(ring, "aaa", 3) == 0);
     assert(socket_ring_put(ring, "bbb", 3) == 0);
-    /* ring full — next put should drop oldest */
+    /* ring full — next put should drop the new entry (lossy) */
     assert(socket_ring_put(ring, "ccc", 3) == 0);
-    assert(ring->dropped == 1);
-    assert(ring->count == 2);
+    assert(clog_atomic_get64(&ring->dropped) == 1);
+    assert(clog_atomic_load_sz(&ring->count) == 2);
 
     const char *lines[2];
     size_t      lengths[2];
     int         n = socket_ring_get_batch(ring, lines, lengths, 2);
     assert(n == 2);
-    /* oldest (aaa) was dropped, so we get bbb then ccc */
-    assert(memcmp(lines[0], "bbb", 3) == 0);
-    assert(memcmp(lines[1], "ccc", 3) == 0);
+    /* ccc was dropped, so we get aaa then bbb */
+    assert(memcmp(lines[0], "aaa", 3) == 0);
+    assert(memcmp(lines[1], "bbb", 3) == 0);
 
     for (int i = 0; i < n; i++) {
         free((void *)lines[i]);
@@ -143,14 +143,14 @@ static void test_ring_get_batch_limit(void)
     /* request max 3 */
     int n = socket_ring_get_batch(ring, lines, lengths, 3);
     assert(n == 3);
-    assert(ring->count == 3);
+    assert(clog_atomic_load_sz(&ring->count) == 3);
     for (int i = 0; i < n; i++) {
         free((void *)lines[i]);
     }
     /* get the rest */
     n = socket_ring_get_batch(ring, lines, lengths, 8);
     assert(n == 3);
-    assert(ring->count == 0);
+    assert(clog_atomic_load_sz(&ring->count) == 0);
     for (int i = 0; i < n; i++) {
         free((void *)lines[i]);
     }
@@ -273,7 +273,7 @@ static void test_writer_integration(void)
     struct timeval tv;
     gettimeofday(&tv, NULL);
     long deadline_sec = tv.tv_sec + 5;
-    while (ring->count > 0 && tv.tv_sec < deadline_sec) {
+    while (socket_ring_depth(ring) > 0 && tv.tv_sec < deadline_sec) {
         usleep(10000);
         gettimeofday(&tv, NULL);
     }

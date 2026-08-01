@@ -257,10 +257,7 @@ size_t log_async_get_queue_depth_for(logger_t *logger)
     if (!logger || !logger->queue) {
         return 0;
     }
-    clog_mutex_lock(&logger->queue->mutex);
-    size_t depth = logger->queue->count;
-    clog_mutex_unlock(&logger->queue->mutex);
-    return depth;
+    return clog_atomic_load_sz(&logger->queue->count);
 }
 
 void log_async_atfork_child_for(logger_t *logger)
@@ -269,11 +266,29 @@ void log_async_atfork_child_for(logger_t *logger)
         return;
     }
     mpsc_queue_t *q = logger->queue;
-    clog_mutex_init(&q->mutex);
-    clog_cond_init(&q->not_full);
-    clog_cond_init(&q->not_empty);
-    clog_cond_init(&q->drained);
-    q->closed             = 0;
+    /* The parent's thread does not survive fork; re-init sync primitives. */
+    clog_sem_destroy(&q->items_sem);
+    clog_sem_destroy(&q->slots_sem);
+    clog_mutex_destroy(&q->drain_mutex);
+    clog_cond_destroy(&q->drain_cond);
+
+    q->head   = 0;
+    q->tail   = 0;
+    q->count  = 0;
+    q->closed = 0;
+
+    if (clog_sem_init(&q->items_sem, 0) != 0) {
+        logger->async_running = 0;
+        return;
+    }
+    if (clog_sem_init(&q->slots_sem, (long)q->capacity) != 0) {
+        clog_sem_destroy(&q->items_sem);
+        logger->async_running = 0;
+        return;
+    }
+    clog_mutex_init(&q->drain_mutex);
+    clog_cond_init(&q->drain_cond);
+
     logger->async_running = 1;
     if (clog_thread_create(&logger->worker_thread, async_worker_for, logger) != 0) {
         logger->async_running = 0;

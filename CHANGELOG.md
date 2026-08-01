@@ -12,6 +12,7 @@ All notable changes to this project will be documented in this file.
 - Async non-blocking socket sink: `socket_sink_create_async()` with ring buffer, background writer thread, non-blocking TCP/TLS I/O, and exponential backoff with jitter for reconnection (`socket_async`, `socket_ring_capacity`, `socket_backoff_min_ms`, `socket_backoff_max_ms` config keys)
 
 ### Changed
+- Lock-free MPSC ring buffers: `core/queue.c` (`mpsc_queue_t`) and `core/socket_async.c` (`socket_ring_buffer_t`) now use atomic CAS on `head` for producer slot claiming instead of mutex-protected critical sections. The producer fast path (`try_put`) is fully lock-free — no mutex is acquired. Consumer blocking uses a semaphore (`items_sem`) instead of condition variables, and a lightweight `drain_mutex` + `drain_cond` pair is retained only for `wait_empty` during shutdown. Capacity is rounded to a power of two for fast bitwise modulo. Each slot carries a per-slot sequence counter (`seq`): the producer release-stores `seq = position + 1` after writing the record, and the consumer acquire-loads `seq` before reading, so records are only consumed after their write is fully visible.
 - Centralized platform adaptation code: `get_timestamp()` / `get_thread_id()` from `core/log.c`, `get_now_ms()` from `core/rate_limit.c`, and Windows VT mode helper from `sinks/console_sink.c` now live in `include/clog_port.h`
 - Default log format changed from `%msg` to `[%time] [%level] %msg`
 - `console_sink_create` / `console_sink_create_stderr` now share a unified internal helper; public API unchanged
@@ -21,6 +22,8 @@ All notable changes to this project will be documented in this file.
 - Removed redundant `#include "log.h"` from `core/plugin_loader.c` POSIX section; `log_config.h` is the minimal required header
 - `core/prometheus_exporter.c` no longer includes redundant platform socket headers; `WSAStartup` replaced with existing `clog_net_init()`
 - Windows plugin loader stubs now include `clog_port.h` for consistency
+- Data race in lock-free ring buffers: the consumer could read a slot between the producer's `head` CAS and the record write (a preempted producer), consuming half-written records. Per-slot sequence numbers now gate reads on publication (visible under ThreadSanitizer; `test_queue_try_put` concurrency test failed reliably before the fix)
+- `core/socket_async.c`: producer no longer rolls `head` back when the line-copy `malloc` fails — in a concurrent setting that decrement could reclaim another producer's claimed slot and corrupt the ring. The slot is published empty and counted as dropped instead
 
 ### Deprecated
 - Old `log_console_sink_create(bool stderr, bool color)` name referenced in `docs/user_manual.md` updated to current `console_sink_create` / `console_sink_create_stderr` API

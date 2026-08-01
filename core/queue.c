@@ -1,50 +1,71 @@
 /**
  * @file queue.c
- * @brief Bounded ring buffer for async logging.
+ * @brief Lock-free MPSC (Multi-Producer, Single-Consumer) ring buffer for async logging.
  *
  * ## Design
  *
- * This is a mutex-protected bounded queue backed by a dynamically-allocated
- * ring buffer (`log_record_t`). The implementation is intentionally simple:
- * lock → push/pop → unlock. This avoids lock-free complexity while still
- * delivering high throughput via the mutex hot path.
+ * This is a lock-free bounded queue backed by a dynamically-allocated ring
+ * buffer of `log_record_t` values. The producer fast path (`try_put`) uses
+ * an atomic compare-exchange loop on `head` — no mutex is ever acquired by
+ * producers. The single consumer drains via `get_batch` and advances `tail`.
  *
- * ## State Diagram
+ * Synchronization is handled by:
+ * - **Atomic CAS** on `head` for slot claiming (producers).
+ * - **Per-slot sequence numbers**: a producer writes the record, then
+ *   release-stores `seq = position + 1`; the consumer acquire-loads `seq`
+ *   and only reads slots where it equals `position + 1`. This makes the
+ *   record write visible to the consumer and prevents it from reading a
+ *   half-written record in the window between the head CAS and the write.
+ * - **Semaphore** `items_sem` signals the consumer when new items arrive.
+ * - **Semaphore** `slots_sem` signals blocked producers when space frees up.
+ * - A small `drain_mutex` + `drain_cond` pair is used *only* by
+ *   `wait_empty` during shutdown — never in the hot path.
+ *
+ * ### Power-of-Two Capacity
+ *
+ * The capacity is rounded up to the next power of two so that the ring index
+ * can be computed with a cheap bitwise AND (`pos & mask`) instead of modulo.
+ *
+ * ## Memory Ordering
+ *
+ * - Producers: `clog_atomic_load_sz(tail)` (acquire) is performed inside the
+ *   CAS loop to check capacity. After claiming a slot via CAS, the record is
+ *   written, then the slot is published with a release-store of
+ *   `seq = position + 1`, and `sem_post(items_sem)` wakes the consumer.
+ *
+ * - Consumer: `sem_wait(items_sem)` (acquire) → `clog_atomic_load_sz(head)`
+ *   (acquire) → for each slot, acquire-load `seq` and only read records where
+ *   `seq == position + 1` → `clog_atomic_store_sz(tail, ...)` (release) →
+ *   `sem_post(slots_sem)` to free slots for producers.
+ *
+ * @par State Diagram
  *
  * ```
- * [EMPTY] ──push()──► [PARTIAL] ──push()──► [FULL]
- *                        │                     │
- *                     pop()                 pop()
- *                        │                     │
- *                        ▼                     ▼
- * [EMPTY] ◄────────── [PARTIAL] ◄────────── [EMPTY]
+ * [EMPTY] ──try_put()──► [PARTIAL] ──try_put()──► [FULL]
+ *                      │               │
+ *                 get_batch          get_batch
+ *                      │               │
+ *                      ▼               ▼
+ * [EMPTY] ◄───────── [PARTIAL] ◄────────── (drained → FULL→PARTIAL)
  * ```
- *
- * - `head` is the index of the next slot to write to (producer).
- * - `tail` is the index of the next slot to read from (consumer).
- * - `head == tail` → empty; `next(head) == tail` → full.
- *
- * ## Thread Safety
- *
- * All operations are serialised by `queue->mutex`. In async logging mode,
- * only the producer thread (main thread calling `LOG_*`) pushes, while
- * the consumer thread (worker thread) pops.
  */
 #include "queue.h"
 #include "clog_port.h"
 #include <stdlib.h>
 #include <string.h>
 
-/**
- * @brief Create a bounded ring buffer for async log records.
- *
- * Allocates the queue struct, the ring buffer, and initialises three
- * condition variables: not_full (producer waits), not_empty (consumer
- * waits), drained (flush waits).
- *
- * @param capacity  Maximum number of records the queue can hold.
- * @return Pointer to the new queue, or NULL on allocation failure.
- */
+static size_t next_pow2(size_t n)
+{
+    if (n <= 1) {
+        return 1;
+    }
+    size_t p = 2;
+    while (p < n) {
+        p <<= 1;
+    }
+    return p;
+}
+
 mpsc_queue_t *mpsc_queue_create(size_t capacity)
 {
     mpsc_queue_t *q = malloc(sizeof(mpsc_queue_t));
@@ -52,88 +73,108 @@ mpsc_queue_t *mpsc_queue_create(size_t capacity)
         return NULL;
     }
 
-    q->capacity = capacity;
-    q->buffer   = malloc(capacity * sizeof(log_record_t));
+    size_t cap = next_pow2(capacity);
+
+    q->buffer = malloc(cap * sizeof(mpsc_slot_t));
     if (!q->buffer) {
         free(q);
         return NULL;
     }
+
+    q->capacity = cap;
+    q->mask     = cap - 1;
 
     q->head   = 0;
     q->tail   = 0;
     q->count  = 0;
     q->closed = 0;
 
-    clog_mutex_init(&q->mutex);
-    clog_cond_init(&q->not_full);
-    clog_cond_init(&q->not_empty);
-    clog_cond_init(&q->drained);
+    /* Initialise per-slot sequence numbers: slot i expects `seq == i + 1`
+     * for the first record written at absolute position i. */
+    for (size_t i = 0; i < cap; i++) {
+        q->buffer[i].seq = (uint64_t)i;
+    }
+
+    if (clog_sem_init(&q->items_sem, 0) != 0) {
+        free(q->buffer);
+        free(q);
+        return NULL;
+    }
+    if (clog_sem_init(&q->slots_sem, (long)cap) != 0) {
+        clog_sem_destroy(&q->items_sem);
+        free(q->buffer);
+        free(q);
+        return NULL;
+    }
+    clog_mutex_init(&q->drain_mutex);
+    clog_cond_init(&q->drain_cond);
 
     return q;
 }
 
-/**
- * @brief Blocking enqueue: wait for space if the queue is full.
- *
- * Blocks the calling thread on the not_full condition variable until
- * a slot is available or the queue is closed. This is the primary
- * enqueue path for the LOG_* macros in async mode.
- *
- * @param q        Queue instance (must not be NULL).
- * @param record   Log record to enqueue (deep-copied into the ring).
- * @return 0 on success, -1 if queue is NULL, closed, or record is NULL.
- */
-int mpsc_queue_put(mpsc_queue_t *restrict q, log_record_t *restrict record)
-{
-    if (!q || !record) {
-        return -1;
-    }
-
-    int ret = -1;
-    CLOG_MUTEXGUARDED(&q->mutex, {
-        while (q->count == q->capacity && !q->closed) {
-            clog_cond_wait(&q->not_full, &q->mutex);
-        }
-
-        if (!q->closed) {
-            q->buffer[q->head] = *record;
-            q->head            = (q->head + 1) % q->capacity;
-            q->count++;
-            clog_cond_signal(&q->not_empty);
-            ret = 0;
-        }
-    });
-    return ret;
-}
-
-/**
- * @brief Non-blocking enqueue: return immediately if the queue is full.
- *
- * Unlike mpsc_queue_put(), never blocks. Returns -1 if no space is
- * available, which triggers the async fallback path (drop or sync
- * degradation depending on configuration).
- *
- * @param q        Queue instance (must not be NULL).
- * @param record   Log record to enqueue.
- * @return 0 on success, -1 if full, closed, or NULL inputs.
- */
 int mpsc_queue_try_put(mpsc_queue_t *restrict q, log_record_t *restrict record)
 {
     if (!q || !record) {
         return -1;
     }
 
-    int ret = -1;
-    CLOG_MUTEXGUARDED(&q->mutex, {
-        if (!q->closed && q->count < q->capacity) {
-            q->buffer[q->head] = *record;
-            q->head            = (q->head + 1) % q->capacity;
-            q->count++;
-            clog_cond_signal(&q->not_empty);
-            ret = 0;
+    /* Fast check: if the queue has been closed, give up immediately. */
+    if (__atomic_load_n(&q->closed, __ATOMIC_ACQUIRE)) {
+        return -1;
+    }
+
+    /*
+     * CAS loop: each producer atomically claims a write slot by advancing
+     * `head`. If another producer races ahead, we retry with the updated
+     * value. This is the lock-free fast path — no mutex is acquired.
+     */
+    for (;;) {
+        size_t head = clog_atomic_load_sz(&q->head);
+        size_t tail = clog_atomic_load_sz(&q->tail);
+
+        if (head - tail >= q->capacity) {
+            return -1; /* Queue is full. */
         }
-    });
-    return ret;
+
+        if (clog_atomic_cas_sz(&q->head, &head, head + 1)) {
+            /*
+             * Successfully claimed slot `head` (the old value). Write the
+             * record, publish it with a release-store of the sequence number
+             * (making the write visible to the consumer), then signal.
+             */
+            mpsc_slot_t *slot = &q->buffer[head & q->mask];
+            slot->rec         = *record;
+            __atomic_store_n(&slot->seq, (uint64_t)head + 1, __ATOMIC_RELEASE);
+            clog_atomic_fetch_add_sz(&q->count, 1);
+            clog_sem_post(&q->items_sem);
+            return 0;
+        }
+        /* CAS failed — head was advanced by another producer; retry. */
+    }
+}
+
+int mpsc_queue_put(mpsc_queue_t *restrict q, log_record_t *restrict record)
+{
+    if (!q || !record) {
+        return -1;
+    }
+
+    for (;;) {
+        /* Try a non-blocking enqueue first. */
+        if (mpsc_queue_try_put(q, record) == 0) {
+            return 0;
+        }
+
+        /*
+         * try_put failed. If the queue is closed, propagate the failure.
+         * Otherwise it was full — wait for a free slot, then retry.
+         */
+        if (__atomic_load_n(&q->closed, __ATOMIC_ACQUIRE)) {
+            return -1;
+        }
+
+        clog_sem_wait(&q->slots_sem);
+    }
 }
 
 int mpsc_queue_get(mpsc_queue_t *restrict q, log_record_t *restrict record)
@@ -141,19 +182,6 @@ int mpsc_queue_get(mpsc_queue_t *restrict q, log_record_t *restrict record)
     return mpsc_queue_get_batch(q, record, 1) == 1 ? 0 : -1;
 }
 
-/**
- * @brief Batch dequeue: drain up to @p max_records in a single lock acquisition.
- *
- * The async worker calls this to dequeue multiple records per iteration,
- * reducing mutex contention. Blocks on the not_empty condition when the
- * queue is empty, unless the queue is closed (returns remaining records).
- *
- * @param q            Queue instance (must not be NULL).
- * @param records      Output array for dequeued records.
- * @param max_records  Maximum records to dequeue in this call.
- * @return Number of records actually dequeued (0 if closed and empty),
- *         or -1 on NULL inputs.
- */
 int mpsc_queue_get_batch(mpsc_queue_t *restrict q,
                          log_record_t *restrict records,
                          size_t max_records)
@@ -162,96 +190,152 @@ int mpsc_queue_get_batch(mpsc_queue_t *restrict q,
         return -1;
     }
 
-    int count_to_get = -1;
-    CLOG_MUTEXGUARDED(&q->mutex, {
-        while (q->count == 0) {
-            if (q->closed) {
+    /*
+     * The semaphore may be posted by close() even when the queue is empty.
+     * Loop until we either find items to consume or confirm the queue is
+     * closed and drained.
+     */
+    for (;;) {
+        clog_sem_wait(&q->items_sem);
+
+        /* Load the latest head (producer writes) and tail (consumer reads). */
+        size_t head = clog_atomic_load_sz(&q->head);
+        size_t tail = clog_atomic_load_sz(&q->tail); /* single consumer,
+                                                       wait_empty may read */
+
+        /*
+         * If no items are available, either the queue was closed (return -1
+         * to signal shutdown) or this was a spurious wake-up (loop and wait
+         * again).
+         */
+        if (head - tail == 0) {
+            if (__atomic_load_n(&q->closed, __ATOMIC_ACQUIRE)) {
+                return -1;
+            }
+            continue; /* Spurious wake-up — re-block. */
+        }
+
+        size_t available = head - tail;
+        size_t n         = 0;
+        while (n < available && n < max_records) {
+            size_t       pos  = tail + n;
+            mpsc_slot_t *slot = &q->buffer[pos & q->mask];
+            /*
+             * Only read the slot once its producer has published it
+             * (release-stored seq == pos + 1). A producer that won the head
+             * CAS but was preempted before writing has *committed* — it will
+             * finish writing and post items_sem, so waiting is safe.
+             */
+            if (__atomic_load_n(&slot->seq, __ATOMIC_ACQUIRE) != (uint64_t)pos + 1) {
                 break;
             }
-            clog_cond_wait(&q->not_empty, &q->mutex);
+            records[n] = slot->rec;
+            n++;
         }
 
-        if (!q->closed || q->count > 0) {
-            count_to_get = (int)(q->count < max_records ? q->count : max_records);
-            for (int i = 0; i < count_to_get; i++) {
-                records[i] = q->buffer[q->tail];
-                q->tail    = (q->tail + 1) % q->capacity;
-                q->count--;
-            }
-
-            if (q->count == 0) {
-                clog_cond_broadcast(&q->drained);
-            }
-
-            clog_cond_broadcast(&q->not_full);
+        if (n == 0) {
+            /*
+             * All claimed slots are still unpublished (producers preempted
+             * between CAS and write). Yield once and re-wait: the committed
+             * producers are guaranteed to publish and post items_sem, so this
+             * cannot deadlock or busy-loop.
+             */
+            clog_sleep_ms(0);
+            continue;
         }
-    });
-    return count_to_get;
+
+        /* Advance our consumer read position. */
+        clog_atomic_store_sz(&q->tail, tail + n);
+        clog_atomic_fetch_sub_sz(&q->count, n);
+
+        /* Free up slots for blocked producers. */
+        for (size_t i = 0; i < n; i++) {
+            clog_sem_post(&q->slots_sem);
+        }
+
+        /*
+         * If the queue is now empty, notify any threads waiting in
+         * mpsc_queue_wait_empty(). This must happen even when the queue is
+         * not closed, because mpsc_queue_wait_empty() is called by
+         * log_async_flush_for() before close to ensure all records have been
+         * dispatched.
+         */
+        size_t rem = clog_atomic_load_sz(&q->head) - clog_atomic_load_sz(&q->tail);
+        if (rem == 0) {
+            clog_mutex_lock(&q->drain_mutex);
+            clog_cond_broadcast(&q->drain_cond);
+            clog_mutex_unlock(&q->drain_mutex);
+        }
+
+        return (int)n;
+    }
 }
 
-/**
- * @brief Close the queue, waking all blocked producers and consumers.
- *
- * After closing, mpsc_queue_put() returns -1 immediately and
- * mpsc_queue_get_batch() drains remaining records then returns 0.
- * Used during logger shutdown to signal the async worker to exit.
- */
 void mpsc_queue_close(mpsc_queue_t *q)
 {
     if (!q) {
         return;
     }
 
-    CLOG_MUTEXGUARDED(&q->mutex, {
-        q->closed = 1;
-        clog_cond_broadcast(&q->not_empty);
-        clog_cond_broadcast(&q->not_full);
-        clog_cond_broadcast(&q->drained);
-    });
+    __atomic_store_n(&q->closed, 1, __ATOMIC_RELEASE);
+
+    /*
+     * Wake at least one consumer and unblock all producers. We post to
+     * items_sem once for the consumer and post capacity times to slots_sem
+     * (worst case: every slot is occupied by a blocked producer).
+     */
+    clog_sem_post(&q->items_sem);
+    for (size_t i = 0; i < q->capacity; i++) {
+        clog_sem_post(&q->slots_sem);
+    }
+
+    /* Also wake any wait_empty callers. */
+    clog_mutex_lock(&q->drain_mutex);
+    clog_cond_broadcast(&q->drain_cond);
+    clog_mutex_unlock(&q->drain_mutex);
 }
 
-/**
- * @brief Block until the queue is empty (all records drained by consumer).
- *
- * Used by log_flush() to wait for the async worker to finish processing
- * all queued records. Blocks on the drained condition variable.
- */
 void mpsc_queue_wait_empty(mpsc_queue_t *q)
 {
     if (!q) {
         return;
     }
 
-    CLOG_MUTEXGUARDED(&q->mutex, {
-        while (q->count > 0) {
-            clog_cond_wait(&q->drained, &q->mutex);
+    clog_mutex_lock(&q->drain_mutex);
+    for (;;) {
+        size_t head = clog_atomic_load_sz(&q->head);
+        size_t tail = clog_atomic_load_sz(&q->tail);
+        if (head - tail == 0) {
+            break;
         }
-    });
+        clog_cond_wait(&q->drain_cond, &q->drain_mutex);
+    }
+    clog_mutex_unlock(&q->drain_mutex);
 }
 
-/**
- * @brief Free all resources associated with the queue.
- *
- * Broadcasts all condition variables to wake any blocked threads,
- * destroys mutex and conditions, then frees the ring buffer and
- * queue struct. Caller must ensure no other thread is accessing
- * the queue (typically after mpsc_queue_close() + thread join).
- */
 void mpsc_queue_destroy(mpsc_queue_t *q)
 {
     if (!q) {
         return;
     }
 
-    CLOG_MUTEXGUARDED(&q->mutex, {
-        clog_cond_broadcast(&q->not_full);
-        clog_cond_broadcast(&q->not_empty);
-        clog_cond_broadcast(&q->drained);
-    });
-    clog_mutex_destroy(&q->mutex);
-    clog_cond_destroy(&q->not_full);
-    clog_cond_destroy(&q->not_empty);
-    clog_cond_destroy(&q->drained);
+    /*
+     * Wake any threads that might still be blocked on the semaphores so
+     * they can observe the closed state and exit.
+     */
+    __atomic_store_n(&q->closed, 1, __ATOMIC_RELEASE);
+    for (size_t i = 0; i < q->capacity + 2; i++) {
+        clog_sem_post(&q->items_sem);
+        clog_sem_post(&q->slots_sem);
+    }
+    clog_mutex_lock(&q->drain_mutex);
+    clog_cond_broadcast(&q->drain_cond);
+    clog_mutex_unlock(&q->drain_mutex);
+
+    clog_sem_destroy(&q->items_sem);
+    clog_sem_destroy(&q->slots_sem);
+    clog_mutex_destroy(&q->drain_mutex);
+    clog_cond_destroy(&q->drain_cond);
 
     free(q->buffer);
     free(q);

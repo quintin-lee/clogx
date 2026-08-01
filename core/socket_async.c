@@ -1,9 +1,18 @@
 /**
  * @file socket_async.c
- * @brief Async non-blocking socket writer with ring buffer and exponential backoff.
+ * @brief Lock-free async non-blocking socket writer with ring buffer and
+ * exponential backoff.
  *
  * Implements the ring buffer for formatted log lines and a background writer
  * thread that drains the buffer over a TCP/TLS socket with non-blocking I/O.
+ *
+ * ## Lock-free Design
+ *
+ * The ring buffer uses atomic compare-exchange on `head` for producer slot
+ * claiming — multiple producer threads may call @ref socket_ring_put concurrently
+ * without any mutex. When the buffer is full, the new line is dropped (lossy)
+ * and the `dropped` counter is incremented. The single consumer (writer thread)
+ * blocks on a semaphore (`items_sem`) and reads from `tail`.
  */
 
 #include "socket_async.h"
@@ -44,6 +53,18 @@ struct socket_writer_t {
 
 /* ── Ring Buffer Implementation ── */
 
+static size_t sk_next_pow2(size_t n)
+{
+    if (n < 2) {
+        return 2;
+    }
+    size_t p = 1;
+    while (p < n) {
+        p <<= 1;
+    }
+    return p;
+}
+
 socket_ring_buffer_t *socket_ring_create(size_t capacity)
 {
     if (capacity == 0) {
@@ -55,20 +76,33 @@ socket_ring_buffer_t *socket_ring_create(size_t capacity)
         return NULL;
     }
 
-    ring->slots = calloc(capacity, sizeof(socket_ring_slot_t));
+    size_t cap = sk_next_pow2(capacity);
+
+    ring->slots = calloc(cap, sizeof(socket_ring_slot_t));
     if (!ring->slots) {
         free(ring);
         return NULL;
     }
 
-    ring->capacity = capacity;
-    ring->head     = 0;
-    ring->tail     = 0;
-    ring->count    = 0;
-    ring->dropped  = 0;
-    ring->closed   = 0;
-    clog_mutex_init(&ring->mutex);
-    clog_cond_init(&ring->not_empty);
+    ring->capacity = cap;
+    ring->mask     = cap - 1;
+
+    ring->head    = 0;
+    ring->tail    = 0;
+    ring->count   = 0;
+    ring->dropped = 0;
+    ring->closed  = 0;
+
+    /* Slot i expects `seq == i + 1` for the first line at absolute position i. */
+    for (size_t i = 0; i < cap; i++) {
+        ring->slots[i].seq = (uint64_t)i;
+    }
+
+    if (clog_sem_init(&ring->items_sem, 0) != 0) {
+        free(ring->slots);
+        free(ring);
+        return NULL;
+    }
 
     return ring;
 }
@@ -79,41 +113,65 @@ int socket_ring_put(socket_ring_buffer_t *ring, const char *line, size_t len)
         return -1;
     }
 
-    clog_mutex_lock(&ring->mutex);
-
-    if (ring->closed) {
-        clog_mutex_unlock(&ring->mutex);
+    /* Fast check: closed ring rejects puts. */
+    if (__atomic_load_n(&ring->closed, __ATOMIC_ACQUIRE)) {
         return -1;
     }
 
-    /* If buffer is full, drop oldest entry (lossy backpressure). */
-    if (ring->count == ring->capacity) {
-        free(ring->slots[ring->tail].line);
-        ring->slots[ring->tail].line = NULL;
-        ring->slots[ring->tail].len  = 0;
-        ring->tail                   = (ring->tail + 1) % ring->capacity;
-        ring->count--;
-        ring->dropped++;
+    /*
+     * Lock-free producer path: use a CAS loop to atomically claim a slot in
+     * `head`. This is the hot path — no mutex is ever acquired.
+     */
+    for (;;) {
+        size_t head = clog_atomic_load_sz(&ring->head);
+        size_t tail = clog_atomic_load_sz(&ring->tail);
+
+        if (head - tail >= ring->capacity) {
+            /*
+             * Ring is full — drop the new entry (lossy backpressure).
+             * This is intentional for a logging ring buffer: blocking the
+             * caller would be worse than dropping a message.
+             */
+            __atomic_fetch_add(&ring->dropped, 1, __ATOMIC_RELAXED);
+            return 0;
+        }
+
+        if (clog_atomic_cas_sz(&ring->head, &head, head + 1)) {
+            /*
+             * Successfully claimed slot `head`. Allocate a copy of the line
+             * and write it, then publish with a release-store of seq (making
+             * the write visible to the consumer) before signalling.
+             */
+            socket_ring_slot_t *slot = &ring->slots[head & ring->mask];
+            char               *copy = malloc(len + 1);
+            if (!copy) {
+                /*
+                 * Allocation failed. The slot is already claimed — rolling
+                 * head back would corrupt other producers' claims, so publish
+                 * an empty slot instead and count it as dropped. The consumer
+                 * frees NULL safely and skips zero-length lines.
+                 */
+                slot->line = NULL;
+                slot->len  = 0;
+                __atomic_store_n(&slot->seq, (uint64_t)head + 1, __ATOMIC_RELEASE);
+                clog_atomic_fetch_add_sz(&ring->count, 1);
+                clog_sem_post(&ring->items_sem);
+                __atomic_fetch_add(&ring->dropped, 1, __ATOMIC_RELAXED);
+                return -1;
+            }
+            memcpy(copy, line, len);
+            copy[len] = '\0';
+
+            slot->line = copy;
+            slot->len  = len;
+
+            __atomic_store_n(&slot->seq, (uint64_t)head + 1, __ATOMIC_RELEASE);
+            clog_atomic_fetch_add_sz(&ring->count, 1);
+            clog_sem_post(&ring->items_sem);
+            return 0;
+        }
+        /* CAS failed — another producer claimed the slot; retry. */
     }
-
-    /* Allocate and copy the line. */
-    char *copy = malloc(len + 1);
-    if (!copy) {
-        clog_mutex_unlock(&ring->mutex);
-        return -1;
-    }
-    memcpy(copy, line, len);
-    copy[len] = '\0';
-
-    ring->slots[ring->head].line = copy;
-    ring->slots[ring->head].len  = len;
-    ring->head                   = (ring->head + 1) % ring->capacity;
-    ring->count++;
-
-    clog_cond_signal(&ring->not_empty);
-    clog_mutex_unlock(&ring->mutex);
-
-    return 0;
 }
 
 int socket_ring_get_batch(socket_ring_buffer_t *ring,
@@ -125,30 +183,61 @@ int socket_ring_get_batch(socket_ring_buffer_t *ring,
         return -1;
     }
 
-    clog_mutex_lock(&ring->mutex);
+    /*
+     * Block until at least one item is available or the ring is closed.
+     * The semaphore is posted by producers after each put, and by
+     * socket_ring_close() / socket_ring_signal() to wake blocked consumers.
+     */
+    clog_sem_wait(&ring->items_sem);
 
-    /* Wait for data or close signal. */
-    while (ring->count == 0 && !ring->closed) {
-        clog_cond_wait(&ring->not_empty, &ring->mutex);
+    /* Load the latest head (producer writes) and local tail (consumer reads). */
+    size_t head = clog_atomic_load_sz(&ring->head);
+    size_t tail = clog_atomic_load_sz(&ring->tail);
+
+    size_t available = head - tail;
+
+    if (available == 0) {
+        /*
+         * Woken by close/signal with no actual items to read.
+         * If closed, signal shutdown.
+         */
+        if (__atomic_load_n(&ring->closed, __ATOMIC_ACQUIRE)) {
+            return -1;
+        }
+        return 0;
     }
 
-    if (ring->count == 0 && ring->closed) {
-        clog_mutex_unlock(&ring->mutex);
-        return -1; /* Closed and drained. */
+    /*
+     * Only read slots whose producer has published them (seq == pos + 1).
+     * A producer that won the head CAS but was preempted before writing has
+     * committed — it will finish and post items_sem, so a short yield and a
+     * retry from the caller is safe.
+     */
+    size_t n = 0;
+    while (n < available && n < max_lines) {
+        size_t              pos  = tail + n;
+        socket_ring_slot_t *slot = &ring->slots[pos & ring->mask];
+        if (__atomic_load_n(&slot->seq, __ATOMIC_ACQUIRE) != (uint64_t)pos + 1) {
+            break;
+        }
+        lines[n]   = slot->line;
+        lengths[n] = slot->len;
+        slot->line = NULL;
+        slot->len  = 0;
+        n++;
     }
 
-    /* Dequeue up to max_lines. */
-    size_t n = ring->count < max_lines ? ring->count : max_lines;
-    for (size_t i = 0; i < n; i++) {
-        lines[i]                     = ring->slots[ring->tail].line;
-        lengths[i]                   = ring->slots[ring->tail].len;
-        ring->slots[ring->tail].line = NULL;
-        ring->slots[ring->tail].len  = 0;
-        ring->tail                   = (ring->tail + 1) % ring->capacity;
+    if (n == 0) {
+        /* Claimed but unpublished slots — yield once and report empty; the
+         * committed producer's post will wake the next get_batch. */
+        clog_sleep_ms(0);
+        return 0;
     }
-    ring->count -= n;
 
-    clog_mutex_unlock(&ring->mutex);
+    /* Advance the consumer read position. */
+    clog_atomic_store_sz(&ring->tail, tail + n);
+    clog_atomic_fetch_sub_sz(&ring->count, n);
+
     return (int)n;
 }
 
@@ -158,10 +247,13 @@ void socket_ring_close(socket_ring_buffer_t *ring)
         return;
     }
 
-    clog_mutex_lock(&ring->mutex);
-    ring->closed = 1;
-    clog_cond_broadcast(&ring->not_empty);
-    clog_mutex_unlock(&ring->mutex);
+    __atomic_store_n(&ring->closed, 1, __ATOMIC_RELEASE);
+
+    /*
+     * Post to the semaphore so any blocked consumer wakes up and can
+     * observe the closed state.
+     */
+    clog_sem_post(&ring->items_sem);
 }
 
 void socket_ring_signal(socket_ring_buffer_t *ring)
@@ -170,9 +262,11 @@ void socket_ring_signal(socket_ring_buffer_t *ring)
         return;
     }
 
-    clog_mutex_lock(&ring->mutex);
-    clog_cond_broadcast(&ring->not_empty);
-    clog_mutex_unlock(&ring->mutex);
+    /*
+     * Wake the consumer thread. The consumer will check the actual head/tail
+     * after waking.
+     */
+    clog_sem_post(&ring->items_sem);
 }
 
 void socket_ring_destroy(socket_ring_buffer_t *ring)
@@ -181,27 +275,42 @@ void socket_ring_destroy(socket_ring_buffer_t *ring)
         return;
     }
 
-    /* Free any remaining lines. */
-    for (size_t i = 0; i < ring->capacity; i++) {
-        free(ring->slots[i].line);
-    }
-    free(ring->slots);
+    /* Wake any blocked consumer so it can observe closed state. */
+    __atomic_store_n(&ring->closed, 1, __ATOMIC_RELEASE);
+    clog_sem_post(&ring->items_sem);
 
-    clog_mutex_destroy(&ring->mutex);
-    clog_cond_destroy(&ring->not_empty);
+    /* Free any remaining lines. */
+    size_t head      = clog_atomic_load_sz(&ring->head);
+    size_t tail      = clog_atomic_load_sz(&ring->tail);
+    size_t remaining = head - tail;
+    for (size_t i = 0; i < remaining && i < ring->capacity; i++) {
+        size_t idx = (tail + i) & ring->mask;
+        free(ring->slots[idx].line);
+        ring->slots[idx].line = NULL;
+        ring->slots[idx].len  = 0;
+    }
+
+    clog_sem_destroy(&ring->items_sem);
+    free(ring->slots);
     free(ring);
+}
+
+size_t socket_ring_depth(const socket_ring_buffer_t *ring)
+{
+    if (!ring) {
+        return 0;
+    }
+    return clog_atomic_load_sz(&ring->head) - clog_atomic_load_sz(&ring->tail);
 }
 
 /* ── Exponential Backoff Helpers ── */
 
 static uint32_t backoff_next(uint32_t current_ms, uint32_t max_ms)
 {
-    /* Double the delay, cap at max, add ±10% jitter. */
     uint32_t next = current_ms * 2;
     if (next > max_ms) {
         next = max_ms;
     }
-    /* Simple LCG jitter: ±10%. */
     uint32_t jitter = next / 10;
     uint32_t seed   = (uint32_t)clog_get_now_ms();
     uint32_t delta  = (seed % (2 * jitter + 1));
@@ -210,7 +319,6 @@ static uint32_t backoff_next(uint32_t current_ms, uint32_t max_ms)
     } else {
         next -= (jitter - delta);
     }
-    /* Clamp back to min. */
     if (next < 100) {
         next = 100;
     }
@@ -266,7 +374,6 @@ static int socket_connect_nonblocking(clog_socket_t sockfd, const char *host, in
 #else
     if (errno == EINPROGRESS) {
 #endif
-        /* Wait for connection with a short timeout (1 second). */
         fd_set writefds;
         FD_ZERO(&writefds);
         FD_SET(sockfd, &writefds);
@@ -277,7 +384,6 @@ static int socket_connect_nonblocking(clog_socket_t sockfd, const char *host, in
 
         int sel = select((int)sockfd + 1, NULL, &writefds, NULL, &tv);
         if (sel > 0) {
-            /* Check if connect succeeded. */
             int       err    = 0;
             socklen_t errlen = sizeof(err);
             getsockopt(sockfd, SOL_SOCKET, SO_ERROR, (char *)&err, &errlen);
@@ -310,10 +416,8 @@ static int socket_send_nonblocking(clog_socket_t sockfd, const char *buf, size_t
 #else
             if (errno == EAGAIN || errno == EWOULDBLOCK || errno == EINTR) {
 #endif
-                /* Would block — caller should retry after backoff. */
                 return (int)total_sent > 0 ? (int)total_sent : -1;
             }
-            /* Real error. */
             return -1;
         }
         if (sent == 0) {
@@ -385,21 +489,18 @@ static int socket_writer_connect(socket_writer_t *writer)
         return -1;
     }
 
-    /* Set non-blocking mode. */
     if (socket_set_nonblocking(writer->sockfd) != 0) {
         clog_close_socket(writer->sockfd);
         writer->sockfd = CLOG_INVALID_SOCKET;
         return -1;
     }
 
-    /* Non-blocking connect with 1-second timeout. */
     if (socket_connect_nonblocking(writer->sockfd, writer->config.host, writer->config.port) != 0) {
         clog_close_socket(writer->sockfd);
         writer->sockfd = CLOG_INVALID_SOCKET;
         return -1;
     }
 
-    /* TLS handshake (if enabled). */
     if (writer->config.use_tls) {
 #ifdef CLOG_USE_TLS
         const SSL_METHOD *method = TLS_method();
@@ -500,7 +601,7 @@ static void *socket_writer_thread(void *arg)
     size_t       lengths[64];
 
     for (;;) {
-        /* Dequeue a batch (blocks on condvar if empty). */
+        /* Dequeue a batch (blocks on semaphore if empty). */
         int n = socket_ring_get_batch(ring, lines, lengths, BATCH_SIZE);
         if (n < 0) {
             /* Ring closed and drained — exit. */
@@ -528,8 +629,13 @@ static void *socket_writer_thread(void *arg)
         /* Send the batch. */
         int send_failed = 0;
         for (int i = 0; i < n; i++) {
+            /* Skip empty slots (published on producer-side alloc failure). */
+            if (!lines[i] || lengths[i] == 0) {
+                free((void *)lines[i]);
+                continue;
+            }
             int rc = 0;
-            if (lengths[i] > 0 && lines[i][lengths[i] - 1] == '\n') {
+            if (lines[i][lengths[i] - 1] == '\n') {
                 rc = socket_writer_send(writer, lines[i], lengths[i]);
             } else {
                 char *framed = malloc(lengths[i] + 1);
@@ -571,7 +677,11 @@ static void *socket_writer_thread(void *arg)
                 break;
             }
             for (int i = 0; i < n; i++) {
-                if (lengths[i] > 0 && lines[i][lengths[i] - 1] == '\n') {
+                if (!lines[i] || lengths[i] == 0) {
+                    free((void *)lines[i]);
+                    continue;
+                }
+                if (lines[i][lengths[i] - 1] == '\n') {
                     socket_writer_send(writer, lines[i], lengths[i]);
                 } else {
                     char *framed = malloc(lengths[i] + 1);
@@ -660,5 +770,5 @@ uint64_t socket_writer_dropped(const socket_writer_t *writer)
     if (!writer || !writer->ring) {
         return 0;
     }
-    return writer->ring->dropped;
+    return __atomic_load_n(&writer->ring->dropped, __ATOMIC_RELAXED);
 }

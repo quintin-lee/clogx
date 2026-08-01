@@ -467,6 +467,150 @@ static inline uint64_t clog_atomic_get64(volatile uint64_t *ptr)
 #endif
 }
 
+/* ── Atomic size_t operations (for lock-free ring buffers) ── */
+
+static inline size_t clog_atomic_load_sz(const volatile size_t *ptr)
+{
+#if defined(__GNUC__) || defined(__clang__)
+    return __atomic_load_n(ptr, __ATOMIC_ACQUIRE);
+#elif defined(_WIN32) || defined(_WIN64)
+    return (size_t)InterlockedCompareExchange64((volatile LONG64 *)ptr, 0, 0);
+#else
+    return *ptr;
+#endif
+}
+
+static inline void clog_atomic_store_sz(volatile size_t *ptr, size_t val)
+{
+#if defined(__GNUC__) || defined(__clang__)
+    __atomic_store_n(ptr, val, __ATOMIC_RELEASE);
+#elif defined(_WIN32) || defined(_WIN64)
+    InterlockedExchange64((volatile LONG64 *)ptr, (LONG64)val);
+#else
+    *ptr = val;
+#endif
+}
+
+static inline size_t clog_atomic_fetch_add_sz(volatile size_t *ptr, size_t n)
+{
+#if defined(__GNUC__) || defined(__clang__)
+    return __atomic_fetch_add(ptr, n, __ATOMIC_ACQUIRE);
+#elif defined(_WIN32) || defined(_WIN64)
+    return (size_t)InterlockedExchangeAdd64((volatile LONG64 *)ptr, (LONG64)n);
+#else
+    size_t old = *ptr;
+    *ptr += n;
+    return old;
+#endif
+}
+
+static inline size_t clog_atomic_fetch_sub_sz(volatile size_t *ptr, size_t n)
+{
+#if defined(__GNUC__) || defined(__clang__)
+    return __atomic_fetch_sub(ptr, n, __ATOMIC_RELEASE);
+#elif defined(_WIN32) || defined(_WIN64)
+    return (size_t)InterlockedExchangeAdd64((volatile LONG64 *)ptr, -(LONG64)n);
+#else
+    size_t old = *ptr;
+    *ptr -= n;
+    return old;
+#endif
+}
+
+static inline int clog_atomic_cas_sz(volatile size_t *ptr, size_t *expected, size_t desired)
+{
+#if defined(__GNUC__) || defined(__clang__)
+    return __atomic_compare_exchange_n(
+        ptr, expected, desired, 1, __ATOMIC_ACQ_REL, __ATOMIC_ACQUIRE);
+#elif defined(_WIN32) || defined(_WIN64)
+    size_t old = (size_t)InterlockedCompareExchange64(
+        (volatile LONG64 *)ptr, (LONG64)desired, (LONG64)*expected);
+    if (old == *expected) {
+        return 1;
+    }
+    *expected = old;
+    return 0;
+#else
+    if (*ptr == *expected) {
+        *ptr = desired;
+        return 1;
+    }
+    *expected = *ptr;
+    return 0;
+#endif
+}
+
+/* ── Semaphore ── */
+
+#if defined(_WIN32) || defined(_WIN64)
+
+typedef HANDLE clog_sem_t;
+
+static inline int clog_sem_init(clog_sem_t *sem, long initial)
+{
+    *sem = CreateSemaphoreA(NULL, initial, 0x7FFFFFFF, NULL);
+    return *sem ? 0 : -1;
+}
+
+static inline void clog_sem_destroy(clog_sem_t *sem)
+{
+    if (sem && *sem) {
+        CloseHandle(*sem);
+        *sem = NULL;
+    }
+}
+
+static inline void clog_sem_wait(clog_sem_t *sem)
+{
+    WaitForSingleObject(*sem, INFINITE);
+}
+
+static inline int clog_sem_trywait(clog_sem_t *sem)
+{
+    DWORD result = WaitForSingleObject(*sem, 0);
+    return (result == WAIT_OBJECT_0) ? 0 : -1;
+}
+
+static inline void clog_sem_post(clog_sem_t *sem)
+{
+    ReleaseSemaphore(*sem, 1, NULL);
+}
+
+#else /* POSIX */
+
+#include <semaphore.h>
+
+typedef sem_t clog_sem_t;
+
+static inline int clog_sem_init(clog_sem_t *sem, long initial)
+{
+    return sem_init(sem, 0, (unsigned int)initial);
+}
+
+static inline void clog_sem_destroy(clog_sem_t *sem)
+{
+    sem_destroy(sem);
+}
+
+static inline void clog_sem_wait(clog_sem_t *sem)
+{
+    while (sem_wait(sem) != 0) {
+        /* Retry on EINTR. */
+    }
+}
+
+static inline int clog_sem_trywait(clog_sem_t *sem)
+{
+    return sem_trywait(sem);
+}
+
+static inline void clog_sem_post(clog_sem_t *sem)
+{
+    sem_post(sem);
+}
+
+#endif /* POSIX / Windows */
+
 /* ── Time & Thread utilities ── */
 
 /**
