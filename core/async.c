@@ -187,13 +187,13 @@ static void *async_worker_for(void *arg)
         if (count <= 0) {
             break;
         }
-        logger->async_processing = 1;
+        clog_atomic_store_int(&logger->async_processing, 1);
         for (int i = 0; i < count; i++) {
             log_dispatcher_dispatch_for(logger, &batch[i]);
             log_record_free_owned(&batch[i]);
         }
         log_dispatcher_flush_for(logger);
-        logger->async_processing = 0;
+        clog_atomic_store_int(&logger->async_processing, 0);
     }
     return NULL;
 }
@@ -250,7 +250,7 @@ void log_async_flush_for(logger_t *logger)
         return;
     }
     mpsc_queue_wait_empty(logger->queue);
-    while (logger->async_processing) {
+    while (clog_atomic_load_int(&logger->async_processing)) {
         clog_sleep_ms(1);
     }
     log_dispatcher_flush_for(logger);

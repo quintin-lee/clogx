@@ -28,6 +28,7 @@ All notable changes to this project will be documented in this file.
 - Data race in lock-free ring buffers: the consumer could read a slot between the producer's `head` CAS and the record write (a preempted producer), consuming half-written records. Per-slot sequence numbers now gate reads on publication (visible under ThreadSanitizer; `test_queue_try_put` concurrency test failed reliably before the fix)
 - `core/socket_async.c`: producer no longer rolls `head` back when the line-copy `malloc` fails — in a concurrent setting that decrement could reclaim another producer's claimed slot and corrupt the ring. The slot is published empty and counted as dropped instead
 - Centralized GCC/Clang `__atomic_*` builtins behind `clog_atomic_load_int` / `clog_atomic_store_int` / `clog_atomic_load_u64` / `clog_atomic_store_u64` in `include/clog_port.h` with MSVC `Interlocked*` equivalents so `core/queue.c` and `core/socket_async.c` compile on Windows; zero-initialize `log_record_t` in the write path (`core/log.c`) to avoid reading uninitialized `kv_count`
+- `logger->async_processing` flag accessed via `clog_atomic_load_int` / `clog_atomic_store_int` instead of plain volatile reads/writes, closing a cross-thread data race between the async worker and `log_async_flush_for`
 
 ### Deprecated
 - Old `log_console_sink_create(bool stderr, bool color)` name referenced in `docs/user_manual.md` updated to current `console_sink_create` / `console_sink_create_stderr` API

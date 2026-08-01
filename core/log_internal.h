@@ -45,7 +45,7 @@ typedef struct logger_t {
     mpsc_queue_t *queue;            /**< MPSC record queue (NULL if sync mode). */
     clog_thread_t worker_thread;    /**< Background consumer thread handle. */
     volatile int  async_running;    /**< 1 while the worker thread is alive. */
-    volatile int  async_processing; /**< 1 while draining a batch. */
+    volatile int  async_processing; /**< 1 while draining a batch; accessed only via clog_atomic_load_int/store_int. */
 
     /* ── Rate limiter (optional) ── */
     bool         rl_enabled;          /**< Token-bucket rate limiting active. */
