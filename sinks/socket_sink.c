@@ -106,6 +106,13 @@ static int socket_connect(log_sink_t *sink)
         perror("Failed to create socket");
         return -1;
     }
+#if !defined(_WIN32) && !defined(_WIN64)
+    struct timeval tv;
+    tv.tv_sec  = 2;
+    tv.tv_usec = 0;
+    setsockopt(data->sockfd, SOL_SOCKET, SO_RCVTIMEO, (const char *)&tv, sizeof(tv));
+    setsockopt(data->sockfd, SOL_SOCKET, SO_SNDTIMEO, (const char *)&tv, sizeof(tv));
+#endif
     struct sockaddr_in serv_addr;
     memset(&serv_addr, 0, sizeof(serv_addr));
     serv_addr.sin_family = AF_INET;
@@ -189,7 +196,11 @@ static int socket_write(log_sink_t *sink, const char *buf, size_t len)
 
     /* Async mode: enqueue into ring buffer and return immediately. */
     if (data->async_enabled && data->async_ring) {
-        return socket_ring_put(data->async_ring, buf, len);
+        size_t send_len = len;
+        if (send_len > 0 && buf[send_len - 1] == '\n') {
+            send_len--;
+        }
+        return socket_ring_put(data->async_ring, buf, send_len);
     }
 
     /* Synchronous mode: blocking send. */
@@ -291,6 +302,8 @@ static void socket_atfork_child(log_sink_t *sink)
 
 #ifdef CLOG_USE_TLS
     if (data->ssl) {
+        SSL_set_shutdown(data->ssl, SSL_SENT_SHUTDOWN);
+        SSL_shutdown(data->ssl);
         SSL_free(data->ssl);
         data->ssl = NULL;
     }
@@ -300,6 +313,9 @@ static void socket_atfork_child(log_sink_t *sink)
     }
 #endif
     if (!clog_is_invalid_socket(data->sockfd)) {
+#if !defined(_WIN32) && !defined(_WIN64)
+        shutdown(data->sockfd, SHUT_WR);
+#endif
         clog_close_socket(data->sockfd);
         data->sockfd = CLOG_INVALID_SOCKET;
     }

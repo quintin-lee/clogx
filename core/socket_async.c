@@ -345,6 +345,7 @@ static void socket_writer_cleanup(socket_writer_t *writer)
 {
 #ifdef CLOG_USE_TLS
     if (writer->ssl) {
+        SSL_set_shutdown(writer->ssl, SSL_SENT_SHUTDOWN);
         SSL_shutdown(writer->ssl);
         SSL_free(writer->ssl);
         writer->ssl = NULL;
@@ -355,6 +356,9 @@ static void socket_writer_cleanup(socket_writer_t *writer)
     }
 #endif
     if (!clog_is_invalid_socket(writer->sockfd)) {
+#if !defined(_WIN32) && !defined(_WIN64)
+        shutdown(writer->sockfd, SHUT_WR);
+#endif
         clog_close_socket(writer->sockfd);
         writer->sockfd = CLOG_INVALID_SOCKET;
     }
@@ -423,7 +427,26 @@ static int socket_writer_connect(socket_writer_t *writer)
         }
 
         SSL_set_fd(writer->ssl, (int)writer->sockfd);
-        if (SSL_connect(writer->ssl) <= 0) {
+        int ssl_res = 0;
+        while ((ssl_res = SSL_connect(writer->ssl)) <= 0) {
+            int err = SSL_get_error(writer->ssl, ssl_res);
+            if (err == SSL_ERROR_WANT_READ || err == SSL_ERROR_WANT_WRITE) {
+                fd_set fds;
+                FD_ZERO(&fds);
+                FD_SET(writer->sockfd, &fds);
+                struct timeval tv;
+                tv.tv_sec  = 1;
+                tv.tv_usec = 0;
+                if (err == SSL_ERROR_WANT_READ) {
+                    select((int)writer->sockfd + 1, &fds, NULL, NULL, &tv);
+                } else {
+                    select((int)writer->sockfd + 1, NULL, &fds, NULL, &tv);
+                }
+                continue;
+            }
+            break;
+        }
+        if (ssl_res <= 0) {
             SSL_free(writer->ssl);
             writer->ssl = NULL;
             SSL_CTX_free(writer->ssl_ctx);
@@ -498,17 +521,18 @@ static void *socket_writer_thread(void *arg)
         /* Send the batch. */
         int send_failed = 0;
         for (int i = 0; i < n; i++) {
-            /* Append newline for TCP framing. */
-            char *framed = malloc(lengths[i] + 1);
-            if (!framed) {
-                free((void *)lines[i]);
-                continue;
+            int rc = 0;
+            if (lengths[i] > 0 && lines[i][lengths[i] - 1] == '\n') {
+                rc = socket_writer_send(writer, lines[i], lengths[i]);
+            } else {
+                char *framed = malloc(lengths[i] + 1);
+                if (framed) {
+                    memcpy(framed, lines[i], lengths[i]);
+                    framed[lengths[i]] = '\n';
+                    rc                 = socket_writer_send(writer, framed, lengths[i] + 1);
+                    free(framed);
+                }
             }
-            memcpy(framed, lines[i], lengths[i]);
-            framed[lengths[i]] = '\n';
-
-            int rc = socket_writer_send(writer, framed, lengths[i] + 1);
-            free(framed);
             free((void *)lines[i]);
 
             if (rc < 0) {
@@ -533,19 +557,23 @@ static void *socket_writer_thread(void *arg)
     }
 
     /* Final drain: send any remaining lines before exit. */
-    if (writer->connected) {
+    if (writer->connected || socket_writer_connect(writer) == 0) {
         for (;;) {
             int n = socket_ring_get_batch(ring, lines, lengths, BATCH_SIZE);
             if (n <= 0) {
                 break;
             }
             for (int i = 0; i < n; i++) {
-                char *framed = malloc(lengths[i] + 1);
-                if (framed) {
-                    memcpy(framed, lines[i], lengths[i]);
-                    framed[lengths[i]] = '\n';
-                    socket_writer_send(writer, framed, lengths[i] + 1);
-                    free(framed);
+                if (lengths[i] > 0 && lines[i][lengths[i] - 1] == '\n') {
+                    socket_writer_send(writer, lines[i], lengths[i]);
+                } else {
+                    char *framed = malloc(lengths[i] + 1);
+                    if (framed) {
+                        memcpy(framed, lines[i], lengths[i]);
+                        framed[lengths[i]] = '\n';
+                        socket_writer_send(writer, framed, lengths[i] + 1);
+                        free(framed);
+                    }
                 }
                 free((void *)lines[i]);
             }

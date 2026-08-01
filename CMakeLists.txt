@@ -219,6 +219,7 @@ if(CLOG_BUILD_TESTS)
         test_multi_instance
         test_coverage_gaps
         test_socket_async
+        test_tls
     )
 
     # Tests that directly reference internal symbols (not exported from shared lib)
