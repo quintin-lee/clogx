@@ -244,11 +244,24 @@ static int create_sinks_from_cfg(const log_config_t *cfg, log_sink_t **sinks)
         }
     }
     if (cfg->socket_enable && strlen(cfg->socket_host) > 0) {
-        log_sink_t *sink = socket_sink_create_tls(cfg->socket_host,
-                                                  cfg->socket_port,
-                                                  cfg->socket_tls,
-                                                  cfg->socket_tls_ca_file,
-                                                  cfg->socket_tls_skip_verify);
+        log_sink_t *sink = NULL;
+        if (cfg->socket_async) {
+            sink = socket_sink_create_async_ex(cfg->socket_host,
+                                               cfg->socket_port,
+                                               cfg->socket_tls,
+                                               cfg->socket_tls_ca_file,
+                                               cfg->socket_tls_skip_verify,
+                                               cfg->socket_ring_capacity,
+                                               cfg->socket_backoff_min_ms,
+                                               cfg->socket_backoff_max_ms,
+                                               cfg->socket_connect_timeout_ms);
+        } else {
+            sink = socket_sink_create_tls(cfg->socket_host,
+                                          cfg->socket_port,
+                                          cfg->socket_tls,
+                                          cfg->socket_tls_ca_file,
+                                          cfg->socket_tls_skip_verify);
+        }
         if (sink) {
             sinks[count++] = sink;
         }

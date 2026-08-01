@@ -302,6 +302,7 @@ Both formats are fully supported. New users should prefer the nested `log:` form
 | `socket_ring_capacity` | int | `8192` | Ring buffer capacity for async socket (number of lines) |
 | `socket_backoff_min_ms` | int | `1000` | Initial reconnect backoff delay in milliseconds |
 | `socket_backoff_max_ms` | int | `60000` | Maximum reconnect backoff delay in milliseconds |
+| `socket_connect_timeout_ms` | int | `1000` | Socket connection and TLS handshake timeout in milliseconds |
 
 #### Rate Limiter Settings (token bucket algorithm)
 

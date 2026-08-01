@@ -83,6 +83,7 @@ typedef enum {
     HANDLER_SOCKET_RING_CAPACITY,
     HANDLER_SOCKET_BACKOFF_MIN_MS,
     HANDLER_SOCKET_BACKOFF_MAX_MS,
+    HANDLER_SOCKET_CONNECT_TIMEOUT_MS,
     HANDLER_TIME_FORMAT,
     HANDLER_PROMETHEUS_ENABLE,
     HANDLER_PROMETHEUS_PORT,
@@ -108,7 +109,9 @@ static const config_key_t g_config_keys[] = {
     {"color", HANDLER_COLOR},
     {"console_enable", HANDLER_CONSOLE_ENABLE},
     {"console_stderr", HANDLER_CONSOLE_STDERR},
+    {"file_backups", HANDLER_BACKUP},
     {"file_enable", HANDLER_FILE_ENABLE},
+    {"file_max_size", HANDLER_MAX_SIZE},
     {"file_path", HANDLER_FILE_PATH},
     {"format", HANDLER_FORMAT},
     {"host", HANDLER_HOST},
@@ -125,6 +128,7 @@ static const config_key_t g_config_keys[] = {
     {"socket_async", HANDLER_SOCKET_ASYNC},
     {"socket_backoff_max_ms", HANDLER_SOCKET_BACKOFF_MAX_MS},
     {"socket_backoff_min_ms", HANDLER_SOCKET_BACKOFF_MIN_MS},
+    {"socket_connect_timeout_ms", HANDLER_SOCKET_CONNECT_TIMEOUT_MS},
     {"socket_enable", HANDLER_SOCKET_ENABLE},
     {"socket_ring_capacity", HANDLER_SOCKET_RING_CAPACITY},
     {"socket_tls", HANDLER_SOCKET_TLS},
@@ -482,6 +486,18 @@ static int parse_config_file(const char *filepath, log_config_t *cfg)
                         }
                         break;
                     }
+                    case HANDLER_SOCKET_CONNECT_TIMEOUT_MS: {
+                        char *end       = NULL;
+                        errno           = 0;
+                        unsigned long v = strtoul(val, &end, 10);
+                        if (end == val || *end != '\0' || errno == ERANGE) {
+                            fprintf(stderr, "Invalid socket_connect_timeout_ms: %s\n", val);
+                            has_errors = 1;
+                        } else {
+                            cfg->socket_connect_timeout_ms = (uint32_t)v;
+                        }
+                        break;
+                    }
                     case HANDLER_RATE_LIMIT_ENABLE:
                         cfg->rate_limit_enable = (strcmp(val, "true") == 0);
                         break;
@@ -636,30 +652,31 @@ int log_config_load_into(logger_t *logger, const char *yaml_path)
     char local_format[CLOG_MAX_FORMAT_SIZE] = "";
     char local_time_format[64]              = "";
 
-    logger->config.level                  = LOG_LEVEL_INFO;
-    logger->config.async                  = false;
-    logger->config.queue_size             = 8192;
-    logger->config.color                  = true;
-    logger->config.console_enable         = 1;
-    logger->config.console_stderr         = 0;
-    logger->config.file_enable            = 0;
-    logger->config.file_path[0]           = '\0';
-    logger->config.file_max_size          = (uint64_t)100 * 1024 * 1024;
-    logger->config.file_backups           = 10;
-    logger->config.socket_enable          = 0;
-    logger->config.socket_host[0]         = '\0';
-    logger->config.socket_port            = 0;
-    logger->config.socket_tls             = false;
-    logger->config.socket_tls_ca_file[0]  = '\0';
-    logger->config.socket_tls_skip_verify = false;
-    logger->config.socket_async           = false;
-    logger->config.socket_ring_capacity   = 0;
-    logger->config.socket_backoff_min_ms  = 0;
-    logger->config.socket_backoff_max_ms  = 0;
-    logger->config.rate_limit_enable      = false;
-    logger->config.rate_limit_max_per_sec = 0;
-    logger->config.rate_limit_burst       = 0;
-    logger->config.catch_signals          = true;
+    logger->config.level                     = LOG_LEVEL_INFO;
+    logger->config.async                     = false;
+    logger->config.queue_size                = 8192;
+    logger->config.color                     = true;
+    logger->config.console_enable            = 1;
+    logger->config.console_stderr            = 0;
+    logger->config.file_enable               = 0;
+    logger->config.file_path[0]              = '\0';
+    logger->config.file_max_size             = (uint64_t)100 * 1024 * 1024;
+    logger->config.file_backups              = 10;
+    logger->config.socket_enable             = 0;
+    logger->config.socket_host[0]            = '\0';
+    logger->config.socket_port               = 0;
+    logger->config.socket_tls                = false;
+    logger->config.socket_tls_ca_file[0]     = '\0';
+    logger->config.socket_tls_skip_verify    = false;
+    logger->config.socket_async              = false;
+    logger->config.socket_ring_capacity      = 0;
+    logger->config.socket_backoff_min_ms     = 0;
+    logger->config.socket_backoff_max_ms     = 0;
+    logger->config.socket_connect_timeout_ms = 0;
+    logger->config.rate_limit_enable         = false;
+    logger->config.rate_limit_max_per_sec    = 0;
+    logger->config.rate_limit_burst          = 0;
+    logger->config.catch_signals             = true;
 
     snprintf(local_format, sizeof(local_format), "%s", "[%time] [%level] %msg");
     snprintf(local_time_format, sizeof(local_time_format), "%s", "%Y-%m-%d %H:%M:%S");
@@ -740,17 +757,18 @@ static int apply_config(const log_config_t *cfg)
              sizeof(g_default_logger.config.socket_tls_ca_file),
              "%s",
              cfg->socket_tls_ca_file);
-    g_default_logger.config.socket_tls_skip_verify = cfg->socket_tls_skip_verify;
-    g_default_logger.config.socket_async           = cfg->socket_async;
-    g_default_logger.config.socket_ring_capacity   = cfg->socket_ring_capacity;
-    g_default_logger.config.socket_backoff_min_ms  = cfg->socket_backoff_min_ms;
-    g_default_logger.config.socket_backoff_max_ms  = cfg->socket_backoff_max_ms;
-    g_default_logger.config.rate_limit_enable      = cfg->rate_limit_enable;
-    g_default_logger.config.rate_limit_max_per_sec = cfg->rate_limit_max_per_sec;
-    g_default_logger.config.rate_limit_burst       = cfg->rate_limit_burst;
-    g_default_logger.config.catch_signals          = cfg->catch_signals;
-    g_default_logger.config.prometheus_enable      = cfg->prometheus_enable;
-    g_default_logger.config.prometheus_port        = cfg->prometheus_port;
+    g_default_logger.config.socket_tls_skip_verify    = cfg->socket_tls_skip_verify;
+    g_default_logger.config.socket_async              = cfg->socket_async;
+    g_default_logger.config.socket_ring_capacity      = cfg->socket_ring_capacity;
+    g_default_logger.config.socket_backoff_min_ms     = cfg->socket_backoff_min_ms;
+    g_default_logger.config.socket_backoff_max_ms     = cfg->socket_backoff_max_ms;
+    g_default_logger.config.socket_connect_timeout_ms = cfg->socket_connect_timeout_ms;
+    g_default_logger.config.rate_limit_enable         = cfg->rate_limit_enable;
+    g_default_logger.config.rate_limit_max_per_sec    = cfg->rate_limit_max_per_sec;
+    g_default_logger.config.rate_limit_burst          = cfg->rate_limit_burst;
+    g_default_logger.config.catch_signals             = cfg->catch_signals;
+    g_default_logger.config.prometheus_enable         = cfg->prometheus_enable;
+    g_default_logger.config.prometheus_port           = cfg->prometheus_port;
 
     g_default_logger.config.plugin_count = cfg->plugin_count;
     for (int i = 0; i < cfg->plugin_count && i < CLOG_MAX_PLUGINS; i++) {

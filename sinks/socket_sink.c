@@ -277,6 +277,7 @@ static void socket_destroy(log_sink_t *sink)
         if (!clog_is_invalid_socket(data->sockfd)) {
             clog_close_socket(data->sockfd);
         }
+        clog_net_cleanup();
         free((char *)data->host);
         free(data->ca_file);
         free(data);
@@ -289,10 +290,10 @@ static void socket_atfork_child(log_sink_t *sink)
     if (!sink || !sink->private_data) {
         return;
     }
+
     socket_sink_data_t *data = (socket_sink_data_t *)sink->private_data;
 
-    /* In async mode, the writer thread doesn't survive fork.
-     * Stop it and mark as disconnected so a new thread can be started. */
+    /* Close worker thread resources if running in async mode. */
     if (data->async_enabled && data->async_writer) {
         socket_writer_stop(data->async_writer);
         free(data->async_writer);
@@ -383,29 +384,17 @@ log_sink_t *socket_sink_create_tls(
 }
 
 /**
- * @brief Create an async TCP/TLS socket sink with ring buffer and backoff.
- *
- * The writer thread connects lazily and drains the ring buffer with
- * non-blocking sends. Reconnection uses exponential backoff with jitter.
- *
- * @param host            Remote host. Non-NULL, non-empty, port 1–65535.
- * @param port            Remote port.
- * @param use_tls         Enable OpenSSL TLS transport (requires CLOG_USE_TLS).
- * @param ca_file         CA certificate path for TLS verification, or NULL.
- * @param skip_verify     Skip server certificate verification when true.
- * @param ring_capacity   Ring buffer capacity (number of lines). 0 = 8192 default.
- * @param backoff_min_ms  Initial backoff delay in ms. 0 = 1000 default.
- * @param backoff_max_ms  Maximum backoff delay in ms. 0 = 60000 default.
- * @return New sink, or NULL on error.
+ * @brief Create an async TCP/TLS socket sink with explicit connect / TLS handshake timeout.
  */
-log_sink_t *socket_sink_create_async(const char *host,
-                                     int         port,
-                                     bool        use_tls,
-                                     const char *ca_file,
-                                     bool        skip_verify,
-                                     size_t      ring_capacity,
-                                     uint32_t    backoff_min_ms,
-                                     uint32_t    backoff_max_ms)
+log_sink_t *socket_sink_create_async_ex(const char *host,
+                                        int         port,
+                                        bool        use_tls,
+                                        const char *ca_file,
+                                        bool        skip_verify,
+                                        size_t      ring_capacity,
+                                        uint32_t    backoff_min_ms,
+                                        uint32_t    backoff_max_ms,
+                                        uint32_t    connect_timeout_ms)
 {
     log_sink_t *sink = socket_sink_create_tls(host, port, use_tls, ca_file, skip_verify);
     if (!sink) {
@@ -416,14 +405,15 @@ log_sink_t *socket_sink_create_async(const char *host,
 
     socket_writer_config_t wconfig;
     memset(&wconfig, 0, sizeof(wconfig));
-    wconfig.host           = data->host;
-    wconfig.port           = data->port;
-    wconfig.use_tls        = data->use_tls;
-    wconfig.ca_file        = data->ca_file;
-    wconfig.skip_verify    = data->skip_verify;
-    wconfig.ring_capacity  = ring_capacity > 0 ? ring_capacity : 8192;
-    wconfig.backoff_min_ms = backoff_min_ms > 0 ? backoff_min_ms : 1000;
-    wconfig.backoff_max_ms = backoff_max_ms > 0 ? backoff_max_ms : 60000;
+    wconfig.host               = data->host;
+    wconfig.port               = data->port;
+    wconfig.use_tls            = data->use_tls;
+    wconfig.ca_file            = data->ca_file;
+    wconfig.skip_verify        = data->skip_verify;
+    wconfig.ring_capacity      = ring_capacity > 0 ? ring_capacity : 8192;
+    wconfig.backoff_min_ms     = backoff_min_ms > 0 ? backoff_min_ms : 1000;
+    wconfig.backoff_max_ms     = backoff_max_ms > 0 ? backoff_max_ms : 60000;
+    wconfig.connect_timeout_ms = connect_timeout_ms > 0 ? connect_timeout_ms : 1000;
 
     socket_writer_t *writer = socket_writer_start(&wconfig);
     if (!writer) {
@@ -436,6 +426,29 @@ log_sink_t *socket_sink_create_async(const char *host,
     data->async_ring    = socket_writer_ring(writer);
 
     return sink;
+}
+
+/**
+ * @brief Create an async TCP/TLS socket sink with ring buffer and backoff.
+ */
+log_sink_t *socket_sink_create_async(const char *host,
+                                     int         port,
+                                     bool        use_tls,
+                                     const char *ca_file,
+                                     bool        skip_verify,
+                                     size_t      ring_capacity,
+                                     uint32_t    backoff_min_ms,
+                                     uint32_t    backoff_max_ms)
+{
+    return socket_sink_create_async_ex(host,
+                                       port,
+                                       use_tls,
+                                       ca_file,
+                                       skip_verify,
+                                       ring_capacity,
+                                       backoff_min_ms,
+                                       backoff_max_ms,
+                                       0);
 }
 
 /**

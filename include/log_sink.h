@@ -349,6 +349,21 @@ CLOGX_API log_sink_t *socket_sink_create_async(const char *host,
                                                uint32_t    backoff_max_ms);
 
 /**
+ * @brief Create an async TCP/TLS socket sink with explicit connect / TLS handshake timeout.
+ *
+ * @param connect_timeout_ms  Connection / TLS handshake timeout in ms. 0 = 1000 default.
+ */
+CLOGX_API log_sink_t *socket_sink_create_async_ex(const char *host,
+                                                  int         port,
+                                                  bool        use_tls,
+                                                  const char *ca_file,
+                                                  bool        skip_verify,
+                                                  size_t      ring_capacity,
+                                                  uint32_t    backoff_min_ms,
+                                                  uint32_t    backoff_max_ms,
+                                                  uint32_t    connect_timeout_ms);
+
+/**
  * @brief Create a custom user-defined sink plugin.
  *
  * Allows application code to define a completely custom sink by providing

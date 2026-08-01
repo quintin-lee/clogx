@@ -105,9 +105,10 @@ typedef struct {
     size_t   socket_ring_capacity;  /**< Ring buffer capacity for async socket (lines). 0 = 8192. */
     uint32_t socket_backoff_min_ms; /**< Initial reconnect backoff in ms. 0 = 1000. */
     uint32_t socket_backoff_max_ms; /**< Max reconnect backoff in ms. 0 = 60000. */
-    bool     rate_limit_enable;     /**< Enable global token bucket rate limiting. */
-    int      rate_limit_max_per_sec; /**< Maximum allowed log events per second. */
-    int      rate_limit_burst;       /**< Maximum burst capacity for the token bucket. */
+    uint32_t socket_connect_timeout_ms; /**< Connect / TLS handshake timeout in ms. 0 = 1000. */
+    bool     rate_limit_enable;         /**< Enable global token bucket rate limiting. */
+    int      rate_limit_max_per_sec;    /**< Maximum allowed log events per second. */
+    int      rate_limit_burst;          /**< Maximum burst capacity for the token bucket. */
     bool     catch_signals; /**< Catch SIGTERM/SIGINT for graceful shutdown via self-pipe. */
 
     /* ---- Prometheus /metrics endpoint ---- */

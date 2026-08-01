@@ -279,6 +279,7 @@ log:
 | `socket_ring_capacity` | ring buffer capacity for async socket (default: `8192`) |
 | `socket_backoff_min_ms` | initial reconnect backoff in ms (default: `1000`) |
 | `socket_backoff_max_ms` | max reconnect backoff in ms (default: `60000`) |
+| `socket_connect_timeout_ms` | socket connect and TLS handshake timeout in ms (default: `1000`) |
 | `rate_limit_enable` | enable global token bucket rate limiting (`true`/`false`) |
 | `rate_limit_max_per_sec` | max allowed log messages per second (e.g. `1000`) |
 | `rate_limit_burst` | maximum burst capacity (e.g. `100`) |

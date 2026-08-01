@@ -228,6 +228,7 @@ int clog_prometheus_exporter_start(int port)
 
     g_prom_server_fd = socket(AF_INET, SOCK_STREAM, 0);
     if (g_prom_server_fd == CLOG_INVALID_SOCKET) {
+        clog_net_cleanup();
         clog_mutex_unlock(&g_prom_mutex);
         return CLOG_ERR_SOCKET_CONNECT;
     }
@@ -244,6 +245,7 @@ int clog_prometheus_exporter_start(int port)
     if (bind(g_prom_server_fd, (struct sockaddr *)&addr, sizeof(addr)) != 0) {
         clog_close_socket(g_prom_server_fd);
         g_prom_server_fd = CLOG_INVALID_SOCKET;
+        clog_net_cleanup();
         clog_mutex_unlock(&g_prom_mutex);
         return CLOG_ERR_SOCKET_CONNECT;
     }
@@ -251,6 +253,7 @@ int clog_prometheus_exporter_start(int port)
     if (listen(g_prom_server_fd, 5) != 0) {
         clog_close_socket(g_prom_server_fd);
         g_prom_server_fd = CLOG_INVALID_SOCKET;
+        clog_net_cleanup();
         clog_mutex_unlock(&g_prom_mutex);
         return CLOG_ERR_SOCKET_CONNECT;
     }
@@ -260,6 +263,7 @@ int clog_prometheus_exporter_start(int port)
         g_prom_running = false;
         clog_close_socket(g_prom_server_fd);
         g_prom_server_fd = CLOG_INVALID_SOCKET;
+        clog_net_cleanup();
         clog_mutex_unlock(&g_prom_mutex);
         return CLOG_ERR_THREAD_CREATE;
     }
@@ -287,6 +291,7 @@ void clog_prometheus_exporter_stop(void)
         shutdown(g_prom_server_fd, SHUT_RDWR);
         clog_close_socket(g_prom_server_fd);
         g_prom_server_fd = CLOG_INVALID_SOCKET;
+        clog_net_cleanup();
     }
     clog_mutex_unlock(&g_prom_mutex);
 

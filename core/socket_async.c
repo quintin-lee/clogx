@@ -353,7 +353,8 @@ static int socket_set_nonblocking(clog_socket_t sockfd)
 #endif
 }
 
-static int socket_connect_nonblocking(clog_socket_t sockfd, const char *host, int port)
+static int
+socket_connect_nonblocking(clog_socket_t sockfd, const char *host, int port, uint32_t timeout_ms)
 {
     struct sockaddr_in serv_addr;
     memset(&serv_addr, 0, sizeof(serv_addr));
@@ -378,9 +379,12 @@ static int socket_connect_nonblocking(clog_socket_t sockfd, const char *host, in
         FD_ZERO(&writefds);
         FD_SET(sockfd, &writefds);
 
+        if (timeout_ms == 0) {
+            timeout_ms = 1000;
+        }
         struct timeval tv;
-        tv.tv_sec  = 1;
-        tv.tv_usec = 0;
+        tv.tv_sec  = (long)(timeout_ms / 1000);
+        tv.tv_usec = (long)((timeout_ms % 1000) * 1000);
 
         int sel = select((int)sockfd + 1, NULL, &writefds, NULL, &tv);
         if (sel > 0) {
@@ -473,6 +477,7 @@ static void socket_writer_cleanup(socket_writer_t *writer)
         clog_close_socket(writer->sockfd);
         writer->sockfd = CLOG_INVALID_SOCKET;
     }
+    clog_net_cleanup();
     writer->connected = 0;
 }
 
@@ -486,18 +491,17 @@ static int socket_writer_connect(socket_writer_t *writer)
 
     writer->sockfd = socket(AF_INET, SOCK_STREAM, 0);
     if (clog_is_invalid_socket(writer->sockfd)) {
+        clog_net_cleanup();
         return -1;
     }
 
-    if (socket_set_nonblocking(writer->sockfd) != 0) {
-        clog_close_socket(writer->sockfd);
-        writer->sockfd = CLOG_INVALID_SOCKET;
-        return -1;
-    }
+    uint32_t timeout_ms =
+        writer->config.connect_timeout_ms > 0 ? writer->config.connect_timeout_ms : 1000;
 
-    if (socket_connect_nonblocking(writer->sockfd, writer->config.host, writer->config.port) != 0) {
-        clog_close_socket(writer->sockfd);
-        writer->sockfd = CLOG_INVALID_SOCKET;
+    if (socket_set_nonblocking(writer->sockfd) != 0 ||
+        socket_connect_nonblocking(
+            writer->sockfd, writer->config.host, writer->config.port, timeout_ms) != 0) {
+        socket_writer_cleanup(writer);
         return -1;
     }
 
@@ -506,8 +510,7 @@ static int socket_writer_connect(socket_writer_t *writer)
         const SSL_METHOD *method = TLS_method();
         writer->ssl_ctx          = SSL_CTX_new(method);
         if (!writer->ssl_ctx) {
-            clog_close_socket(writer->sockfd);
-            writer->sockfd = CLOG_INVALID_SOCKET;
+            socket_writer_cleanup(writer);
             return -1;
         }
 
@@ -523,10 +526,7 @@ static int socket_writer_connect(socket_writer_t *writer)
 
         writer->ssl = SSL_new(writer->ssl_ctx);
         if (!writer->ssl) {
-            SSL_CTX_free(writer->ssl_ctx);
-            writer->ssl_ctx = NULL;
-            clog_close_socket(writer->sockfd);
-            writer->sockfd = CLOG_INVALID_SOCKET;
+            socket_writer_cleanup(writer);
             return -1;
         }
 
@@ -543,8 +543,8 @@ static int socket_writer_connect(socket_writer_t *writer)
                 FD_ZERO(&fds);
                 FD_SET(writer->sockfd, &fds);
                 struct timeval tv;
-                tv.tv_sec  = 1;
-                tv.tv_usec = 0;
+                tv.tv_sec  = (long)(timeout_ms / 1000);
+                tv.tv_usec = (long)((timeout_ms % 1000) * 1000);
                 if (err == SSL_ERROR_WANT_READ) {
                     select((int)writer->sockfd + 1, &fds, NULL, NULL, &tv);
                 } else {
@@ -555,18 +555,12 @@ static int socket_writer_connect(socket_writer_t *writer)
             break;
         }
         if (ssl_res <= 0) {
-            SSL_free(writer->ssl);
-            writer->ssl = NULL;
-            SSL_CTX_free(writer->ssl_ctx);
-            writer->ssl_ctx = NULL;
-            clog_close_socket(writer->sockfd);
-            writer->sockfd = CLOG_INVALID_SOCKET;
+            socket_writer_cleanup(writer);
             return -1;
         }
 #else
         fprintf(stderr, "[clogx] TLS requested but compiled without OpenSSL\n");
-        clog_close_socket(writer->sockfd);
-        writer->sockfd = CLOG_INVALID_SOCKET;
+        socket_writer_cleanup(writer);
         return -1;
 #endif
     }

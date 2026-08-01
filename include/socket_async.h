@@ -118,14 +118,15 @@ size_t socket_ring_depth(const socket_ring_buffer_t *ring);
  * @brief Configuration for the async socket writer.
  */
 typedef struct {
-    const char *host;           /**< Remote host. */
-    int         port;           /**< Remote port. */
-    bool        use_tls;        /**< Enable TLS (requires CLOG_USE_TLS). */
-    const char *ca_file;        /**< CA certificate path for TLS, or NULL. */
-    bool        skip_verify;    /**< Skip TLS certificate verification. */
-    size_t      ring_capacity;  /**< Ring buffer capacity (number of lines). 0 = 8192. */
-    uint32_t    backoff_min_ms; /**< Initial backoff delay in ms. */
-    uint32_t    backoff_max_ms; /**< Maximum backoff delay in ms. */
+    const char *host;            /**< Remote host. */
+    int         port;            /**< Remote port. */
+    bool        use_tls;         /**< Enable TLS (requires CLOG_USE_TLS). */
+    const char *ca_file;         /**< CA certificate path for TLS, or NULL. */
+    bool        skip_verify;     /**< Skip TLS certificate verification. */
+    size_t      ring_capacity;   /**< Ring buffer capacity (number of lines). 0 = 8192. */
+    uint32_t    backoff_min_ms;  /**< Initial backoff delay in ms. */
+    uint32_t    backoff_max_ms;  /**< Maximum backoff delay in ms. */
+    uint32_t connect_timeout_ms; /**< Connection / TLS handshake timeout in ms. 0 = 1000 default. */
 } socket_writer_config_t;
 
 /**

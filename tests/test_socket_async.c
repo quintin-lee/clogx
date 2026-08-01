@@ -3,6 +3,7 @@
  * @brief Regression tests for async socket ring buffer and writer thread.
  */
 
+#include "log_sink.h"
 #include "socket_async.h"
 #include <assert.h>
 #include <stdio.h>
@@ -380,18 +381,25 @@ static void test_socket_async_boundary_cases(void)
     assert(socket_writer_start(&cfg) == NULL);
 
     /* socket_writer_start with zero defaults and TLS requested */
-    cfg.port           = 9000;
-    cfg.use_tls        = true;
-    cfg.ring_capacity  = 0;
-    cfg.backoff_min_ms = 0;
-    cfg.backoff_max_ms = 0;
-    socket_writer_t *w = socket_writer_start(&cfg);
+    cfg.port               = 9000;
+    cfg.use_tls            = true;
+    cfg.ring_capacity      = 0;
+    cfg.backoff_min_ms     = 0;
+    cfg.backoff_max_ms     = 0;
+    cfg.connect_timeout_ms = 50;
+    socket_writer_t *w     = socket_writer_start(&cfg);
     assert(w != NULL);
     assert(socket_writer_ring(w) != NULL);
 
     usleep(20000);
     socket_writer_stop(w);
     free(w);
+
+    /* socket_sink_create_async_ex test */
+    log_sink_t *ex_sink =
+        socket_sink_create_async_ex("127.0.0.1", 9001, false, NULL, false, 256, 50, 500, 100);
+    assert(ex_sink != NULL);
+    ex_sink->destroy(ex_sink);
 
     /* socket_writer_ring and dropped NULL checks */
     assert(socket_writer_ring(NULL) == NULL);
