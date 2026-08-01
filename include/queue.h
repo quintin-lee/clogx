@@ -6,7 +6,8 @@
  * @details The queue uses C11-style atomic operations (via compiler builtins)
  * for the producer fast path — multiple threads may call @ref mpsc_queue_try_put
  * concurrently without any mutex contention. A single dedicated consumer thread
- * calls @ref mpsc_queue_get_batch to drain records.
+ * blocks on @ref mpsc_queue_wait_for_items and drains via
+ * @ref mpsc_queue_get_batch_try (or the combined @ref mpsc_queue_get_batch).
  *
  * ## Architecture
  *
@@ -173,6 +174,39 @@ int mpsc_queue_try_put(mpsc_queue_t *restrict q, log_record_t *restrict record);
  * @retval -1  Queue is closed and drained (consumer should exit).
  */
 int mpsc_queue_get(mpsc_queue_t *restrict q, log_record_t *restrict record);
+
+/**
+ * @brief Block until the queue has at least one published record.
+ *
+ * Returns as soon as records are available to dequeue. Spurious wake-ups
+ * (e.g. @ref mpsc_queue_close posting items_sem on an empty queue) are
+ * retried internally.
+ *
+ * @param[in,out] q  Queue instance.
+ * @retval 0   Records are available to dequeue.
+ * @retval -1  Queue is closed and drained.
+ */
+int mpsc_queue_wait_for_items(mpsc_queue_t *q);
+
+/**
+ * @brief Non-blocking batch dequeue.
+ *
+ * Same dequeue semantics as @ref mpsc_queue_get_batch, but never blocks:
+ * returns 0 immediately when no published records are available. The async
+ * worker uses this after @ref mpsc_queue_wait_for_items so it can set its
+ * in-flight flag before draining (closing the flush visibility window).
+ *
+ * @param[in,out] q            Queue instance.
+ * @param[out]    records      Destination array (must hold at least
+ *                             @p max_records entries).
+ * @param[in]     max_records  Capacity of @p records array.
+ * @retval >0  Number of records dequeued (guaranteed ≤ @p max_records).
+ * @retval 0   No published records available.
+ * @retval -1  Invalid arguments.
+ */
+int mpsc_queue_get_batch_try(mpsc_queue_t *restrict q,
+                             log_record_t *restrict records,
+                             size_t max_records);
 
 /**
  * @brief Dequeue up to @p max_records in one batch.

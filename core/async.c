@@ -169,8 +169,9 @@ static int log_record_clone(log_record_t *restrict dst, const log_record_t *rest
 /**
  * @brief Background worker thread: dequeue batches and dispatch to sinks.
  *
- * Runs in a loop calling mpsc_queue_get_batch() (up to 64 records
- * per batch). For each batch, dispatches every record via
+ * Runs in a loop calling mpsc_queue_wait_for_items() then
+ * mpsc_queue_get_batch_try() (up to 64 records per batch). For each
+ * batch, dispatches every record via
  * log_dispatcher_dispatch_for(), frees owned strings, then flushes
  * the dispatcher once per batch (not per record) for throughput.
  * Exits when the queue is closed and drained.
@@ -183,16 +184,24 @@ static void *async_worker_for(void *arg)
     logger_t    *logger = (logger_t *)arg;
     log_record_t batch[ASYNC_BATCH_SIZE];
     while (1) {
-        int count = mpsc_queue_get_batch(logger->queue, batch, ASYNC_BATCH_SIZE);
-        if (count <= 0) {
+        if (mpsc_queue_wait_for_items(logger->queue) != 0) {
             break;
         }
+        /*
+         * Set the in-flight flag *before* draining: log_async_flush_for()
+         * treats "queue empty && !async_processing" as quiescent, so claiming
+         * records after the flag is set closes the window where a flush could
+         * observe an empty queue while a batch is still being processed.
+         */
         clog_atomic_store_int(&logger->async_processing, 1);
+        int count = mpsc_queue_get_batch_try(logger->queue, batch, ASYNC_BATCH_SIZE);
         for (int i = 0; i < count; i++) {
             log_dispatcher_dispatch_for(logger, &batch[i]);
             log_record_free_owned(&batch[i]);
         }
-        log_dispatcher_flush_for(logger);
+        if (count > 0) {
+            log_dispatcher_flush_for(logger);
+        }
         clog_atomic_store_int(&logger->async_processing, 0);
     }
     return NULL;

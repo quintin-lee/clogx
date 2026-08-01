@@ -60,17 +60,28 @@ int main(void)
 
     if (pid == 0) {
         /* Child process */
+        fprintf(stderr, "child: begin\n");
         LOG_INFO("child-after-fork-msg-1");
+        fprintf(stderr, "child: msg1 queued\n");
         LOG_INFO("child-after-fork-msg-2");
+        fprintf(stderr, "child: msg2 queued\n");
         log_flush();
+        fprintf(stderr, "child: flushed\n");
         log_destroy();
+        fprintf(stderr, "child: destroyed\n");
         _exit(0);
     } else {
         /* Parent process */
         int status = 0;
         waitpid(pid, &status, 0);
         if (!WIFEXITED(status) || WEXITSTATUS(status) != 0) {
-            fprintf(stderr, "child process failed\n");
+            fprintf(stderr,
+                    "child process failed: status=%d exited=%d code=%d signaled=%d sig=%d\n",
+                    status,
+                    WIFEXITED(status),
+                    WIFEXITED(status) ? WEXITSTATUS(status) : -1,
+                    WIFSIGNALED(status),
+                    WIFSIGNALED(status) ? WTERMSIG(status) : -1);
             return 1;
         }
 

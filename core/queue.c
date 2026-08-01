@@ -182,11 +182,9 @@ int mpsc_queue_get(mpsc_queue_t *restrict q, log_record_t *restrict record)
     return mpsc_queue_get_batch(q, record, 1) == 1 ? 0 : -1;
 }
 
-int mpsc_queue_get_batch(mpsc_queue_t *restrict q,
-                         log_record_t *restrict records,
-                         size_t max_records)
+int mpsc_queue_wait_for_items(mpsc_queue_t *q)
 {
-    if (!q || !records || max_records == 0) {
+    if (!q) {
         return -1;
     }
 
@@ -203,71 +201,101 @@ int mpsc_queue_get_batch(mpsc_queue_t *restrict q,
         size_t tail = clog_atomic_load_sz(&q->tail); /* single consumer,
                                                        wait_empty may read */
 
+        if (head - tail > 0) {
+            return 0;
+        }
+        if (clog_atomic_load_int(&q->closed)) {
+            return -1;
+        }
+        /* Spurious wake-up — re-block. */
+    }
+}
+
+int mpsc_queue_get_batch_try(mpsc_queue_t *restrict q,
+                             log_record_t *restrict records,
+                             size_t max_records)
+{
+    if (!q || !records || max_records == 0) {
+        return -1;
+    }
+
+    /* Load the latest head (producer writes) and tail (consumer reads). */
+    size_t head = clog_atomic_load_sz(&q->head);
+    size_t tail = clog_atomic_load_sz(&q->tail); /* single consumer,
+                                                   wait_empty may read */
+    size_t available = head - tail;
+    if (available == 0) {
+        return 0;
+    }
+
+    size_t n = 0;
+    while (n < available && n < max_records) {
+        size_t       pos  = tail + n;
+        mpsc_slot_t *slot = &q->buffer[pos & q->mask];
         /*
-         * If no items are available, either the queue was closed (return -1
-         * to signal shutdown) or this was a spurious wake-up (loop and wait
-         * again).
+         * Only read the slot once its producer has published it
+         * (release-stored seq == pos + 1). A producer that won the head
+         * CAS but was preempted before writing has *committed* — it will
+         * finish writing and post items_sem, so waiting is safe.
          */
-        if (head - tail == 0) {
-            if (clog_atomic_load_int(&q->closed)) {
-                return -1;
-            }
-            continue; /* Spurious wake-up — re-block. */
+        if (clog_atomic_load_u64(&slot->seq) != (uint64_t)pos + 1) {
+            break;
         }
+        records[n] = slot->rec;
+        n++;
+    }
+    if (n == 0) {
+        return 0;
+    }
 
-        size_t available = head - tail;
-        size_t n         = 0;
-        while (n < available && n < max_records) {
-            size_t       pos  = tail + n;
-            mpsc_slot_t *slot = &q->buffer[pos & q->mask];
-            /*
-             * Only read the slot once its producer has published it
-             * (release-stored seq == pos + 1). A producer that won the head
-             * CAS but was preempted before writing has *committed* — it will
-             * finish writing and post items_sem, so waiting is safe.
-             */
-            if (clog_atomic_load_u64(&slot->seq) != (uint64_t)pos + 1) {
-                break;
-            }
-            records[n] = slot->rec;
-            n++;
+    /* Advance our consumer read position. */
+    clog_atomic_store_sz(&q->tail, tail + n);
+    clog_atomic_fetch_sub_sz(&q->count, n);
+
+    /* Free up slots for blocked producers. */
+    for (size_t i = 0; i < n; i++) {
+        clog_sem_post(&q->slots_sem);
+    }
+
+    /*
+     * If the queue is now empty, notify any threads waiting in
+     * mpsc_queue_wait_empty(). This must happen even when the queue is
+     * not closed, because mpsc_queue_wait_empty() is called by
+     * log_async_flush_for() before close to ensure all records have been
+     * dispatched.
+     */
+    size_t rem = clog_atomic_load_sz(&q->head) - clog_atomic_load_sz(&q->tail);
+    if (rem == 0) {
+        clog_mutex_lock(&q->drain_mutex);
+        clog_cond_broadcast(&q->drain_cond);
+        clog_mutex_unlock(&q->drain_mutex);
+    }
+
+    return (int)n;
+}
+
+int mpsc_queue_get_batch(mpsc_queue_t *restrict q,
+                         log_record_t *restrict records,
+                         size_t max_records)
+{
+    if (!q || !records || max_records == 0) {
+        return -1;
+    }
+
+    /*
+     * Blocking batch dequeue: wait for at least one published record, then
+     * drain without blocking again. If all claimed slots are still
+     * unpublished (producers preempted between CAS and write), the committed
+     * producers are guaranteed to publish and post items_sem, so re-wait.
+     */
+    for (;;) {
+        if (mpsc_queue_wait_for_items(q) != 0) {
+            return -1;
         }
-
-        if (n == 0) {
-            /*
-             * All claimed slots are still unpublished (producers preempted
-             * between CAS and write). Yield once and re-wait: the committed
-             * producers are guaranteed to publish and post items_sem, so this
-             * cannot deadlock or busy-loop.
-             */
-            clog_sleep_ms(0);
-            continue;
+        int n = mpsc_queue_get_batch_try(q, records, max_records);
+        if (n != 0) {
+            return n;
         }
-
-        /* Advance our consumer read position. */
-        clog_atomic_store_sz(&q->tail, tail + n);
-        clog_atomic_fetch_sub_sz(&q->count, n);
-
-        /* Free up slots for blocked producers. */
-        for (size_t i = 0; i < n; i++) {
-            clog_sem_post(&q->slots_sem);
-        }
-
-        /*
-         * If the queue is now empty, notify any threads waiting in
-         * mpsc_queue_wait_empty(). This must happen even when the queue is
-         * not closed, because mpsc_queue_wait_empty() is called by
-         * log_async_flush_for() before close to ensure all records have been
-         * dispatched.
-         */
-        size_t rem = clog_atomic_load_sz(&q->head) - clog_atomic_load_sz(&q->tail);
-        if (rem == 0) {
-            clog_mutex_lock(&q->drain_mutex);
-            clog_cond_broadcast(&q->drain_cond);
-            clog_mutex_unlock(&q->drain_mutex);
-        }
-
-        return (int)n;
     }
 }
 
