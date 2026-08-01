@@ -152,6 +152,30 @@ jobs:
           files: ./coverage.info
           flag: lcov
 
+  tls:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v7
+
+      - name: Install dependencies
+        run: sudo apt-get update && sudo apt-get install -y libyaml-dev libssl-dev openssl
+
+      - name: Build with Makefile (TLS enabled)
+        run: make clean && make TLS=1
+
+      - name: Run TLS tests with Makefile
+        run: make test TLS=1
+
+      - name: Configure with CMake (TLS enabled)
+        run: cmake -S . -B build -DCMAKE_EXPORT_COMPILE_COMMANDS=ON -DCLOG_ENABLE_TLS=ON
+
+      - name: Build with CMake (TLS enabled)
+        run: cmake --build build -j
+
+      - name: Run TLS tests with CMake
+        run: ctest --test-dir build -C Debug --output-on-failure --timeout 120
+
   fuzz:
     runs-on: ubuntu-latest
     steps:
