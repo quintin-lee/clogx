@@ -624,6 +624,45 @@ static inline void clog_sem_post(clog_sem_t *sem)
     ReleaseSemaphore(*sem, 1, NULL);
 }
 
+#elif defined(__APPLE__)
+
+/*
+ * macOS does not implement POSIX unnamed semaphores: sem_init() always
+ * returns -1 with ENOSYS. Use Grand Central Dispatch semaphores instead.
+ */
+#include <dispatch/dispatch.h>
+
+typedef dispatch_semaphore_t clog_sem_t;
+
+static inline int clog_sem_init(clog_sem_t *sem, long initial)
+{
+    *sem = dispatch_semaphore_create(initial);
+    return *sem ? 0 : -1;
+}
+
+static inline void clog_sem_destroy(clog_sem_t *sem)
+{
+    if (sem && *sem) {
+        dispatch_release(*sem);
+        *sem = NULL;
+    }
+}
+
+static inline void clog_sem_wait(clog_sem_t *sem)
+{
+    dispatch_semaphore_wait(*sem, DISPATCH_TIME_FOREVER);
+}
+
+static inline int clog_sem_trywait(clog_sem_t *sem)
+{
+    return (dispatch_semaphore_wait(*sem, DISPATCH_TIME_NOW) == 0) ? 0 : -1;
+}
+
+static inline void clog_sem_post(clog_sem_t *sem)
+{
+    dispatch_semaphore_signal(*sem);
+}
+
 #else /* POSIX */
 
 #include <semaphore.h>
