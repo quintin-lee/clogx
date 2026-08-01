@@ -87,6 +87,25 @@ static void format_sec_cached(time_t sec, const char *fmt, char *out_str, size_t
 
 #define TIME_BUF_SIZE 64
 
+/*
+ * Per-thread compiled-format cache.
+ *
+ * fmt_compile() output depends only on the format string, so re-parsing it
+ * on every log call is pure waste. The cache keeps a private copy of the
+ * format string; literal opcodes reference that copy, making the cached
+ * program self-contained regardless of the lifetime of the caller's format
+ * buffer (e.g. `logger->format_str` across a reload). A string compare on
+ * each call invalidates the cache whenever the format actually changes.
+ * Thread-local: no locking, no cross-thread sharing.
+ */
+typedef struct {
+    char     fmt[CLOG_MAX_FORMAT_SIZE];
+    fmt_op_t ops[FMT_MAX_OPS];
+    int      op_count;
+} clog_fmt_cache_t;
+
+static clog_thread_local clog_fmt_cache_t g_fmt_cache;
+
 /* ------------------------------------------------------------------ */
 /*  Helpers                                                           */
 /* ------------------------------------------------------------------ */
@@ -692,8 +711,8 @@ static int fmt_compile(const char *fmt_str, fmt_op_t *ops, int max_ops)
  *
  * If @p fmt is "json"/"JSON", delegates to format_json_ex().
  * If @p fmt is "otlp"/"OTLP"/"otel"/"OTEL", delegates to format_otel_json().
- * Otherwise, compiles the format string into opcodes via fmt_compile()
- * and renders by walking the opcode array.
+ * Otherwise, resolves the per-thread compiled-opcode cache and renders by
+ * walking the opcode array.
  *
  * @param[in]  record       Log record to format.
  * @param[out] buf          Output buffer.
@@ -716,9 +735,13 @@ static int format_impl(log_record_t *restrict record,
         return format_otel_json(record, buf, buf_size);
     }
 
-    fmt_op_t    ops[FMT_MAX_OPS];
-    int         op_count = fmt_compile(fmt, ops, FMT_MAX_OPS);
-    const char *tf       = (time_format && time_format[0]) ? time_format : "%Y-%m-%d %H:%M:%S";
+    if (strcmp(fmt, g_fmt_cache.fmt) != 0) {
+        snprintf(g_fmt_cache.fmt, sizeof(g_fmt_cache.fmt), "%s", fmt);
+        g_fmt_cache.op_count = fmt_compile(g_fmt_cache.fmt, g_fmt_cache.ops, FMT_MAX_OPS);
+    }
+    const fmt_op_t *ops      = g_fmt_cache.ops;
+    int             op_count = g_fmt_cache.op_count;
+    const char     *tf       = (time_format && time_format[0]) ? time_format : "%Y-%m-%d %H:%M:%S";
 
     char  *out       = buf;
     size_t remaining = buf_size;

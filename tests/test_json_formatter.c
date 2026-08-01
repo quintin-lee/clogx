@@ -62,9 +62,51 @@ static void test_timestamp_cache_formatting(void)
     printf("test_timestamp_cache_formatting PASSED\n");
 }
 
+static void test_format_cache_switch(void)
+{
+    /* Warm the per-thread compiled-format cache with format A, then switch
+     * formats and verify the cache recompiles (output must follow the new
+     * format every time). */
+    log_record_t rec = {0};
+    rec.level        = LOG_LEVEL_INFO;
+    rec.timestamp    = 1700000000000000ULL; /* fixed epoch time in microseconds */
+    rec.message      = "switch test";
+
+    logger_t logger_a     = {0};
+    logger_t logger_b     = {0};
+    logger_a.config.level = LOG_LEVEL_DEBUG;
+    logger_b.config.level = LOG_LEVEL_DEBUG;
+    log_formatter_init_for(&logger_a, "[%time] %msg", NULL);
+    log_formatter_init_for(&logger_b, "%level|%msg", NULL);
+
+    char buf[256];
+
+    int len1 = log_formatter_format_for(&logger_a, &rec, buf, sizeof(buf));
+    assert(len1 > 0);
+    assert(strstr(buf, "] ") != NULL); /* format A shape */
+    assert(strstr(buf, "|") == NULL);  /* format B marker absent */
+
+    int len2 = log_formatter_format_for(&logger_b, &rec, buf, sizeof(buf));
+    assert(len2 > 0);
+    assert(strcmp(buf, "INFO|switch test") == 0);
+
+    int len3 = log_formatter_format_for(&logger_a, &rec, buf, sizeof(buf));
+    assert(len3 > 0);
+    assert(strstr(buf, "] ") != NULL && strstr(buf, "switch test") != NULL);
+
+    /* Reload logger_a with a third format; cache must follow. */
+    log_formatter_init_for(&logger_a, "%level|%file:%line", NULL);
+    int len4 = log_formatter_format_for(&logger_a, &rec, buf, sizeof(buf));
+    assert(len4 > 0);
+    assert(strcmp(buf, "INFO|(unknown):0") == 0);
+
+    printf("test_format_cache_switch PASSED\n");
+}
+
 int main(void)
 {
     test_timestamp_cache_formatting();
+    test_format_cache_switch();
 
     remove(LOG_PATH);
     if (write_config() != 0 || log_init(CONFIG_PATH) != 0) {
