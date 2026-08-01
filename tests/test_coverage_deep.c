@@ -179,6 +179,7 @@ int main(void)
 
     log_dispatcher_atfork_prepare();
     log_dispatcher_atfork_parent();
+    log_dispatcher_atfork_prepare();
     log_dispatcher_atfork_child();
 #endif
 

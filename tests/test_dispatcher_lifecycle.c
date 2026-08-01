@@ -94,6 +94,7 @@ int main(void)
         log_dispatcher_add_sink(sock_sink);
         log_dispatcher_atfork_prepare();
         log_dispatcher_atfork_parent();
+        log_dispatcher_atfork_prepare();
         log_dispatcher_atfork_child();
         log_dispatcher_remove_sink(sock_sink);
         sock_sink->destroy(sock_sink);
