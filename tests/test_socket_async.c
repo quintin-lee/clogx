@@ -8,7 +8,6 @@
 #include <stdio.h>
 #include <stdlib.h>
 #include <string.h>
-#include <sys/time.h>
 
 /* ── Ring buffer unit tests ── */
 
@@ -176,6 +175,7 @@ static void test_ring_signal_wakes(void)
 #include <netinet/in.h>
 #include <pthread.h>
 #include <sys/socket.h>
+#include <sys/time.h>
 #include <unistd.h>
 
 typedef struct {
