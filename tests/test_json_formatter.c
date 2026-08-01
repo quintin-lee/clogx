@@ -6,6 +6,7 @@
 #include "log.h"
 #include "log_formatter.h"
 #include "log_internal.h"
+#include "log_limits.h"
 #include <stdio.h>
 #include <stdlib.h>
 #include <string.h>
@@ -103,10 +104,88 @@ static void test_format_cache_switch(void)
     printf("test_format_cache_switch PASSED\n");
 }
 
+static void test_json_truncation_stays_valid(void)
+{
+    /* A string field that escapes to far more than CLOG_MAX_FORMATTED_SIZE
+     * must not silently drop the whole line: the renderer closes the object
+     * with a valid `"}` suffix instead of returning -1. The record is shaped
+     * so the escaping breaks with exactly 3 bytes of buffer left (enough for
+     * the closing suffix) — deterministic for any run. */
+    remove("logs/json_trunc_test.log");
+
+    log_config_t cfg   = {0};
+    cfg.level          = LOG_LEVEL_INFO;
+    cfg.console_enable = 0;
+    cfg.file_enable    = 1;
+    snprintf(cfg.file_path, sizeof(cfg.file_path), "logs/json_trunc_test.log");
+    cfg.format      = "json";
+    cfg.time_format = "%Y-%m-%d %H:%M:%S";
+
+    logger_t *logger = logger_create_from_config(&cfg);
+    assert(logger != NULL);
+
+    char big[CLOG_MAX_MESSAGE_SIZE * 2];
+    for (size_t i = 0; i < sizeof(big) - 1; i++) {
+        big[i] = (char)0x01; /* escapes to 6 bytes each — far past the buffer */
+    }
+    big[sizeof(big) - 1] = '\0';
+
+    /* Prefix before the file field is 77 bytes (fixed): 14 timestamp label +
+     * 26 time + 11 level label + 4 "INFO" + 12 module label + 10 file label.
+     * 8192 - 77 = 8115, and 8115 % 6 == 3 → the \u0001 escape loop breaks
+     * with exactly 3 bytes free: room for the `"}` suffix but nothing else. */
+    log_record_t rec = {0};
+    rec.level        = LOG_LEVEL_INFO;
+    rec.timestamp    = 1700000000000000ULL;
+    rec.file         = big; /* overflows the line buffer */
+    rec.line         = 0;
+    rec.tid          = 1;
+    rec.pid          = 1;
+    rec.message      = "x";
+
+    char buf[CLOG_MAX_FORMATTED_SIZE];
+    int  len = log_formatter_format_for(logger, &rec, buf, sizeof(buf));
+
+    assert(len > 0); /* line was NOT silently dropped */
+    assert(buf[0] == '{');
+    assert(len >= 3);
+    assert(strcmp(buf + len - 2, "\"}") == 0); /* closed string + object brace */
+
+    /* Pipeline smoke check: an overlong LOGGER_INFO message must produce
+     * either a valid JSON line or no line at all — never invalid JSON. */
+    char bigmsg[CLOG_MAX_MESSAGE_SIZE];
+    for (size_t i = 0; i < sizeof(bigmsg) - 1; i++) {
+        bigmsg[i] = (i % 2) ? '"' : (char)0x01; /* mixes \" and \u0001 escapes */
+    }
+    bigmsg[sizeof(bigmsg) - 1] = '\0';
+    LOGGER_INFO(logger, "%s", bigmsg);
+    logger_flush(logger);
+    logger_destroy(logger);
+
+    FILE *f = fopen("logs/json_trunc_test.log", "rb");
+    if (f) {
+        char   out[CLOG_MAX_FORMATTED_SIZE + 16];
+        size_t n = fread(out, 1, sizeof(out) - 1, f);
+        fclose(f);
+        out[n] = '\0';
+        if (n > 0 && out[n - 1] == '\n') {
+            out[--n] = '\0';
+        }
+        if (n > 0) {
+            assert(out[0] == '{');
+            assert(n >= 3);
+            assert(strcmp(out + n - 2, "\"}") == 0);
+        }
+    }
+
+    printf("test_json_truncation_stays_valid PASSED\n");
+}
+
 int main(void)
 {
     test_timestamp_cache_formatting();
     test_format_cache_switch();
+    test_json_truncation_stays_valid();
 
     remove(LOG_PATH);
     if (write_config() != 0 || log_init(CONFIG_PATH) != 0) {
