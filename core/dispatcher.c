@@ -7,17 +7,17 @@
  * The dispatcher is the central hub that bridges the write path with sinks.
  * On each log call:
  *
- * 1. A **snapshot** of the current sinks is read under a reader-writer lock.
+ * 1. The sink array is read under `dispatcher_mutex` (the dispatcher lock).
  * 2. The message is formatted **once** using `log_formatter_format`.
  * 3. The formatted string is written to every sink in the snapshot.
  * 4. For async mode, the deep-copied record is queued instead of dispatching.
  *
  * ## Snapshot Reload
  *
- * When `log_reload` is called, the new config is applied atomically:
- * the dispatcher lock is held while the old sink list is freed and replaced.
- * `log_snapshot_get` returns the snapshot without locking; the caller is
- * responsible for calling `log_snapshot_release` when done.
+ * When `log_reload` is called, a fresh sink set is built off-line via
+ * `log_dispatcher_build_snapshot_for`, then swapped in atomically by
+ * `log_dispatcher_commit_snapshot_for` while `dispatcher_mutex` is held;
+ * the old sinks are destroyed after the swap.
  *
  * ## Plugin Sink Initialisation
  *

@@ -18,14 +18,15 @@
  *    without touching the active set.
  * 2. @ref log_dispatcher_commit_snapshot swaps the pointer atomically.
  * 3. The old snapshot is destroyed after ensuring no dispatcher call is
- *    in flight (guarded by a read-write lock).
+ *    in flight (guarded by the dispatcher mutex).
  *
  * This ensures that log lines are never written to a partially-configured
  * or destroyed sink during reload.
  *
  * ## Thread Safety
  *
- * - @ref log_dispatcher_dispatch is thread-safe (read-locked).
+ * - @ref log_dispatcher_dispatch is thread-safe (serialised by the
+ *   dispatcher mutex; the line is formatted before the lock is taken).
  * - @ref log_dispatcher_init and @ref log_dispatcher_destroy must be
  *   called while the logger is quiesced.
  * - @ref log_dispatcher_add_sink and @ref log_dispatcher_remove_sink are
@@ -97,7 +98,7 @@ void log_dispatcher_flush(void);
  * @retval 0   Success (written to at least one sink).
  * @retval -1  NULL argument or format failure.
  *
- * @note Thread-safe (acquires a read lock).
+ * @note Thread-safe (serialised by the dispatcher mutex).
  */
 int log_dispatcher_dispatch(log_record_t *restrict record);
 
