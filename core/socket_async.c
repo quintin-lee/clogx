@@ -294,8 +294,14 @@ static int socket_send_nonblocking(clog_socket_t sockfd, const char *buf, size_t
     size_t total_sent = 0;
 
     while (total_sent < len) {
-        long sent =
-            send(sockfd, buf + total_sent, (clog_sock_size_t)(len - total_sent), MSG_NOSIGNAL);
+         long sent =
+             send(sockfd, buf + total_sent, (clog_sock_size_t)(len - total_sent),
+#if !defined(_WIN32)
+                  MSG_NOSIGNAL
+#else
+                  0
+#endif
+                  );
         if (sent < 0) {
 #if defined(_WIN32)
             int err = WSAGetLastError();
