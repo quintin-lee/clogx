@@ -61,7 +61,9 @@ jobs:
 
       - name: Run tests with CMake
         if: matrix.build_type == 'cmake'
-        run: ctest --test-dir build -C Debug --output-on-failure --timeout 120
+        run: |
+          mkdir -p logs
+          ctest --test-dir build -C Debug --output-on-failure --timeout 120
 
       - name: Verify compile_commands.json
         if: matrix.build_type == 'cmake' && matrix.os != 'windows-latest'
@@ -174,7 +176,9 @@ jobs:
         run: cmake --build build -j
 
       - name: Run TLS tests with CMake
-        run: ctest --test-dir build -C Debug --output-on-failure --timeout 120
+        run: |
+          mkdir -p logs
+          ctest --test-dir build -C Debug --output-on-failure --timeout 120
 
   fuzz:
     runs-on: ubuntu-latest

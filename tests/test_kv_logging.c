@@ -66,6 +66,7 @@ static void test_kv_json_formatting(void)
 
 static void test_kv_async_mode(void)
 {
+    remove("logs/test_kv_async.log"); /* append-mode sink accumulates across runs */
     log_config_t cfg   = {0};
     cfg.level          = LOG_LEVEL_INFO;
     cfg.console_enable = 0;

@@ -182,6 +182,7 @@ example: $(EXAMPLE_BIN)
 
 test: $(TEST_BINS)
 	@mkdir -p logs
+	@rm -f logs/*.log
 	@status=0; \
 	for t in $(TEST_BINS); do \
 		echo "=== $$t ==="; \
