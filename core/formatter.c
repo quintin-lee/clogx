@@ -41,6 +41,7 @@
  * control bytes). Used exclusively by `otlp_sink.c`.
  */
 #include "clog_port.h"
+#include "fast_ascii.h"
 #include "log_formatter.h"
 #include "log_internal.h"
 #include "log_limits.h"
@@ -76,11 +77,25 @@ static void format_sec_cached(time_t sec, const char *fmt, char *out_str, size_t
         g_time_cache.formatted[0] == '\0') {
         struct tm tm_buf;
         clog_localtime_r(&sec, &tm_buf);
-        strftime(g_time_cache.formatted, sizeof(g_time_cache.formatted), fmt, &tm_buf);
-        snprintf(g_time_cache.time_format, sizeof(g_time_cache.time_format), "%s", fmt);
-        g_time_cache.sec = sec;
+        if (strcmp(fmt, "%Y-%m-%d %H:%M:%S") == 0) {
+            clog_format_iso_datetime(&tm_buf, g_time_cache.formatted);
+        } else {
+            strftime(g_time_cache.formatted, sizeof(g_time_cache.formatted), fmt, &tm_buf);
+        }
+        size_t fmt_len = strlen(fmt);
+        if (fmt_len >= sizeof(g_time_cache.time_format)) {
+            fmt_len = sizeof(g_time_cache.time_format) - 1;
+        }
+        memcpy(g_time_cache.time_format, fmt, fmt_len);
+        g_time_cache.time_format[fmt_len] = '\0';
+        g_time_cache.sec                  = sec;
     }
-    snprintf(out_str, out_str_size, "%s", g_time_cache.formatted);
+    size_t len = strlen(g_time_cache.formatted);
+    if (len >= out_str_size) {
+        len = out_str_size - 1;
+    }
+    memcpy(out_str, g_time_cache.formatted, len);
+    out_str[len] = '\0';
 }
 
 /* Compiled opcode program (populated at init time). */
@@ -241,20 +256,61 @@ static void append_json_escaped_string(char **out, size_t *remaining, const char
     **out = '\0';
 }
 
-/** @brief Encode a 16-byte trace ID as a 32-char hex string (no null terminator in output). */
+static const char g_hex_lut[16] = "0123456789abcdef";
+
+/** @brief Encode a 16-byte trace ID as a 32-char hex string. */
 static void trace_id_hex(const uint8_t trace_id[16], char *out)
 {
     for (int i = 0; i < 16; i++) {
-        snprintf(out + (size_t)i * 2, 3, "%02x", trace_id[i]);
+        uint8_t byte           = trace_id[i];
+        out[(size_t)i * 2]     = g_hex_lut[byte >> 4];
+        out[(size_t)i * 2 + 1] = g_hex_lut[byte & 0x0F];
     }
+    out[32] = '\0';
 }
 
-/** @brief Encode an 8-byte span ID as a 16-char hex string (no null terminator in output). */
+/** @brief Encode an 8-byte span ID as a 16-char hex string. */
 static void span_id_hex(const uint8_t span_id[8], char *out)
 {
     for (int i = 0; i < 8; i++) {
-        snprintf(out + (size_t)i * 2, 3, "%02x", span_id[i]);
+        uint8_t byte           = span_id[i];
+        out[(size_t)i * 2]     = g_hex_lut[byte >> 4];
+        out[(size_t)i * 2 + 1] = g_hex_lut[byte & 0x0F];
     }
+    out[16] = '\0';
+}
+
+static inline int append_buf_str(char **out, size_t *remaining, const char *str, size_t len)
+{
+    if (len >= *remaining) {
+        return -1;
+    }
+    memcpy(*out, str, len);
+    *out += len;
+    *remaining -= len;
+    **out = '\0';
+    return 0;
+}
+
+static inline int append_buf_u32(char **out, size_t *remaining, uint32_t val)
+{
+    char   tmp[16];
+    size_t len = clog_u32toa(val, tmp);
+    return append_buf_str(out, remaining, tmp, len);
+}
+
+static inline int append_buf_i32(char **out, size_t *remaining, int32_t val)
+{
+    char   tmp[16];
+    size_t len = clog_i32toa(val, tmp);
+    return append_buf_str(out, remaining, tmp, len);
+}
+
+static inline int append_buf_u32_pad6(char **out, size_t *remaining, uint32_t val)
+{
+    char tmp[8];
+    clog_u32toa_pad6(val, tmp);
+    return append_buf_str(out, remaining, tmp, 6);
 }
 
 /** @brief Check if an ID byte array is all zeros (no active trace/span). */
@@ -292,87 +348,68 @@ static int format_json_ex(log_record_t *restrict record,
     char time_buf[64];
     format_sec_cached(sec, time_format, time_buf, sizeof(time_buf));
 
-    char  *out       = buf;
-    size_t remaining = buf_size;
+    char       *out       = buf;
+    size_t      remaining = buf_size;
+    const char *lvl_str   = level_to_string(record->level);
 
-    int ret = snprintf(out,
-                       remaining,
-                       "{\"timestamp\":\"%s.%06u\",\"level\":\"%s\",\"module\":\"",
-                       time_buf,
-                       usec,
-                       level_to_string(record->level));
-    if (ret <= 0 || (size_t)ret >= remaining) {
+    if (append_buf_str(&out, &remaining, "{\"timestamp\":\"", 14) != 0 ||
+        append_buf_str(&out, &remaining, time_buf, strlen(time_buf)) != 0 ||
+        append_buf_str(&out, &remaining, ".", 1) != 0 ||
+        append_buf_u32_pad6(&out, &remaining, usec) != 0 ||
+        append_buf_str(&out, &remaining, "\",\"level\":\"", 11) != 0 ||
+        append_buf_str(&out, &remaining, lvl_str, strlen(lvl_str)) != 0 ||
+        append_buf_str(&out, &remaining, "\",\"module\":\"", 12) != 0) {
         return -1;
     }
-    out += ret;
-    remaining -= (size_t)ret;
 
     append_json_escaped_string(&out, &remaining, record->module ? record->module : "");
 
-    ret = snprintf(out, remaining, "\",\"file\":\"");
-    if (ret <= 0 || (size_t)ret >= remaining) {
+    if (append_buf_str(&out, &remaining, "\",\"file\":\"", 10) != 0) {
         return -1;
     }
-    out += ret;
-    remaining -= (size_t)ret;
-
     append_json_escaped_string(&out, &remaining, record->file ? record->file : "");
 
-    ret = snprintf(out, remaining, "\",\"line\":%d,\"func\":\"", record->line);
-    if (ret <= 0 || (size_t)ret >= remaining) {
+    if (append_buf_str(&out, &remaining, "\",\"line\":", 9) != 0 ||
+        append_buf_i32(&out, &remaining, record->line) != 0 ||
+        append_buf_str(&out, &remaining, ",\"func\":\"", 9) != 0) {
         return -1;
     }
-    out += ret;
-    remaining -= (size_t)ret;
-
     append_json_escaped_string(&out, &remaining, record->func ? record->func : "");
 
-    ret = snprintf(
-        out, remaining, "\",\"thread\":%u,\"pid\":%u,\"tag\":\"", record->tid, record->pid);
-    if (ret <= 0 || (size_t)ret >= remaining) {
+    if (append_buf_str(&out, &remaining, "\",\"thread\":", 11) != 0 ||
+        append_buf_u32(&out, &remaining, record->tid) != 0 ||
+        append_buf_str(&out, &remaining, ",\"pid\":", 7) != 0 ||
+        append_buf_u32(&out, &remaining, record->pid) != 0 ||
+        append_buf_str(&out, &remaining, ",\"tag\":\"", 8) != 0) {
         return -1;
     }
-    out += ret;
-    remaining -= (size_t)ret;
-
     append_json_escaped_string(&out, &remaining, record->tag ? record->tag : "");
 
     char tid_hex[33];
     char sid_hex[17];
     if (!is_zero_id(record->trace_id, 16)) {
         trace_id_hex(record->trace_id, tid_hex);
-        ret = snprintf(out, remaining, "\",\"trace_id\":\"%s", tid_hex);
-        if (ret <= 0 || (size_t)ret >= remaining) {
+        if (append_buf_str(&out, &remaining, "\",\"trace_id\":\"", 14) != 0 ||
+            append_buf_str(&out, &remaining, tid_hex, 32) != 0) {
             return -1;
         }
-        out += ret;
-        remaining -= (size_t)ret;
     }
     if (!is_zero_id(record->span_id, 8)) {
         span_id_hex(record->span_id, sid_hex);
-        ret = snprintf(out, remaining, "\",\"span_id\":\"%s", sid_hex);
-        if (ret <= 0 || (size_t)ret >= remaining) {
+        if (append_buf_str(&out, &remaining, "\",\"span_id\":\"", 13) != 0 ||
+            append_buf_str(&out, &remaining, sid_hex, 16) != 0) {
             return -1;
         }
-        out += ret;
-        remaining -= (size_t)ret;
     }
 
-    ret = snprintf(out, remaining, "\",\"message\":\"");
-    if (ret <= 0 || (size_t)ret >= remaining) {
+    if (append_buf_str(&out, &remaining, "\",\"message\":\"", 13) != 0) {
         return -1;
     }
-    out += ret;
-    remaining -= (size_t)ret;
-
     append_json_escaped_string(&out, &remaining, record->message ? record->message : "");
 
-    ret = snprintf(out, remaining, "\"}");
-    if (ret <= 0 || (size_t)ret >= remaining) {
+    if (append_buf_str(&out, &remaining, "\"}", 2) != 0) {
         return -1;
     }
-    out += ret;
-    remaining -= (size_t)ret;
 
     return (int)(out - buf);
 }
@@ -502,23 +539,20 @@ static int format_otel_json(log_record_t *restrict record, char *restrict buf, s
     char time_buf[64];
     format_sec_cached(sec, g_time_format_buf, time_buf, sizeof(time_buf));
 
-    char  *out       = buf;
-    size_t remaining = buf_size;
-    int    ret;
+    char       *out       = buf;
+    size_t      remaining = buf_size;
+    const char *lvl_str   = level_to_string(record->level);
 
-    /* Open the top-level object */
-    ret = snprintf(out,
-                   remaining,
-                   "{\"timestamp\":\"%s.%06u\",\"severity\":\"%s\",\"severity_number\":%d",
-                   time_buf,
-                   usec,
-                   level_to_string(record->level),
-                   otel_severity_number(record->level));
-    if (ret <= 0 || (size_t)ret >= remaining) {
+    if (append_buf_str(&out, &remaining, "{\"timestamp\":\"", 14) != 0 ||
+        append_buf_str(&out, &remaining, time_buf, strlen(time_buf)) != 0 ||
+        append_buf_str(&out, &remaining, ".", 1) != 0 ||
+        append_buf_u32_pad6(&out, &remaining, usec) != 0 ||
+        append_buf_str(&out, &remaining, "\",\"severity\":\"", 14) != 0 ||
+        append_buf_str(&out, &remaining, lvl_str, strlen(lvl_str)) != 0 ||
+        append_buf_str(&out, &remaining, "\",\"severity_number\":", 20) != 0 ||
+        append_buf_i32(&out, &remaining, otel_severity_number(record->level)) != 0) {
         return -1;
     }
-    out += ret;
-    remaining -= (size_t)ret;
 
     /* Trace context (only when present) */
     char tid_hex[33];
@@ -526,89 +560,55 @@ static int format_otel_json(log_record_t *restrict record, char *restrict buf, s
     parse_traceparent(record->trace_id, record->span_id);
     if (!is_zero_id(record->trace_id, 16)) {
         trace_id_hex(record->trace_id, tid_hex);
-        ret = snprintf(out, remaining, ",\"trace_id\":\"%s\"", tid_hex);
-        if (ret <= 0 || (size_t)ret >= remaining) {
+        if (append_buf_str(&out, &remaining, ",\"trace_id\":\"", 13) != 0 ||
+            append_buf_str(&out, &remaining, tid_hex, 32) != 0 ||
+            append_buf_str(&out, &remaining, "\"", 1) != 0) {
             return -1;
         }
-        out += ret;
-        remaining -= (size_t)ret;
     }
     if (!is_zero_id(record->span_id, 8)) {
         span_id_hex(record->span_id, sid_hex);
-        ret = snprintf(out, remaining, ",\"span_id\":\"%s\"", sid_hex);
-        if (ret <= 0 || (size_t)ret >= remaining) {
+        if (append_buf_str(&out, &remaining, ",\"span_id\":\"", 12) != 0 ||
+            append_buf_str(&out, &remaining, sid_hex, 16) != 0 ||
+            append_buf_str(&out, &remaining, "\"", 1) != 0) {
             return -1;
         }
-        out += ret;
-        remaining -= (size_t)ret;
     }
 
-    /* Body = message */
-    ret = snprintf(out, remaining, ",\"body\":\"");
-    if (ret <= 0 || (size_t)ret >= remaining) {
+    if (append_buf_str(&out, &remaining, ",\"body\":\"", 9) != 0) {
         return -1;
     }
-    out += ret;
-    remaining -= (size_t)ret;
     append_json_escaped_string(&out, &remaining, record->message ? record->message : "");
-    ret = snprintf(out, remaining, "\"");
-    if (ret <= 0 || (size_t)ret >= remaining) {
+    if (append_buf_str(&out, &remaining, "\"", 1) != 0) {
         return -1;
     }
-    out += ret;
-    remaining -= (size_t)ret;
 
-    /* Attributes object */
-    ret = snprintf(out, remaining, ",\"attributes\":{");
-    if (ret <= 0 || (size_t)ret >= remaining) {
+    if (append_buf_str(&out, &remaining, ",\"attributes\":{", 15) != 0 ||
+        append_buf_str(&out, &remaining, "\"module\":\"", 10) != 0) {
         return -1;
     }
-    out += ret;
-    remaining -= (size_t)ret;
-
-    ret = snprintf(out, remaining, "\"module\":\"");
-    if (ret <= 0 || (size_t)ret >= remaining) {
-        return -1;
-    }
-    out += ret;
-    remaining -= (size_t)ret;
     append_json_escaped_string(&out, &remaining, record->module ? record->module : "");
-    ret = snprintf(out, remaining, "\",\"file\":\"");
-    if (ret <= 0 || (size_t)ret >= remaining) {
+    if (append_buf_str(&out, &remaining, "\",\"file\":\"", 10) != 0) {
         return -1;
     }
-    out += ret;
-    remaining -= (size_t)ret;
     append_json_escaped_string(&out, &remaining, record->file ? record->file : "");
-    ret = snprintf(out, remaining, "\",\"line\":%d,\"func\":\"", record->line);
-    if (ret <= 0 || (size_t)ret >= remaining) {
+    if (append_buf_str(&out, &remaining, "\",\"line\":", 9) != 0 ||
+        append_buf_i32(&out, &remaining, record->line) != 0 ||
+        append_buf_str(&out, &remaining, ",\"func\":\"", 9) != 0) {
         return -1;
     }
-    out += ret;
-    remaining -= (size_t)ret;
     append_json_escaped_string(&out, &remaining, record->func ? record->func : "");
-    ret = snprintf(
-        out, remaining, "\",\"thread\":%u,\"pid\":%u,\"tag\":\"", record->tid, record->pid);
-    if (ret <= 0 || (size_t)ret >= remaining) {
+    if (append_buf_str(&out, &remaining, "\",\"thread\":", 11) != 0 ||
+        append_buf_u32(&out, &remaining, record->tid) != 0 ||
+        append_buf_str(&out, &remaining, ",\"pid\":", 7) != 0 ||
+        append_buf_u32(&out, &remaining, record->pid) != 0 ||
+        append_buf_str(&out, &remaining, ",\"tag\":\"", 8) != 0) {
         return -1;
     }
-    out += ret;
-    remaining -= (size_t)ret;
     append_json_escaped_string(&out, &remaining, record->tag ? record->tag : "");
-    ret = snprintf(out, remaining, "\"}");
-    if (ret <= 0 || (size_t)ret >= remaining) {
+    if (append_buf_str(&out, &remaining, "\"}}", 3) != 0) {
         return -1;
     }
-    out += ret;
-    remaining -= (size_t)ret;
-
-    /* Close top-level object */
-    ret = snprintf(out, remaining, "}");
-    if (ret <= 0 || (size_t)ret >= remaining) {
-        return -1;
-    }
-    out += ret;
-    remaining -= (size_t)ret;
 
     return (int)(out - buf);
 }
@@ -775,20 +775,16 @@ static int format_impl(log_record_t *restrict record,
         }
 
         case FMT_OP_THREAD: {
-            char tmp[32];
-            int  n = snprintf(tmp, sizeof(tmp), "%u", record->tid);
-            if (n > 0) {
-                total += append_token(&out, &remaining, tmp, (size_t)n);
-            }
+            char   tmp[16];
+            size_t n = clog_u32toa(record->tid, tmp);
+            total += append_token(&out, &remaining, tmp, n);
             break;
         }
 
         case FMT_OP_PID: {
-            char tmp[32];
-            int  n = snprintf(tmp, sizeof(tmp), "%u", record->pid);
-            if (n > 0) {
-                total += append_token(&out, &remaining, tmp, (size_t)n);
-            }
+            char   tmp[16];
+            size_t n = clog_u32toa(record->pid, tmp);
+            total += append_token(&out, &remaining, tmp, n);
             break;
         }
 
@@ -799,11 +795,9 @@ static int format_impl(log_record_t *restrict record,
         }
 
         case FMT_OP_LINE: {
-            char tmp[32];
-            int  n = snprintf(tmp, sizeof(tmp), "%d", record->line);
-            if (n > 0) {
-                total += append_token(&out, &remaining, tmp, (size_t)n);
-            }
+            char   tmp[16];
+            size_t n = clog_i32toa(record->line, tmp);
+            total += append_token(&out, &remaining, tmp, n);
             break;
         }
 

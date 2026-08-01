@@ -220,6 +220,7 @@ if(CLOG_BUILD_TESTS)
         test_coverage_gaps
         test_socket_async
         test_tls
+        test_fast_ascii
     )
 
     # Tests that directly reference internal symbols (not exported from shared lib)
