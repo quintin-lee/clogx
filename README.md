@@ -11,17 +11,17 @@ Lightweight C99 logging library: config-driven, multi-sink output, optional asyn
 ## Features
 
 - Macro API: `LOG_INFO` / `LOG_DEBUG` / `LOG_WARN` / `LOG_ERROR` / `LOG_FATAL` / `LOG_TRACE` (`TRACE` kept as alias)
-- Multi-sink: console (optional ANSI color), file (auto-create directories + rotation), TCP socket (optional OpenSSL TLS encryption, async non-blocking mode with ring buffer and exponential backoff), native POSIX syslog sink (`syslog_sink_create`), OpenTelemetry OTLP JSON log sink (`otlp_sink`), custom sink API
+- Multi-sink: console (optional ANSI color), file (auto-create directories + rotation), TCP socket (optional OpenSSL TLS encryption, async non-blocking mode with ring buffer and exponential backoff), native POSIX syslog sink (`syslog_sink_create`), OpenTelemetry OTLP JSON log sink (`otlp_sink_create`), custom sink API
 - Plugin ABI: runtime dlopen-based plugin system with ABI versioning, directory scanning (`log_plugin_scan`), and handle caching for dynamically-loadable sink modules
 - Multi-Instance Logger API: independent `logger_t` instances via `logger_create()` / `LOGGER_INFO()` / `logger_destroy()` — each with isolated config, sinks, module, and async worker
 - Prometheus Metrics Exporter: built-in HTTP /metrics server (`clog_prometheus_exporter_start`) exposing per-level counters, async queue depth, and suppressed/dropped event gauges in Prometheus Text Format
-- Mapped Diagnostic Context (MDC): thread-local context key-values (`log_set_thread_context`, `log_get_thread_context`, `log_clear_thread_context`), `%context` token formatting, and top-level JSON injection
+- Mapped Diagnostic Context (MDC): thread-local context key-values (`log_set_thread_context`, `log_get_thread_context`, `log_clear_thread_context`) auto-injected into JSON output
 - Structured Logging: native single-line JSON format (`format: "json"`) with RFC 8259 string escaping & thread-local context injection
 - Operational Observability: `log_get_stats(&stats)` API tracking total logs, async queue drops, rate limiter suppressions, and active queue depth
-- High Performance Async Batching: worker thread batch dequeue (`mpsc_queue_get_batch` up to 64 records per batch) with once-per-batch sink flushing
-- Token formatting: `%time` `%level` `%msg` `%file` `%line` `%func` `%module` `%tag` `%thread` `%pid` `%context`
+- High Performance Async Batching: worker thread batch dequeue (up to 64 records per batch) with once-per-batch sink flushing
+- Token formatting: `%time` `%level` `%msg` `%file` `%line` `%func` `%module` `%tag` `%thread` `%pid` `%trace_id` `%span_id`
 - Buffer Limit Safety: macro-configurable buffer sizes (`include/log_limits.h`) with strict boundary checks
-- Fuzz Testing: built-in AFL / libFuzzer test harnesses (`make fuzz-build`)
+- Fuzz Testing: built-in AFL / libFuzzer test harnesses for config, formatter, and pipeline (`make fuzz-build`)
 - Sync / async switchable; async path deep-copies records to avoid dangling stack pointers
 - Fork Safety: POSIX `pthread_atfork` handlers prevent deadlocks and restart async worker in child processes
 - Graceful Shutdown: POSIX `sigaction` signal handlers for `SIGTERM`/`SIGINT` (`catch_signals: true` or `log_install_signal_handlers()`)
@@ -34,8 +34,7 @@ Lightweight C99 logging library: config-driven, multi-sink output, optional asyn
 - Clean ABI: symbol visibility control exports public symbols cleanly
 - Build: Makefile and CMake (with CTest, `find_package(clogx)`); ASan/UBSan/Valgrind/clang-tidy check targets
 - Static Analysis: zero-warning `clang-tidy` policy (`make check-tidy` / `CLOG_ENABLE_CLANG_TIDY=ON`)
-- Fuzz Testing: focused AFL / libFuzzer test harnesses for config, formatter, and pipeline (`fuzz/fuzz_pipeline.c`)
-- C-Source Branch Coverage: POSIX shell/AWK gcov branch coverage tool (`make coverage-gcov`) with **96%+** branch coverage across core C files and 75% CI gate
+- C-Source Branch Coverage: POSIX shell/AWK gcov branch coverage tool (`make coverage-gcov`) with **97.8%+** branch coverage across core C files and 75% CI gate
 - Signal Safety: POSIX self-pipe signal handler with zero-lock design (`log_get_signal_fd()`) for event loop integration, plus graceful `SIGTERM`/`SIGINT` handling
 
 ## Directory Layout
@@ -50,6 +49,7 @@ tests/       regression tests
 benchmarks/  throughput & async-vs-sync benchmarks
 cmake/       CMake package config templates
 scripts/     gcov branch coverage analysis tooling
+docs/        user manual, contributing guide, dependencies, security policy
 VERSION      unified project version string (single source of truth)
 ```
 
@@ -110,7 +110,7 @@ make TLS=1        # builds with OpenSSL TLS socket sink support
 make test         # compiles and runs all regression tests
 make asan         # build + test with AddressSanitizer
 make ubsan        # build + test with UndefinedBehaviorSanitizer
-make coverage     # generate gcov branch summary (>96%) + lcov HTML report
+make coverage     # generate gcov branch summary (>97%) + lcov HTML report
 make coverage-gcov# run gcov -b branch coverage gate via scripts/gcov_branch_summary.sh (CI-enforced, 75% threshold)
 make tidy         # run clang-tidy static analysis
 make check-tidy   # enforce clang-tidy warnings-as-errors
@@ -251,9 +251,7 @@ log:
   rate_limit_enable: true
   rate_limit_max_per_sec: 1000
   rate_limit_burst: 100
-  otlp_enable: true
-  otlp_endpoint: "logs/otel.json"
-  otlp_service_name: "my-service"
+  catch_signals: false
   prometheus_enable: true
   prometheus_port: 9090
 ```
@@ -283,8 +281,10 @@ log:
 | `rate_limit_enable` | enable global token bucket rate limiting (`true`/`false`) |
 | `rate_limit_max_per_sec` | max allowed log messages per second (e.g. `1000`) |
 | `rate_limit_burst` | maximum burst capacity (e.g. `100`) |
-| `otlp_enable` / `otlp_endpoint` / `otlp_service_name` | OpenTelemetry OTLP JSON log sink |
+| `catch_signals` | catch `SIGTERM`/`SIGINT` for graceful shutdown (`true`/`false`) |
 | `prometheus_enable` / `prometheus_port` | Prometheus HTTP /metrics exporter |
+
+The OTLP sink has no YAML keys — create it programmatically with `otlp_sink_create(endpoint, service_name)` and `log_add_sink()`.
 
 ## Structured Logging (JSON)
 
@@ -333,6 +333,7 @@ Override at compile time: `-DCLOG_MAX_MESSAGE_SIZE=8192`.
 | `%pid` | process ID |
 | `%file` / `%line` / `%func` | source location |
 | `%module` / `%tag` | module (via `log_set_module`) and tag |
+| `%trace_id` / `%span_id` | W3C TraceContext trace/span ID hex strings (when present) |
 | `%newline` | newline |
 
 Example: `[%time] [%level] %file:%line %msg`

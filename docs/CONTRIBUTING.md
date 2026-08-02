@@ -21,7 +21,7 @@ Building and testing clogx requires no external installation beyond these tools.
 ```bash
 make              # Build library and examples
 make test         # Run all unit tests
-make check        # Full quality gate: format → build → test
+make check        # Full quality gate: format check → clang-tidy → unused-includes → clean rebuild → tests
 make asan         # Build + test with AddressSanitizer
 make ubsan        # Build + test with UndefinedBehaviorSanitizer
 make test-valgrind # Run all tests under Valgrind leak check
@@ -41,23 +41,25 @@ ctest --test-dir build --output-on-failure
 ## Code Style
 
 - Source code must be valid **C99**.
-- All `.c`, `.h`, and `.md` files are formatted with **clang-format** using the project's `.clang-format` configuration.
+- All `.c` and `.h` files are formatted with **clang-format** using the project's `.clang-format` configuration (LLVM base, 4-space indent, 100 col, sorted includes).
 - Run `make format` to automatically apply formatting.
 - Compiler warnings treated as errors: `-Wall -Wextra -Wconversion` are enforced in the build.
 - Follow existing code patterns and style observed in the repository.
 
 ## Commit Messages
 
-Follow **[conventional commits](https://www.conventionalcommits.org/)**:
+Follow **[conventional commits](https://www.conventionalcommits.org/)** with a **gitmoji emoji** in the subject (see `git log` for examples):
 
-- `feat:` — new feature
-- `fix:` — bug fix
-- `docs:` — documentation only
-- `chore:` — build/tooling changes
-- `perf:` — performance improvement
-- `test:` — adding or modifying tests
+- `feat(...): ✨` — new feature
+- `fix(...): 🐛` — bug fix
+- `docs(...): 📝` — documentation only
+- `chore(...): 🔧` — build/tooling changes
+- `perf(...): ⚡` — performance improvement
+- `test(...): ✅` — adding or modifying tests
+- `refactor(...): ♻️` — code refactoring
+- `style(...): 🎨` — formatting / style fixes
 
-Example: `feat: add TLS socket sink support`
+Example: `feat(sink): ✨ add TLS socket sink support`
 
 ## Updating CHANGELOG
 
@@ -65,21 +67,21 @@ All non-trivial changes must update `CHANGELOG.md` using conventional commit sem
 
 ## Pull Request Process
 
-1. Branch from `main`: `git checkout -b feature/my-feature main`
+1. Branch from `master`: `git checkout -b feature/my-feature master`
 2. Implement feature + related tests
 3. Ensure all tests pass (`make check` and relevant sanitizer builds)
 4. Update documentation if needed (API docs, examples, CHANGELOG)
 5. Run `make format` to ensure code is properly formatted
-6. Push branch and open a Pull Request against `main`
+6. Push branch and open a Pull Request against `master`
 7. PR description should reference any related issues and summarize changes
 
 The CI suite will run automatically on your PR. All checks must pass before merge.
 
 ## Public API Contract
 
-Only the following headers in `include/` define the stable public API: `log.h`, `log_config.h`, `log_limits.h`, `log_record.h`, `log_sink.h`, `clogx_version.h`.
+Only the following headers in `include/` define the stable public API: `log.h`, `log_config.h`, `log_limits.h`, `log_record.h`, `log_sink.h`, `log_prometheus.h`, `clog_port.h`, `clogx_plugin.h` (installed to `include/clogx/`).
 
-All other headers (`dispatcher.h`, `log_async.h`, `log_dispatcher.h`, `log_formatter.h`, `log_signal.h`, `log_rate_limit.h`, `queue.h`, `rotate.h`, `clog_port.h`) are internal implementation details and subject to change between releases.
+All other headers (`dispatcher.h`, `log_async.h`, `log_dispatcher.h`, `log_formatter.h`, `log_signal.h`, `log_rate_limit.h`, `queue.h`, `rotate.h`, `socket_async.h`) are internal implementation details and subject to change between releases.
 
 Semantic versioning is followed: `MAJOR.MINOR.PATCH`.
 - `MAJOR` bump: breaking public API changes

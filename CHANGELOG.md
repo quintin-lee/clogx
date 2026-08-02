@@ -28,10 +28,13 @@ All notable changes to this project will be documented in this file.
 - Data race in lock-free ring buffers: the consumer could read a slot between the producer's `head` CAS and the record write (a preempted producer), consuming half-written records. Per-slot sequence numbers now gate reads on publication (visible under ThreadSanitizer; `test_queue_try_put` concurrency test failed reliably before the fix)
 - `core/socket_async.c`: producer no longer rolls `head` back when the line-copy `malloc` fails — in a concurrent setting that decrement could reclaim another producer's claimed slot and corrupt the ring. The slot is published empty and counted as dropped instead
 - Centralized GCC/Clang `__atomic_*` builtins behind `clog_atomic_load_int` / `clog_atomic_store_int` / `clog_atomic_load_u64` / `clog_atomic_store_u64` in `include/clog_port.h` with MSVC `Interlocked*` equivalents so `core/queue.c` and `core/socket_async.c` compile on Windows; zero-initialize `log_record_t` in the write path (`core/log.c`) to avoid reading uninitialized `kv_count`
-- macOS CI: POSIX unnamed semaphores are unimplemented on macOS (`sem_init()` always returns `ENOSYS`), which broke `mpsc_queue_create` and `ring_create` and failed every async test. `clog_sem_*` in `include/clog_port.h` now uses Grand Central Dispatch semaphores (`dispatch_semaphore_*`) on `__APPLE__`
+- macOS CI: POSIX unnamed semaphores are unimplemented on macOS (`sem_init()` always returns `ENOSYS`), which broke `mpsc_queue_create` and `ring_create` and failed every async test. `clog_sem_*` in `include/clog_port.h` now uses fork-safe named semaphores (`sem_open`) on `__APPLE__` — replacing an earlier GCD `dispatch_semaphore_*` attempt that is not fork-safe (child processes would deadlock on the semaphore after `fork()`)
 - `logger->async_processing` flag accessed via `clog_atomic_load_int` / `clog_atomic_store_int` instead of plain volatile reads/writes, closing a cross-thread data race between the async worker and `log_async_flush_for`
 - JSON and OTel renderers guarantee well-formed output under buffer overflow: when a string field exhausts the line buffer, the line is closed with a valid suffix (`"}` for the JSON root, `"}}` for the OTel attributes object) instead of emitting truncated invalid JSON; a truncating KV attribute closes the object the same way, and a line that cannot even be closed is dropped
 - Async flush race: the worker set `async_processing` *after* dequeuing a batch, so `log_async_flush_for()` could observe "queue empty && !async_processing" while a batch was still being processed and return before those records reached the sinks — losing the final records when the process exited right after `log_flush()`. `mpsc_queue_get_batch` is split into `mpsc_queue_wait_for_items` + `mpsc_queue_get_batch_try`, and the worker marks the batch in-flight *before* draining (fixes flaky `test_signal_handler` on Linux CI)
+- `make test` idempotency: `logs/` output is cleaned before each test run so re-running the suite never fails on stale rotation backups
+- Compiler warning cleanup in `core/fast_ascii.h` LUTs and TLS test builds (`-Wall -Wextra -Wconversion` clean)
+- Trace-context coverage: tests now exercise async queue-full fallback, rate-limit suppression reporting, and `%trace_id`/`%span_id` formatting paths (branch coverage 97.8%)
 
 ### Deprecated
 - Old `log_console_sink_create(bool stderr, bool color)` name referenced in `docs/user_manual.md` updated to current `console_sink_create` / `console_sink_create_stderr` API
@@ -39,9 +42,9 @@ All notable changes to this project will be documented in this file.
 ## [0.2.0] - 2026-07-30
 
 ### Added
-- OTLP Sink: native OpenTelemetry Protocol export via `log_sink_create_otlp(endpoint, headers)` — JSON or protobuf over HTTP/2, with `otlp_endpoint`, `otlp_headers`, `otlp_protocol` YAML config keys
-- Prometheus Metrics Exporter: `log_prometheus_init(port)` / `log_prometheus_scrape(buf, size)` exposing counters (total_logged, dropped_queue_full, suppressed_rate) as Prometheus text format on HTTP `/metrics`
-- Plugin ABI: `clogx_plugin_t` struct + `clogx_plugin_register()` / `clogx_plugin_unregister()` — load `.so` at runtime via `dlopen`, each plugin gets `on_load()` / `on_unload()` lifecycle hooks
+- OTLP Sink: native OpenTelemetry Protocol export via `otlp_sink_create(endpoint, service_name)` — JSON log records over HTTP, added programmatically with `log_add_sink()` (no YAML keys)
+- Prometheus Metrics Exporter: `clog_prometheus_exporter_start(port)` / `clog_prometheus_exporter_stop()` / `clog_prometheus_render_metrics(buf, size)` exposing per-level counters, queue depth, and dropped/suppressed gauges as Prometheus text format on HTTP `/metrics` (enable via `prometheus_enable` / `prometheus_port` YAML keys)
+- Plugin ABI (`include/clogx_plugin.h`): `log_plugin_load(so_path)` / `log_plugin_unload(h)` / `log_plugin_create_sink(h, params_json)` / `log_plugin_scan(dir, out, max)` — load `.so` sink modules at runtime via `dlopen`, with ABI version checks (`CLOGX_PLUGIN_ABI_VERSION`); plugins export `clogx_plugin_desc()` (metadata) and `clogx_plugin_create()` (factory) symbols
 - Multi-Instance Logger (`logger_t`): independent `logger_create()` / `logger_destroy()` / `LOGGER_INFO()` etc. — each instance owns its own config, sinks, module, and async worker, isolated from the global default logger
 - Coverage Gap Test Suite (`tests/test_coverage_gaps.c`): 9 tests targeting untaken code paths (strerror codes, config parse failure, no-sinks init, async fallback, signal-in-write, thread context update, logger_reload, custom format/time_format)
 - Millisecond-Precision Token Bucket Rate Limiter (`core/rate_limit.c`): optimized token replenishment at millisecond granularity (`g_fill_rate = max_per_sec / 1000.0`), eliminating sub-millisecond floating-point arithmetic overhead on hot paths
@@ -63,7 +66,7 @@ All notable changes to this project will be documented in this file.
 
 ### Added
 - Native POSIX Syslog Sink: `syslog_sink_create(ident, facility)` mapping log levels to syslog priorities (`LOG_DEBUG`, `LOG_INFO`, `LOG_WARNING`, `LOG_ERR`, `LOG_CRIT`) with automatic syslog re-connection in child processes after `fork()`
-- Thread-Local Mapped Diagnostic Context (MDC): `log_set_thread_context(key, val)`, `log_get_thread_context(key)`, and `log_clear_thread_context()` supporting `%context` format tokens and auto-injecting top-level JSON fields
+- Thread-Local Mapped Diagnostic Context (MDC): `log_set_thread_context(key, val)`, `log_get_thread_context(key)`, and `log_clear_thread_context()` auto-injecting top-level JSON fields
 - Operational Observability Metrics API: `log_get_stats(&stats)` retrieving runtime counters (`total_logged_count`, `dropped_queue_full_count`, `suppressed_rate_count`, `current_queue_depth`)
 - High Performance Async Queue Batching: worker thread dequeues up to 64 records per batch (`mpsc_queue_get_batch`) and flushes sinks once per batch to minimize mutex contention and I/O syscalls
 - Graceful Shutdown (`SIGTERM`/`SIGINT` handling): POSIX `sigaction` signal handlers

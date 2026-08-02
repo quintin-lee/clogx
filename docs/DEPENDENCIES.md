@@ -15,7 +15,8 @@ This document lists third-party software dependencies used by clogx, their versi
 | Tool | License | Usage |
 |------|---------|-------|
 | **clang-format** | Apache 2.0 | Source code formatting (`make format`, `make check-format`) |
-| **cppcheck** | GPL v2+ | Static analysis (`make cppcheck`) |
+| **clang-tidy** | Apache 2.0 | Static analysis (`make tidy`, `make check-tidy`, `make tidy-check`) |
+| **gcov / lcov** | GPL v3 / GPL v2+ | Branch coverage (`make coverage`, `make coverage-gcov`) |
 | **valgrind** | GPL v2+ | Memory checking (`make test-valgrind`, ASan/UBSan compatible) |
 | **AFL / libFuzzer** | Apache 2.0 / BSD | Fuzz testing (`make fuzz-build`) |
 

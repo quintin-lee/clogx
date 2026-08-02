@@ -16,22 +16,23 @@
    - [Legacy Config Format](#42-legacy-config-format)
    - [Configuration Keys Reference](#43-configuration-keys-reference)
    - [Configuring Programmatically](#44-configuring-programmatically)
+   - [Format Tokens](#45-format-tokens)
 5. [Usage Examples](#5-usage-examples)
    - [Basic Console Logging](#51-basic-console-logging)
    - [File Logging with Rotation](#52-file-logging-with-rotation)
    - [JSON Structured Logging](#53-json-structured-logging)
    - [Multi-Sink Setup](#54-multi-sink-setup)
    - [Asynchronous Logging](#55-asynchronous-logging)
-    - [Socket Sink with TLS](#56-socket-sink-with-tls)
-    - [Async Non-Blocking Socket Sink](#57-async-non-blocking-socket-sink)
-    - [Multi-Instance Logger](#58-multi-instance-logger)
- 6. [Advanced Features](#6-advanced-features)
-    - [Async Fallback Callback](#59-async-fallback-callback)
-    - [Per-Sink Level Filtering](#60-per-sink-level-filtering)
-    - [Rate Limiting](#61-rate-limiting)
-    - [Hot Reload Configuration](#62-hot-reload-configuration)
-    - [Fork Safety](#63-fork-safety)
-    - [Signal Handling and Graceful Shutdown](#64-signal-handling-and-graceful-shutdown)
+   - [Socket Sink with TLS](#56-socket-sink-with-tls)
+   - [Async Non-Blocking Socket Sink](#57-async-non-blocking-socket-sink)
+   - [Multi-Instance Logger](#58-multi-instance-logger)
+6. [Advanced Features](#6-advanced-features)
+   - [Async Fallback Callback](#61-async-fallback-callback)
+   - [Per-Sink Level Filtering](#62-per-sink-level-filtering)
+   - [Rate Limiting](#63-rate-limiting)
+   - [Hot Reload Configuration](#64-hot-reload-configuration)
+   - [Fork Safety](#65-fork-safety)
+   - [Signal Handling and Graceful Shutdown](#66-signal-handling-and-graceful-shutdown)
 7. [API Reference](#7-api-reference)
    - [Core Functions](#71-core-functions)
    - [Sink Management](#72-sink-management)
@@ -95,9 +96,13 @@ Common CMake options:
 |--------|---------|-------------|
 | `CLOG_BUILD_EXAMPLES` | ON | Build example programs |
 | `CLOG_BUILD_TESTS` | ON | Build and register CTest targets |
+| `CLOG_BUILD_BENCHMARKS` | OFF | Build benchmark programs |
 | `CLOG_BUILD_SHARED` | OFF | Build shared library when ON |
 | `CLOG_USE_SYSTEM_YAML` | OFF | Use system libyaml instead of auto-download |
 | `CLOG_ENABLE_TLS` | OFF | Enable OpenSSL TLS support for socket sink |
+| `CLOG_ENABLE_CLANG_TIDY` | OFF | Enable clang-tidy static analysis during compilation |
+| `CLOG_BUILD_CLANG_TIDY_CHECKS` | OFF | Build custom clang-tidy checks (unused-includes) |
+| `CMAKE_EXPORT_COMPILE_COMMANDS` | ON | Auto-generate `compile_commands.json` for clangd/LSP |
 
 ### 23 Installing the Library
 
@@ -161,7 +166,7 @@ int main(void) {
 Compile and run:
 
 ```bash
-gcc -Iinclude app.c -Lbuild -lclogx -lpthread -lyaml -o app
+gcc -Iinclude app.c -Lbuild -lclogx -lpthread -o app
 ./app
 ```
 
@@ -288,7 +293,7 @@ Both formats are fully supported. New users should prefer the nested `log:` form
 | `max_size` | uint64 | `0` | Rotate when file reaches this size (suffix K/KB, M/MB, G/GB) |
 | `backups` | int | `0` | Number of rotated files to retain (.1 … .N) |
 
-#### Socket Sink Settings (requires TLS=1 build flag)
+#### Socket Sink Settings
 
 | Key | Type | Default | Description |
 |-----|------|---------|-------------|
@@ -312,37 +317,71 @@ Both formats are fully supported. New users should prefer the nested `log:` form
 | `rate_limit_max_per_sec` | int | `0` | Maximum allowed log messages per second |
 | `rate_limit_burst` | int | `0` | Burst capacity (additional tokens allowed initially) |
 
+#### Signal Handling & Prometheus Settings
+
+| Key | Type | Default | Description |
+|-----|------|---------|-------------|
+| `catch_signals` | bool | `true` | Catch `SIGTERM`/`SIGINT` for graceful shutdown (flush logs, then re-raise) |
+| `prometheus_enable` | bool | `false` | Enable Prometheus HTTP /metrics exporter |
+| `prometheus_port` | int | `0` | Prometheus /metrics HTTP port (1–65535) |
+
 ### 44 Configuring Programmatically
 
-Use the `log_config_t` struct for programmatic configuration:
+Use the `log_config_t` struct for programmatic configuration (abridged — see `include/log_config.h` for the complete definition):
 
 ```c
 typedef struct {
     log_level_t level;              /* min log level */
     bool async;                     /* enable async mode */
-    size_t queue_size;              /* async queue capacity (when async=true) */
+    int  queue_size;                /* async queue capacity (when async=true) */
     bool color;                     /* enable console coloring */
-    char format[1024];              /* format template or "json" */
-    char time_format[64];           /* strftime template */
-    bool console_enable;            /* enable console sink */
-    bool console_stderr;            /* console to stderr */
-    bool file_enable;               /* enable file sink */
-    char file_path[512];            /* file path */
+    log_format_type_t format_type;  /* TEXT or JSON/OTEL mode */
+    const char *format;             /* format template or "json" (owned by library) */
+    const char *time_format;        /* strftime template */
+    int  console_enable;            /* enable console sink */
+    int  console_stderr;            /* console to stderr */
+    int  file_enable;               /* enable file sink */
+    char file_path[CLOG_MAX_PATH_SIZE]; /* file path */
     uint64_t file_max_size;         /* file rotation threshold (bytes) */
-    int file_backups;               /* number of backup files */
-    int socket_port;                /* socket port */
-    bool socket_enable;             /* enable socket sink */
-    char socket_host[64];           /* socket host */
+    int  file_backups;              /* number of backup files */
+    int  socket_enable;             /* enable socket sink */
+    char socket_host[CLOG_MAX_PATH_SIZE]; /* socket host */
+    int  socket_port;               /* socket port */
     bool socket_tls;                /* enable TLS on socket */
-    char socket_tls_ca_file[512];   /* TLS CA file */
+    char socket_tls_ca_file[CLOG_MAX_PATH_SIZE]; /* TLS CA file */
     bool socket_tls_skip_verify;    /* skip TLS cert verification */
+    bool socket_async;              /* async non-blocking socket */
+    size_t socket_ring_capacity;    /* ring buffer capacity (0 = 8192) */
+    uint32_t socket_backoff_min_ms; /* initial reconnect backoff (0 = 1000) */
+    uint32_t socket_backoff_max_ms; /* max reconnect backoff (0 = 60000) */
+    uint32_t socket_connect_timeout_ms; /* connect/TLS handshake timeout (0 = 1000) */
     bool rate_limit_enable;         /* enable rate limiter */
-    int rate_limit_max_per_sec;     /* max messages/sec */
-    int rate_limit_burst;           /* burst capacity */
+    int  rate_limit_max_per_sec;    /* max messages/sec */
+    int  rate_limit_burst;          /* burst capacity */
+    bool catch_signals;             /* catch SIGTERM/SIGINT for graceful shutdown */
+    bool prometheus_enable;         /* enable Prometheus /metrics endpoint */
+    int  prometheus_port;           /* metrics HTTP port */
+    /* ... plugin sink arrays (plugin_so_paths, plugin_params_json, plugin_count) */
 } log_config_t;
 ```
 
 Set configuration via `log_config_set()` (returns 0 on success). Get current config via `log_config_get()`.
+
+### 45 Format Tokens
+
+| Token | Content |
+|-------|---------|
+| `%time` | local time `YYYY-MM-DD HH:MM:SS.uuuuuu` |
+| `%level` | level name (`TRACE` … `FATAL`) |
+| `%msg` | message body |
+| `%thread` | thread ID |
+| `%pid` | process ID |
+| `%file` / `%line` / `%func` | source location |
+| `%module` / `%tag` | module and tag |
+| `%trace_id` / `%span_id` | W3C TraceContext trace/span ID hex strings (when present) |
+| `%newline` | literal newline |
+
+Example: `[%time] [%level] %file:%line %msg`
 
 ---
 
@@ -375,7 +414,7 @@ log:
   level: DEBUG
   async: false
   color: true
-  format: "[%color][%level]%reset %msg"
+  format: "[%time] [%level] %msg"
   console_enable: true
   file_enable: false
 ```
@@ -415,8 +454,9 @@ When the file reaches 100MB, it's renamed to `app.log.1`, the old `.1` becomes `
 
 int main(void) {
     log_init("./config.yaml");
-    LOG_INFO("User logged in", user_id="12345");
-    LOG_ERROR("Database query failed", duration_ms="450", table="users");
+    LOG_INFO_KV("User logged in", CLOG_KV_STR("user_id", "12345"));
+    LOG_ERROR_KV("Database query failed", CLOG_KV_INT("duration_ms", 450),
+                 CLOG_KV_STR("table", "users"));
     log_flush();
     log_destroy();
     return 0;
@@ -451,7 +491,8 @@ int main(void) {
     log_init(NULL);
 
     /* Create a custom file sink with different level filtering */
-    log_sink_t *file_sink = log_file_sink_create("logs/errors.log", LOG_LEVEL_ERROR, 100*1024*1024, 5);
+    log_sink_t *file_sink = file_sink_create("logs/errors.log", 100*1024*1024, 5);
+    log_sink_set_level(file_sink, LOG_LEVEL_ERROR);  /* errors and above only */
     log_add_sink(file_sink);  /* Added after log_init() */
 
     LOG_INFO("This goes to console only");
@@ -477,12 +518,12 @@ Decouple log production from log I/O for high-throughput applications:
 int main(void) {
     /* Configure async mode */
     log_config_t cfg = {0};
-    cfg.level = INFO;
+    cfg.level = LOG_LEVEL_INFO;
     cfg.async = true;
     cfg.queue_size = 8192;
     cfg.console_enable = true;
     cfg.file_enable = true;
-    cfg.file_path = "logs/async.log";
+    snprintf(cfg.file_path, sizeof(cfg.file_path), "logs/async.log");
     log_config_set(&cfg);
 
     /* Fast logging — calls return immediately */
@@ -508,7 +549,7 @@ log:
   file_path: logs/async.log
 ```
 
-The async path makes a deep copy of each log record before enqueuing, so stack-allocated pointers remain valid in the producer. If the async queue fills up (worker thread falling behind), an async fallback callback is triggered (see §6.6).
+The async path makes a deep copy of each log record before enqueuing, so stack-allocated pointers remain valid in the producer. If the async queue fills up (worker thread falling behind), an async fallback callback is triggered (see §6.1).
 
 ### 56 Socket Sink with TLS (Requires TLS=1 Build)
 
@@ -523,7 +564,7 @@ int main(void) {
         443,                     /* port */
         true,                    /* use_tls */
         "certs/ca.crt",          /* ca_file (optional, use "" for none) */
-                         false       /* skip_verify (false = verify cert) */
+        false                    /* skip_verify (false = verify cert) */
     );
 
     if (sink == NULL) {
@@ -532,7 +573,7 @@ int main(void) {
     }
 
     log_add_sink(sink);
-    LOG_SECURE("Secure log message sent over TLS");
+    LOG_INFO("Secure log message sent over TLS");
 
     /* When done, caller must destroy the sink */
     sink->destroy(sink);
@@ -603,7 +644,7 @@ log:
 - The writer thread connects in non-blocking mode with a 1-second select timeout.
 - On send/connect failure, the writer sleeps with exponential backoff (doubles each failure, capped at `socket_backoff_max_ms`, ±10% jitter).
 - On successful send, backoff resets to `socket_backoff_min_ms`.
-- On shutdown (`socket_sink_destroy`), the writer drains remaining entries before exiting.
+- On shutdown (`sink->destroy(sink)`), the writer drains remaining entries before exiting.
 
 ### 58 Multi-Instance Logger
 
@@ -645,7 +686,133 @@ The global default logger (`log_init()` / `LOG_INFO()` etc.) coexists with multi
 
 ## 6. Advanced Features
 
-### 64 Signal Handling and Graceful Shutdown
+### 61 Async Fallback Callback
+
+When the async queue is full (producer faster than consumer), the library falls back to synchronous logging. Register a callback to be notified:
+
+```c
+#include "log.h"
+
+void async_fallback_callback(void) {
+    /* Log to stderr or another mechanism — avoid clogging! */
+    fprintf(stderr, "[clogx] async queue full, falling back to sync\n");
+}
+
+int main(void) {
+    log_set_async_fallback_cb(async_fallback_callback);
+    log_init("./config_async.yaml");
+
+    /* Flood the queue deliberately */
+    for (int i = 0; i < 100000; i++) {
+        LOG_INFO("Big message %d", i);
+    }
+
+    log_flush();
+    log_destroy();
+    return 0;
+}
+```
+
+The callback runs in the context of the calling thread (not async-signal-safe), so avoid complex operations inside it.
+
+### 62 Per-Sink Level Filtering
+
+Different sinks can have different minimum levels:
+
+```c
+#include "log.h"
+#include "log_sink.h"
+
+int main(void) {
+    log_init(NULL);
+
+    /* All sinks inherit global level by default */
+    log_set_level(LOG_LEVEL_WARN);
+
+    /* But individual sinks can override */
+    log_sink_t *file_sink = file_sink_create("logs/full.log", 0, 0);
+    log_sink_set_level(file_sink, LOG_LEVEL_TRACE);  /* File gets everything */
+    log_add_sink(file_sink);
+
+    /* Console keeps global WARN level */
+    LOG_DEBUG("Only in file");  /* Written to file only */
+    LOG_INFO("Console and file");  /* Written to both */
+
+    file_sink->destroy(file_sink);
+    log_flush();
+    log_destroy();
+    return 0;
+}
+```
+
+Get a sink's current level with `log_sink_get_level()`.
+
+### 63 Rate Limiting
+
+Token bucket rate limiter prevents log flood attacks or runaway applications:
+
+```yaml
+log:
+  rate_limit_enable: true
+  rate_limit_max_per_sec: 1000     /* Max 1000 messages per second */
+  rate_limit_burst: 100            /* Allow burst of 100 */
+```
+
+When rate limiting is **disabled**, a lock-free fast-path bypasses mutex overhead for maximum performance. When enabled, a mutex protects the token bucket calculations. Messages above the limit are dropped; a suppression report (total dropped count) is logged the next time the limiter admits a message.
+
+### 64 Hot Reload Configuration
+
+Dynamically reload configuration without restarting the application:
+
+```c
+#include "log.h"
+
+int main(void) {
+    log_init("./config_v1.yaml");
+
+    /* Later, trigger reload */
+    if (log_reload() != 0) {
+        fprintf(stderr, "Reload failed: %s\n", log_strerror(CLOG_ERR_RELOAD));
+    }
+
+    log_destroy();
+    return 0;
+}
+```
+
+`log_reload()` shuts down the async worker (draining pending records), re-reads the YAML config, atomically rebuilds sinks, and restarts the async worker if enabled. This allows adjusting log levels, enabling/disabling sinks, or changing file paths at runtime.
+
+### 65 Fork Safety
+
+When using async mode in multi-process applications, `pthread_atfork` handlers ensure safe fork behavior:
+
+- **Pre-fork**: Lock internal mutexes to prevent deadlocks during forking
+- **Parent process**: Unlock, continue normally
+- **Child process**: Re-initialize mpsc queue condition variables and restart async worker thread
+
+Example:
+```c
+#include "log.h"
+
+int main(void) {
+    log_init("./config_async.yaml");  /* async mode enabled */
+    pid_t pid = fork();
+
+    if (pid == 0) {
+        /* Child process — auto-restarted async worker */
+        LOG_INFO("Child process continuing after fork");
+        _exit(0);
+    } else {
+        /* Parent process continues normally */
+        LOG_INFO("Parent continues logging");
+    }
+
+    log_destroy();
+    return 0;
+}
+```
+
+### 66 Signal Handling and Graceful Shutdown
 
 Install POSIX `sigaction` handlers for `SIGTERM` and `SIGINT` to flush pending logs before process exit:
 
@@ -675,132 +842,6 @@ log:
 ```
 
 The handler sets a global pending signal flag; the main loop calls `log_process_pending_signals()` to flush logs before raising the original signal for normal termination.
-
-### 63 Fork Safety
-
-When using async mode in multi-process applications, `pthread_atfork` handlers ensure safe fork behavior:
-
-- **Pre-fork**: Lock internal mutexes to prevent deadlocks during forking
-- **Parent process**: Unlock, continue normally
-- **Child process**: Re-initialize mpsc queue condition variables and restart async worker thread
-
-Example:
-```c
-#include "log.h"
-
-int main(void) {
-    log_init("./config_async.yaml");  /* async mode enabled */
-    pid_t pid = fork();
-
-    if (pid == 0) {
-        /* Child process — auto-restarted async worker */
-        LOG_CHILD("Child process continuing after fork");
-        _exit(0);
-    } else {
-        /* Parent process continues normally */
-        LOG_PARENT("Parent continues logging");
-    }
-
-    log_destroy();
-    return 0;
-}
-```
-
-### 62 Hot Reload Configuration
-
-Dynamically reload configuration without restarting the application:
-
-```c
-#include "log.h"
-
-int main(void) {
-    log_init("./config_v1.yaml");
-
-    /* Later, trigger reload */
-    if (log_reload() != 0) {
-        fprintf(stderr, "Reload failed: %s\n", log_strerror(CLOG_ERR_RELOAD));
-    }
-
-    log_destroy();
-    return 0;
-}
-```
-
-`log_reload()` shuts down the async worker (draining pending records), re-reads the YAML config, atomically rebuilds sinks, and restarts the async worker if enabled. This allows adjusting log levels, enabling/disabling sinks, or changing file paths at runtime.
-
-### 61 Rate Limiting
-
-Token bucket rate limiter prevents log flood attacks or runaway applications:
-
-```yaml
-log:
-  rate_limit_enable: true
-  rate_limit_max_per_sec: 1000     /* Max 1000 messages per second */
-  rate_limit_burst: 100            /* Allow burst of 100 */
-```
-
-When rate limiting is **disabled**, a lock-free fast-path bypasses mutex overhead for maximum performance. When enabled, a mutex protects the token bucket calculations. The first message exceeding the limit triggers a suppression notice (logged once every minute).
-
-### 60 Per-Sink Level Filtering
-
-Different sinks can have different minimum levels:
-
-```c
-#include "log.h"
-#include "log_sink.h"
-
-int main(void) {
-    log_init(NULL);
-
-    /* All sinks inherit global level by default */
-    log_set_level(WARN);
-
-    /* But individual sinks can override */
-    log_sink_t *file_sink = log_file_sink_create("logs/full.log", LOG_LEVEL_TRACE, 0, 0);
-    log_sink_set_level(file_sink, LOG_LEVEL_TRACE);  /* File gets everything */
-    log_add_sink(file_sink);
-
-    /* Console keeps global WARN level */
-    LOG_DEBUG("Only in file");  /* Written to file only */
-    LOG_INFO("Console and file");  /* Written to both */
-
-    file_sink->destroy(file_sink);
-    log_flush();
-    log_destroy();
-    return 0;
-}
-```
-
-Get a sink's current level with `log_sink_get_level()`.
-
-### 59 Async Fallback Callback
-
-When the async queue is full (producer faster than consumer), the library falls back to synchronous logging. Register a callback to be notified:
-
-```c
-#include "log.h"
-
-void async_fallback_callback(void) {
-    /* Log to stderr or another mechanism — avoid clogging! */
-    fprintf(stderr, "[clogx] async queue full, falling back to sync\n");
-}
-
-int main(void) {
-    log_set_async_fallback_cb(async_fallback_callback);
-    log_init("./config_async.yaml");
-
-    /* Flood the queue deliberately */
-    for (int i = 0; i < 100000; i++) {
-        LOG_OVERFLOW_TEST("Big message %d", i);
-    }
-
-    log_flush();
-    log_destroy();
-    return 0;
-}
-```
-
-The callback runs in the context of the calling thread (not async-signal-safe), so avoid complex operations inside it.
 
 ---
 
@@ -844,11 +885,17 @@ The callback runs in the context of the calling thread (not async-signal-safe), 
 | `log_level_t log_sink_get_level(const log_sink_t *sink)` | Get current minimum level for this sink | Level value |
 
 Sink factory functions (return `log_sink_t*` or `NULL` on failure):
-- `log_console_sink_create(bool stderr, bool color)` — Console sink
-- `log_file_sink_create(const char *path, log_level_t level, uint64_t max_size, int backups)` — File sink with rotation
-- `log_socket_sink_create(const char *host, int port)` — Plain TCP socket sink
+- `console_sink_create(bool use_color)` — Console sink (stdout)
+- `console_sink_create_stderr(bool use_color)` — Console sink (stderr)
+- `file_sink_create(const char *path, uint64_t max_size, int backups)` — File sink with rotation
+- `socket_sink_create(const char *host, int port)` — Plain TCP socket sink
 - `socket_sink_create_tls(const char *host, int port, bool use_tls, const char *ca_file, bool skip_verify)` — TLS-encrypted socket sink (requires TLS build)
 - `socket_sink_create_async(const char *host, int port, bool use_tls, const char *ca_file, bool skip_verify, size_t ring_capacity, uint32_t backoff_min_ms, uint32_t backoff_max_ms)` — Async non-blocking socket sink with ring buffer and exponential backoff
+- `syslog_sink_create(const char *ident, int facility)` — POSIX syslog sink (POSIX only)
+- `otlp_sink_create(const char *endpoint, const char *service_name)` — OpenTelemetry OTLP JSON log sink
+- `custom_sink_create(int (*write_fn)(log_sink_t *, const char *, size_t), void (*flush_fn)(log_sink_t *), void (*destroy_fn)(log_sink_t *), void *private_data)` — Custom sink from user-provided callbacks (see §8)
+
+Per-sink level filtering is applied with `log_sink_set_level()` (see §6.2), not at factory creation time.
 
 Each sink has a `destroy(log_sink_t *sink)` function — **call it after removing or reloading**.
 
@@ -933,24 +980,28 @@ typedef enum {
 
 To implement a custom sink (e.g., write to remote service, database, or embedded display):
 
-1. Define a sink structure implementing the `log_sink_t` vtable:
+1. Define a sink structure implementing the `log_sink_t` vtable (see `include/log_sink.h` for the full contract):
 ```c
-typedef struct {
-    void (*flush)(log_sink_t *sink);
+typedef struct log_sink {
+    uint32_t abi_version;            /* must equal CLOGX_PLUGIN_ABI_VERSION */
     int (*write)(log_sink_t *sink, const char *buf, size_t len);
+    void (*flush)(log_sink_t *sink);
     void (*destroy)(log_sink_t *sink);
-    log_level_t level;
+    void (*atfork_child)(log_sink_t *sink);  /* re-open fd/socket after fork() */
     void *private_data;
+    log_level_t min_level;           /* per-sink level filter */
 } log_sink_t;
 ```
 
 2. Allocate your sink data and set the function pointers.
 
-3. Call `log_add_sink(your_sink)` after `log_init()`.
+3. The easiest path is `custom_sink_create(write_fn, flush_fn, destroy_fn, private_data)`, which fills in `abi_version`, `min_level`, and a safe `atfork_child` for you. Implement `write_fn` to write exactly `len` bytes (or return -1 on error) and `flush_fn` to push buffered output. The caller retains ownership of `private_data` — free it in `destroy_fn` if necessary.
 
-4. When done, call `your_sink->destroy(your_sink)` and/or `log_remove_sink(your_sink)`.
+4. Call `log_add_sink(your_sink)` after `log_init()`.
 
-See `sinks/console_sink.c`, `sinks/file_sink.c`, and `sinks/socket_sink.c` for reference implementations.
+5. When done, call `your_sink->destroy(your_sink)` and/or `log_remove_sink(your_sink)`.
+
+See `sinks/console_sink.c`, `sinks/file_sink.c`, `sinks/socket_sink.c`, `sinks/syslog_sink.c`, and `sinks/otlp_sink.c` for reference implementations.
 
 ---
 
@@ -996,7 +1047,7 @@ cmake --build build --config Release
 | Logs not appearing in async mode | Queue is full or async worker hasn't started | Increase `queue_size`; check if async thread exists; ensure `log_flush()` is called at shutdown |
 | File rotation not working | `file_max_size` set to 0 (disabled) | Set a positive value; ensure `backups >= 1` for retention |
 | Segfault on double `log_init()` | Called without prior `log_destroy()` | Call `log_destroy()` between initializations; use reentrancy protection |
-| Format string warnings | Using unsupported format tokens | Refer to §5 for supported tokens: `%time`, `%level`, `%msg`, `%file`, `%line`, `%func`, `%module`, `%tag`, `%thread`, `%pid` |
+| Format string warnings | Using unsupported format tokens | Refer to §4.5 for supported tokens: `%time`, `%level`, `%msg`, `%file`, `%line`, `%func`, `%module`, `%tag`, `%thread`, `%pid`, `%trace_id`, `%span_id`, `%newline` |
 | `make test` fails | Missing dependencies (libyaml, pthread) | Install `libyaml-dev` or equivalent; ensure pkg-config finds `yaml-0.1` |
 | Valgrind reports leaks in tests | Some tests intentionally leak to simulate errors | Use `--leak-check=full` and filter expected leaks in Valgrind suppressions |
 
