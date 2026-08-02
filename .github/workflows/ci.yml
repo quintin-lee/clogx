@@ -102,6 +102,19 @@ jobs:
             valgrind --error-exitcode=1 --leak-check=full --track-origins=yes "./$t"; \
           done
 
+  shell-syntax:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v7
+
+      - name: Check shell script syntax
+        run: |
+          set -e
+          for f in scripts/*.sh; do
+            bash -n "$f"
+          done
+
   version-consistency:
     runs-on: ubuntu-latest
     steps:
