@@ -241,6 +241,13 @@ if(CLOG_BUILD_TESTS)
         target_include_directories(${test_name} PRIVATE
             $<BUILD_INTERFACE:${CMAKE_CURRENT_SOURCE_DIR}/core>)
         target_compile_definitions(${test_name} PRIVATE _GNU_SOURCE)
+        # Tests validate behavior with assert() side effects (e.g.
+        # assert(socket_ring_put(...) == 0)); Release builds define NDEBUG,
+        # which strips the expressions entirely and breaks the tests. Keep
+        # asserts alive for all build types.
+        target_compile_options(${test_name} PRIVATE
+            $<$<C_COMPILER_ID:GNU,Clang,AppleClang>:-UNDEBUG>
+            $<$<C_COMPILER_ID:MSVC>:/UNDEBUG>)
         set_target_properties(${test_name} PROPERTIES
             RUNTIME_OUTPUT_DIRECTORY ${CMAKE_BINARY_DIR}/tests
             RUNTIME_OUTPUT_DIRECTORY_DEBUG ${CMAKE_BINARY_DIR}/tests
