@@ -69,7 +69,7 @@ int main(void)
         fprintf(stderr, "child: flushed\n");
         log_destroy();
         fprintf(stderr, "child: destroyed\n");
-        _exit(0);
+        exit(0);
     } else {
         /* Parent process */
         int status = 0;

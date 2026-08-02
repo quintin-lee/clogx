@@ -4,12 +4,15 @@
  */
 
 #include "clog_port.h"
+#include <assert.h>
 #include <errno.h>
 #include <signal.h>
 #include <stdio.h>
 #include <stdlib.h>
 #include <string.h>
 #ifndef _WIN32
+#include <fcntl.h>
+#include <sys/resource.h>
 #include <sys/wait.h>
 #endif
 
@@ -28,6 +31,13 @@ static int  g_fallback_count = 0;
 static void test_fallback_cb(void)
 {
     g_fallback_count++;
+}
+
+static volatile sig_atomic_t g_caught_sig = 0;
+
+static void test_sig_catcher(int sig)
+{
+    g_caught_sig = sig;
 }
 
 static int dummy_write(log_sink_t *sink, const char *buf, size_t len)
@@ -53,6 +63,15 @@ static void dummy_destroy(log_sink_t *sink)
     (void)sink;
 }
 
+static int slow_write_fn(log_sink_t *sink, const char *buf, size_t len)
+{
+    (void)sink;
+    (void)buf;
+    (void)len;
+    clog_sleep_ms(10);
+    return 0;
+}
+
 static void write_temp_file(const char *path, const char *content)
 {
     FILE *f = fopen(path, "w");
@@ -65,6 +84,9 @@ static void write_temp_file(const char *path, const char *content)
 int main(void)
 {
     printf("=== Starting test_coverage_deep ===\n");
+
+    /* KV write before any log_init -> uninitialized logger early return */
+    LOG_INFO_KV("kv-before-init", CLOG_KV_STR("k", "v"));
 
     /* -------------------------------------------------------------
      * 1. ERROR STRINGS & MODULE & SINK API EDGE CASES
@@ -455,6 +477,12 @@ int main(void)
     log_init("build/non_existent_file_999.yaml");
     log_destroy();
 
+    log_get_level();
+    log_config_is_async();
+    log_config_color_enabled();
+    log_config_init(NULL);
+    log_destroy();
+
     write_temp_file("build/cfg_max_size_units.yaml",
                     "log:\n"
                     "  max_size: 5KB\n"
@@ -481,10 +509,77 @@ int main(void)
                     "  port: -1\n"
                     "  backups: -10\n"
                     "  queue_size: -100\n"
+                    "  prometheus_port: 0\n"
+                    "  prometheus_port: 99999\n"
                     "  level: UNKNOWN_LEVEL\n"
                     "  unknown_key_foobar: 12345\n");
     log_init("build/cfg_invalid_branches.yaml");
     log_destroy();
+
+    write_temp_file("build/cfg_socket_async.yaml",
+                    "log:\n"
+                    "  socket_async: true\n"
+                    "  socket_ring_capacity: 8192\n"
+                    "  socket_ring_capacity: abc\n"
+                    "  socket_backoff_min_ms: 1000\n"
+                    "  socket_backoff_min_ms: \"\"\n"
+                    "  socket_backoff_max_ms: 60000\n"
+                    "  socket_backoff_max_ms: 99999999999999999999999\n"
+                    "  socket_connect_timeout_ms: 1000\n"
+                    "  socket_connect_timeout_ms: xyz\n");
+    log_init("build/cfg_socket_async.yaml");
+    log_destroy();
+
+    write_temp_file("build/cfg_fatal_nested.yaml",
+                    "level: FATAL\n"
+                    "nested_section:\n"
+                    "  a: 1\n");
+    log_init("build/cfg_fatal_nested.yaml");
+    log_destroy();
+
+    write_temp_file("build/cfg_multidoc.yaml",
+                    "log: INFO\n"
+                    "---\n"
+                    "async: true\n");
+    log_init("build/cfg_multidoc.yaml");
+    log_destroy();
+
+    log_config_t plugin_cfg = {0};
+    snprintf(
+        plugin_cfg.plugin_so_paths[0], sizeof(plugin_cfg.plugin_so_paths[0]), "plugin_dummy.so");
+    snprintf(plugin_cfg.plugin_params_json[0], sizeof(plugin_cfg.plugin_params_json[0]), "{}");
+    plugin_cfg.plugin_count = 1;
+    log_config_set(&plugin_cfg);
+    log_config_t zero_cfg = {0};
+    log_config_set(&zero_cfg);
+
+#ifndef _WIN32
+    /* Exhaust fds so parse_config_file's fopen fails (EMFILE path) */
+    write_temp_file("build/cfg_emfile.yaml", "log:\n  level: DEBUG\n");
+    struct rlimit old_nofile;
+    if (getrlimit(RLIMIT_NOFILE, &old_nofile) == 0) {
+        struct rlimit low_nofile;
+        low_nofile.rlim_cur = 64;
+        low_nofile.rlim_max = old_nofile.rlim_max;
+        if (setrlimit(RLIMIT_NOFILE, &low_nofile) == 0) {
+            int emfile_fds[64];
+            int emfile_n = 0;
+            while (emfile_n < 64) {
+                int fd = open("/dev/null", O_RDONLY);
+                if (fd < 0) {
+                    break;
+                }
+                emfile_fds[emfile_n++] = fd;
+            }
+            log_init("build/cfg_emfile.yaml");
+            for (int i = 0; i < emfile_n; i++) {
+                close(emfile_fds[i]);
+            }
+            setrlimit(RLIMIT_NOFILE, &old_nofile);
+        }
+    }
+    log_destroy();
+#endif
 
     write_temp_file("build/cfg_seq.yaml", "- item1\n- item2\n");
     log_init("build/cfg_seq.yaml");
@@ -620,7 +715,117 @@ int main(void)
         }
     }
 
+    assert(log_init(NULL) == CLOG_OK);
+
+    log_set_level(LOG_LEVEL_WARN);
+    LOG_INFO_KV("kv-level-filtered", CLOG_KV_STR("k", "v"));
+    log_set_level(LOG_LEVEL_TRACE);
+
+    signal(SIGUSR1, test_sig_catcher);
+    log_install_signal_handlers();
+    log_signal_handler(SIGUSR1);
+    LOG_INFO_KV("kv-signal-armed", CLOG_KV_STR("k", "v"));
+    LOG_INFO_KV("kv-signal-fired", CLOG_KV_STR("k", "v"));
+    assert(g_caught_sig == SIGUSR1);
+    log_restore_signal_handlers();
+    signal(SIGUSR1, SIG_DFL);
+
     log_flush();
+    log_destroy();
+
+    write_temp_file("build/cfg_reload_corrupt.yaml",
+                    "log:\n  level: TRACE\n  async: false\n  console_enable: true\n");
+    assert(log_init("build/cfg_reload_corrupt.yaml") == CLOG_OK);
+    write_temp_file("build/cfg_reload_corrupt.yaml", "not: [valid yaml\n");
+    assert(log_reload() == CLOG_ERR_CONFIG_OPEN);
+    write_temp_file("build/cfg_reload_corrupt.yaml",
+                    "log:\n  level: TRACE\n  async: false\n  console_enable: true\n");
+    assert(log_reload() == CLOG_OK);
+    log_destroy();
+
+    logger_t *lr = logger_create("build/cfg_reload_corrupt.yaml");
+    assert(lr != NULL);
+    write_temp_file("build/cfg_reload_corrupt.yaml", "not: [valid yaml\n");
+    assert(logger_create("build/cfg_reload_corrupt.yaml") == NULL);
+    assert(logger_reload(lr) == CLOG_ERR_CONFIG_OPEN);
+    write_temp_file("build/cfg_reload_corrupt.yaml",
+                    "log:\n  level: TRACE\n  async: false\n  console_enable: true\n");
+    assert(logger_reload(lr) == CLOG_OK);
+    write_temp_file("build/cfg_reload_corrupt.yaml",
+                    "log:\n  level: TRACE\n  async: false\n"
+                    "  console_enable: false\n  file_enable: false\n"
+                    "  socket_enable: false\n  otlp_enable: false\n");
+    assert(logger_reload(lr) == CLOG_ERR_NO_SINKS);
+    logger_destroy(lr);
+
+    log_config_t zero_sink_cfg = {0};
+    zero_sink_cfg.level        = LOG_LEVEL_TRACE;
+    zero_sink_cfg.queue_size   = 64;
+    assert(logger_create_from_config(&zero_sink_cfg) == NULL);
+
+    log_config_t rl_cfg           = {0};
+    rl_cfg.level                  = LOG_LEVEL_TRACE;
+    rl_cfg.async                  = false;
+    rl_cfg.console_enable         = true;
+    rl_cfg.console_stderr         = true;
+    rl_cfg.rate_limit_enable      = true;
+    rl_cfg.rate_limit_max_per_sec = 1;
+    rl_cfg.rate_limit_burst       = 1;
+    logger_t *rl                  = logger_create_from_config(&rl_cfg);
+    assert(rl != NULL);
+    LOGGER_INFO_KV(rl, "rl-first", CLOG_KV_STR("k", "v"));
+    LOGGER_INFO_KV(rl, "rl-suppressed", CLOG_KV_STR("k", "v"));
+    clog_sleep_ms(1100);
+    LOGGER_INFO_KV(rl, "rl-after-refill", CLOG_KV_STR("k", "v"));
+    LOGGER_INFO(rl, "rl-plain-suppressed");
+    clog_sleep_ms(1100);
+    LOGGER_INFO(rl, "rl-plain-after-refill");
+    logger_destroy(rl);
+
+    log_config_t rl_a_cfg           = {0};
+    rl_a_cfg.level                  = LOG_LEVEL_TRACE;
+    rl_a_cfg.async                  = true;
+    rl_a_cfg.queue_size             = 16;
+    rl_a_cfg.console_enable         = true;
+    rl_a_cfg.console_stderr         = true;
+    rl_a_cfg.rate_limit_enable      = true;
+    rl_a_cfg.rate_limit_max_per_sec = 1000;
+    rl_a_cfg.rate_limit_burst       = 1;
+    logger_t *rl_a                  = logger_create_from_config(&rl_a_cfg);
+    assert(rl_a != NULL);
+    log_sink_t *slow = custom_sink_create(slow_write_fn, dummy_flush, dummy_destroy, NULL);
+    assert(slow != NULL);
+    assert(logger_add_sink(rl_a, slow) == CLOG_OK);
+    for (int i = 0; i < 24; i++) {
+        LOGGER_INFO(rl_a, "rl-async-flood-v %d", i);
+        LOGGER_INFO_KV(rl_a, "rl-async-flood", CLOG_KV_STR("k", "v"));
+        clog_sleep_ms(2);
+    }
+    logger_destroy(rl_a);
+
+    /* Singleton: 1-token burst fills the small async queue; every later
+     * allowed write then hits the queue-full fallback, and the suppression
+     * report (supp_rec) also fails while the queue is full. */
+    write_temp_file("build/config_queue16.yaml",
+                    "log:\n  level: TRACE\n  async: true\n  queue_size: 16\n"
+                    "  rate_limit_enable: true\n  rate_limit_max_per_sec: 1000\n"
+                    "  rate_limit_burst: 1\n  console_enable: true\n"
+                    "  console_stderr: true\n  file_enable: false\n  socket_enable: false\n");
+    assert(log_init("build/config_queue16.yaml") == CLOG_OK);
+    log_set_async_fallback_cb(test_fallback_cb);
+    log_sink_t *slow2 = custom_sink_create(slow_write_fn, dummy_flush, dummy_destroy, NULL);
+    assert(slow2 != NULL);
+    assert(log_add_sink(slow2) == CLOG_OK);
+    for (int i = 0; i < 120; i++) {
+        if (i % 2 == 0) {
+            LOG_INFO_KV("queue16-flood-kv", CLOG_KV_STR("k", "v"));
+            LOG_INFO("queue16-flood %d", i);
+        } else {
+            LOG_INFO("queue16-flood %d", i);
+            LOG_INFO_KV("queue16-flood-kv", CLOG_KV_STR("k", "v"));
+        }
+        clog_sleep_ms(1);
+    }
     log_destroy();
 
     printf("=== test_coverage_deep PASSED ===\n");

@@ -100,6 +100,96 @@ static void test_trace_context_hex_short(void)
     printf("test_trace_context_hex_short passed\n");
 }
 
+static void test_trace_context_null(void)
+{
+    clog_clear_trace_context();
+
+    clog_set_trace_context(NULL, NULL);
+
+    uint8_t tid[16];
+    uint8_t sid[8];
+    clog_get_trace_context(tid, sid);
+    for (int i = 0; i < 16; i++) {
+        assert(tid[i] == 0);
+    }
+    for (int i = 0; i < 8; i++) {
+        assert(sid[i] == 0);
+    }
+
+    printf("test_trace_context_null passed\n");
+}
+
+static void test_trace_context_hex_null_args(void)
+{
+    clog_clear_trace_context();
+
+    int ret = clog_set_trace_context_hex(NULL, "00f067aa0ba902b7");
+    assert(ret == CLOG_OK);
+
+    ret = clog_set_trace_context_hex("4bf92f3577b34da6a3ce929d0e0e4736", NULL);
+    assert(ret == CLOG_OK);
+
+    uint8_t tid[16];
+    uint8_t sid[8];
+    clog_get_trace_context(tid, sid);
+    for (int i = 0; i < 16; i++) {
+        assert(tid[i] == 0);
+    }
+    for (int i = 0; i < 8; i++) {
+        assert(sid[i] == 0);
+    }
+
+    clog_clear_trace_context();
+    printf("test_trace_context_hex_null_args passed\n");
+}
+
+static void test_trace_context_hex_invalid_char(void)
+{
+    clog_clear_trace_context();
+
+    const char *bad_tid = "x4bf92f3577b34da6a3ce929d0e0e4736";
+    int         ret     = clog_set_trace_context_hex(bad_tid, "00f067aa0ba902b7");
+    assert(ret == CLOG_ERR_INVALID_ARG);
+
+    const char *bad_sid = "00f067aa0ba902bx";
+    ret                 = clog_set_trace_context_hex("4bf92f3577b34da6a3ce929d0e0e4736", bad_sid);
+    assert(ret == CLOG_ERR_INVALID_ARG);
+
+    clog_clear_trace_context();
+    printf("test_trace_context_hex_invalid_char passed\n");
+}
+
+static void test_trace_propagation(void)
+{
+    uint8_t tid[16] = {0x4b,
+                       0xf9,
+                       0x2f,
+                       0x35,
+                       0x77,
+                       0xb3,
+                       0x4d,
+                       0xa6,
+                       0xa3,
+                       0xce,
+                       0x92,
+                       0x9d,
+                       0x0e,
+                       0x0e,
+                       0x47,
+                       0x36};
+    uint8_t sid[8]  = {0x00, 0xf0, 0x67, 0xaa, 0x0b, 0xa9, 0x02, 0xb7};
+
+    assert(log_init(NULL) == CLOG_OK);
+
+    clog_set_trace_context(tid, sid);
+    LOG_INFO("trace propagation test");
+    LOG_INFO_KV("trace kv test", CLOG_KV_STR("k", "v"));
+    clog_clear_trace_context();
+
+    log_destroy();
+    printf("test_trace_propagation passed\n");
+}
+
 static void test_pattern_trace_tokens(void)
 {
     clog_set_trace_context_hex("4bf92f3577b34da6a3ce929d0e0e4736", "00f067aa0ba902b7");
@@ -500,6 +590,10 @@ int main(void)
     test_otlp_sink_empty_service_name();
     test_traceparent_uppercase_hex();
     test_traceparent_invalid_hex();
+    test_trace_context_null();
+    test_trace_context_hex_null_args();
+    test_trace_context_hex_invalid_char();
+    test_trace_propagation();
     printf("all otel tests passed!\n");
     return 0;
 }

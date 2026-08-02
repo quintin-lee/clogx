@@ -277,7 +277,36 @@ static void test_config_plugins_no_config(void)
 }
 
 /* ------------------------------------------------------------------ */
-/*  Test 14: Plugin via top-level (backward compat) YAML              */
+/*  Test 14: Plugin entry with non-path key, empty config, escapes    */
+/* ------------------------------------------------------------------ */
+static void test_config_plugin_escapes_and_empty(void)
+{
+    fprintf(stderr, "=== %s ===\n", __func__);
+
+    char cfg[1024];
+    snprintf(cfg,
+             sizeof(cfg),
+             "log:\n"
+             "  level: TRACE\n"
+             "  console_enable: false\n"
+             "  format: \"%%msg\"\n"
+             "  plugins:\n"
+             "    - path: %s\n"
+             "      name: dummy\n"
+             "      config: {}\n"
+             "    - path: %s\n"
+             "      config:\n"
+             "        topic: 'a\\b'\n"
+             "        quote: 'x\"y'\n",
+             TEST_PLUGIN_SO,
+             TEST_PLUGIN_SO);
+
+    assert(test_log_init_basic(cfg) == 0);
+    fprintf(stderr, "PASS\n");
+}
+
+/* ------------------------------------------------------------------ */
+/*  Test 15: Plugin via top-level (backward compat) YAML              */
 /* ------------------------------------------------------------------ */
 static void test_config_top_level_plugins(void)
 {
@@ -364,6 +393,7 @@ int main(void)
     test_add_sink_via_api();
     test_config_plugins_section();
     test_config_plugins_no_config();
+    test_config_plugin_escapes_and_empty();
     test_config_top_level_plugins();
     test_reload_with_plugins();
     test_mixed_sinks();
