@@ -4,6 +4,8 @@ All notable changes to this project will be documented in this file.
 
 ## [Unreleased]
 
+## [0.2.1] - 2026-08-02
+
 ### Added
 - Native Structured Key-Value (KV) Logging API (`LOG_INFO_KV`, `LOGGER_INFO_KV`, `log_write_kv`, `logger_write_kv`) with typed attribute constructors (`CLOG_KV_INT`, `CLOG_KV_UINT`, `CLOG_KV_FLOAT`, `CLOG_KV_STR`, `CLOG_KV_BOOL`) for high-efficiency structured JSON and text log attribute serialization
 - Doxygen API automated documentation generation configuration (`Doxyfile`) and GitHub Actions workflow (`.github/workflows/deploy-docs.yml`) for automatic deployment to GitHub Pages
@@ -188,6 +190,7 @@ All notable changes to this project will be documented in this file.
 - 17 test cases covering lifecycle, reload, rotation, config validation,
   async fallback, and error paths
 
-[Unreleased]: https://github.com/quintin-lee/clogx/compare/v0.2.0...HEAD
+[Unreleased]: https://github.com/quintin-lee/clogx/compare/v0.2.1...HEAD
+[0.2.1]: https://github.com/quintin-lee/clogx/releases/tag/v0.2.1
 [0.2.0]: https://github.com/quintin-lee/clogx/releases/tag/v0.2.0
 [0.1.0]: https://github.com/quintin-lee/clogx/releases/tag/v0.1.0

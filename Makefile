@@ -87,7 +87,7 @@ BENCHMARK_BINS = $(patsubst benchmarks/%.c,$(BUILD_DIR)/%,$(BENCHMARK_SOURCES))
 ASAN_CFLAGS = -std=c99 -Wall -Wextra -Wconversion -Iinclude -Icore -O1 -g -D_GNU_SOURCE -fPIC -fvisibility=hidden -fsanitize=address -fno-omit-frame-pointer -fno-optimize-sibling-calls
 UBSAN_CFLAGS = -std=c99 -Wall -Wextra -Wconversion -Iinclude -Icore -O1 -g -D_GNU_SOURCE -fPIC -fvisibility=hidden -fsanitize=undefined
 
-VERSION := $(shell if [ -f VERSION ]; then head -n 1 VERSION; else echo "0.2.0"; fi)
+VERSION := $(shell if [ -f VERSION ]; then head -n 1 VERSION; else echo "0.2.1"; fi)
 VERSION_MAJOR := $(shell echo $(VERSION) | cut -d. -f1)
 VERSION_MINOR := $(shell echo $(VERSION) | cut -d. -f2)
 VERSION_PATCH := $(shell echo $(VERSION) | cut -d. -f3)
