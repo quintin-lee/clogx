@@ -21,6 +21,19 @@ set -euo pipefail
 ROOT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
 cd "$ROOT_DIR"
 
+RELEASE_FILES="VERSION include/clogx_version.h vcpkg.json Makefile CHANGELOG.md"
+
+on_error() {
+    local tag="${TAG:-}"
+    echo "error: release aborted partway; version files may have been modified." >&2
+    echo "inspect with 'git status'. Roll back with:" >&2
+    echo "  git checkout -- $RELEASE_FILES" >&2
+    if [ -n "$tag" ]; then
+        echo "  git tag -d $tag" >&2
+    fi
+}
+trap 'on_error' ERR
+
 DRY_RUN=0
 PUSH=0
 BUMP=""
