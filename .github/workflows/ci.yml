@@ -102,6 +102,15 @@ jobs:
             valgrind --error-exitcode=1 --leak-check=full --track-origins=yes "./$t"; \
           done
 
+  version-consistency:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v7
+
+      - name: Verify version references match VERSION
+        run: ./scripts/check_version_consistency.sh
+
   clang-tidy:
     runs-on: ubuntu-latest
     steps:
