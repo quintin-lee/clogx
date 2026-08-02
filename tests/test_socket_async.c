@@ -126,6 +126,10 @@ static void test_ring_empty_batch(void)
     socket_ring_close(ring);
     int n = socket_ring_get_batch(ring, lines, lengths, 4);
     assert(n == -1);
+    /* closed empty ring: repeated get_batch must return immediately, not
+     * block on the consumed wake-up post (regression: lost-wakeup deadlock) */
+    n = socket_ring_get_batch(ring, lines, lengths, 4);
+    assert(n == -1);
     socket_ring_destroy(ring);
     printf("  test_ring_empty_batch PASSED\n");
 }

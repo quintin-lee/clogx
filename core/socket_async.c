@@ -187,58 +187,78 @@ int socket_ring_get_batch(socket_ring_buffer_t *ring,
      * Block until at least one item is available or the ring is closed.
      * The semaphore is posted by producers after each put, and by
      * socket_ring_close() / socket_ring_signal() to wake blocked consumers.
+     *
+     * A closed ring must never block: the closed flag is checked before
+     * waiting (fast path for callers that come back after close) and again
+     * after waking, so a close racing with the wait still terminates through
+     * the wake-up post. Without the pre-wait check, a second get_batch on a
+     * closed empty ring would consume the close's post and then block
+     * forever (semaphore count already zero).
      */
-    clog_sem_wait(&ring->items_sem);
-
-    /* Load the latest head (producer writes) and local tail (consumer reads). */
-    size_t head = clog_atomic_load_sz(&ring->head);
-    size_t tail = clog_atomic_load_sz(&ring->tail);
-
-    size_t available = head - tail;
-
-    if (available == 0) {
+    for (;;) {
         /*
-         * Woken by close/signal with no actual items to read.
-         * If closed, signal shutdown.
+         * Closed AND empty → terminate immediately. This keeps repeated
+         * calls after close from blocking on the consumed wake-up post
+         * (lost-wakeup deadlock). Closed-but-nonempty still returns the
+         * remaining items below (the semaphore count can never be zero while
+         * items exist), preserving drain-on-close semantics.
          */
-        if (clog_atomic_load_int(&ring->closed)) {
+        if (clog_atomic_load_int(&ring->closed) &&
+            clog_atomic_load_sz(&ring->head) == clog_atomic_load_sz(&ring->tail)) {
             return -1;
         }
-        return 0;
-    }
+        clog_sem_wait(&ring->items_sem);
 
-    /*
-     * Only read slots whose producer has published them (seq == pos + 1).
-     * A producer that won the head CAS but was preempted before writing has
-     * committed — it will finish and post items_sem, so a short yield and a
-     * retry from the caller is safe.
-     */
-    size_t n = 0;
-    while (n < available && n < max_lines) {
-        size_t              pos  = tail + n;
-        socket_ring_slot_t *slot = &ring->slots[pos & ring->mask];
-        if (clog_atomic_load_u64(&slot->seq) != (uint64_t)pos + 1) {
-            break;
+        /* Load the latest head (producer writes) and local tail (consumer reads). */
+        size_t head = clog_atomic_load_sz(&ring->head);
+        size_t tail = clog_atomic_load_sz(&ring->tail);
+
+        size_t available = head - tail;
+
+        if (available == 0) {
+            /*
+             * Woken by close/signal with no actual items to read.
+             * If closed, signal shutdown; otherwise keep waiting.
+             */
+            if (clog_atomic_load_int(&ring->closed)) {
+                return -1;
+            }
+            continue;
         }
-        lines[n]   = slot->line;
-        lengths[n] = slot->len;
-        slot->line = NULL;
-        slot->len  = 0;
-        n++;
+
+        /*
+         * Only read slots whose producer has published them (seq == pos + 1).
+         * A producer that won the head CAS but was preempted before writing has
+         * committed — it will finish and post items_sem, so a short yield and a
+         * retry from the caller is safe.
+         */
+        size_t n = 0;
+        while (n < available && n < max_lines) {
+            size_t              pos  = tail + n;
+            socket_ring_slot_t *slot = &ring->slots[pos & ring->mask];
+            if (clog_atomic_load_u64(&slot->seq) != (uint64_t)pos + 1) {
+                break;
+            }
+            lines[n]   = slot->line;
+            lengths[n] = slot->len;
+            slot->line = NULL;
+            slot->len  = 0;
+            n++;
+        }
+
+        if (n == 0) {
+            /* Claimed but unpublished slots — yield once and report empty; the
+             * committed producer's post will wake the next get_batch. */
+            clog_sleep_ms(0);
+            continue;
+        }
+
+        /* Advance the consumer read position. */
+        clog_atomic_store_sz(&ring->tail, tail + n);
+        clog_atomic_fetch_sub_sz(&ring->count, n);
+
+        return (int)n;
     }
-
-    if (n == 0) {
-        /* Claimed but unpublished slots — yield once and report empty; the
-         * committed producer's post will wake the next get_batch. */
-        clog_sleep_ms(0);
-        return 0;
-    }
-
-    /* Advance the consumer read position. */
-    clog_atomic_store_sz(&ring->tail, tail + n);
-    clog_atomic_fetch_sub_sz(&ring->count, n);
-
-    return (int)n;
 }
 
 void socket_ring_close(socket_ring_buffer_t *ring)
