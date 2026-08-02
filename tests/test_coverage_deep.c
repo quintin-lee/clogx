@@ -33,12 +33,14 @@ static void test_fallback_cb(void)
     g_fallback_count++;
 }
 
+#ifndef _WIN32
 static volatile sig_atomic_t g_caught_sig = 0;
 
 static void test_sig_catcher(int sig)
 {
     g_caught_sig = sig;
 }
+#endif
 
 static int dummy_write(log_sink_t *sink, const char *buf, size_t len)
 {
@@ -721,6 +723,7 @@ int main(void)
     LOG_INFO_KV("kv-level-filtered", CLOG_KV_STR("k", "v"));
     log_set_level(LOG_LEVEL_TRACE);
 
+#ifndef _WIN32
     signal(SIGUSR1, test_sig_catcher);
     log_install_signal_handlers();
     log_signal_handler(SIGUSR1);
@@ -729,6 +732,7 @@ int main(void)
     assert(g_caught_sig == SIGUSR1);
     log_restore_signal_handlers();
     signal(SIGUSR1, SIG_DFL);
+#endif
 
     log_flush();
     log_destroy();

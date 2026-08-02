@@ -35,6 +35,7 @@ All notable changes to this project will be documented in this file.
 - `make test` idempotency: `logs/` output is cleaned before each test run so re-running the suite never fails on stale rotation backups
 - Compiler warning cleanup in `core/fast_ascii.h` LUTs and TLS test builds (`-Wall -Wextra -Wconversion` clean)
 - Trace-context coverage: tests now exercise async queue-full fallback, rate-limit suppression reporting, and `%trace_id`/`%span_id` formatting paths (branch coverage 97.8%)
+- Windows MSVC build failure in `tests/test_coverage_deep.c`: the signal-handler coverage segment used POSIX-only `SIGUSR1` (undeclared under MSVC, C2065). The segment and its `g_caught_sig`/`test_sig_catcher` helpers are now guarded with `#ifndef _WIN32`, matching the file's existing POSIX-only sections. Also casts `send`/`recv` length arguments to `clog_sock_size_t` in `tests/test_prometheus.c` to silence MSVC C4267 `size_t`→`int` warnings
 
 ### Deprecated
 - Old `log_console_sink_create(bool stderr, bool color)` name referenced in `docs/user_manual.md` updated to current `console_sink_create` / `console_sink_create_stderr` API
