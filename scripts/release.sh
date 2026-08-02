@@ -73,17 +73,18 @@ if [ -n "$dirty" ]; then
 fi
 
 # Refuse to tag behind the remote: a pushed release tag must be an ancestor
-# of origin's tip so the tag points at a commit reachable upstream.
+# of origin's tip so the tag points at a commit reachable upstream. Fetch
+# first so a stale local copy of origin/master cannot mask an outdated branch.
 if [ "$DRY_RUN" = 0 ]; then
-    if ! git rev-parse --verify -q refs/remotes/origin/master >/dev/null; then
-        echo "error: no origin/master tracking ref; fetch first" >&2
+    if ! git fetch -q origin master 2>/dev/null; then
+        echo "error: 'git fetch origin master' failed (check network or 'git remote -v')" >&2
         exit 1
     fi
     local_head="$(git rev-parse HEAD)"
     remote_head="$(git rev-parse refs/remotes/origin/master)"
     if [ "$local_head" != "$remote_head" ]; then
         echo "error: local HEAD ($(git rev-parse --short "$local_head")) is not origin/master ($(git rev-parse --short "$remote_head"))" >&2
-        echo "run 'git fetch && git rebase origin/master' (or --dry-run to preview)" >&2
+        echo "run 'git rebase origin/master' (or --dry-run to preview)" >&2
         exit 1
     fi
 fi
