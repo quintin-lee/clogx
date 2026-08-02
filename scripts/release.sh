@@ -47,6 +47,34 @@ if [ ! -f VERSION ]; then
     exit 1
 fi
 
+# --- pre-flight checks ------------------------------------------------------
+
+# Only the five version files may be dirty; refuse to mix release commits
+# with unrelated in-progress work.
+dirty="$(git status --porcelain | grep -v -E '^(M| M) (VERSION|include/clogx_version\.h|vcpkg\.json|Makefile|CHANGELOG\.md)$' || true)"
+if [ -n "$dirty" ]; then
+    echo "error: working tree has changes outside the version files:" >&2
+    echo "$dirty" >&2
+    echo "commit or stash them first, or run with --dry-run to preview" >&2
+    exit 1
+fi
+
+# Refuse to tag behind the remote: a pushed release tag must be an ancestor
+# of origin's tip so the tag points at a commit reachable upstream.
+if [ "$DRY_RUN" = 0 ]; then
+    if ! git rev-parse --verify -q refs/remotes/origin/master >/dev/null; then
+        echo "error: no origin/master tracking ref; fetch first" >&2
+        exit 1
+    fi
+    local_head="$(git rev-parse HEAD)"
+    remote_head="$(git rev-parse refs/remotes/origin/master)"
+    if [ "$local_head" != "$remote_head" ]; then
+        echo "error: local HEAD ($(git rev-parse --short "$local_head")) is not origin/master ($(git rev-parse --short "$remote_head"))" >&2
+        echo "run 'git fetch && git rebase origin/master' (or --dry-run to preview)" >&2
+        exit 1
+    fi
+fi
+
 CURRENT="$(head -n 1 VERSION | tr -d '[:space:]')"
 if [[ ! "$CURRENT" =~ ^[0-9]+\.[0-9]+\.[0-9]+$ ]]; then
     echo "error: VERSION does not look like semver: '$CURRENT'" >&2
