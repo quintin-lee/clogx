@@ -4,6 +4,14 @@ All notable changes to this project will be documented in this file.
 
 ## [Unreleased]
 
+### Added
+- `scripts/check_version_consistency.sh` version-reference consistency checker, wired into CI to verify `VERSION`, `include/clogx_version.h`, `vcpkg.json`, the Makefile fallback, and the `CHANGELOG.md` heading stay in sync
+- CI shell-syntax check job (`bash -n`) for `scripts/*.sh`
+
+### Changed
+- `scripts/release.sh` pre-flight safety checks: refuses to release from a dirty worktree or when local HEAD diverges from `origin/master` (fetching the remote first), and prints rollback hints when a run aborts partway
+- Documented the release workflow (bump rules, safety checks, manual GitHub Release creation) in `docs/CONTRIBUTING.md`
+
 ## [0.2.1] - 2026-08-02
 
 ### Added
