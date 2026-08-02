@@ -89,3 +89,27 @@ Semantic versioning is followed: `MAJOR.MINOR.PATCH`.
 - `PATCH` bump: backward-compatible bug fixes
 
 The canonical project version lives in the `VERSION` file at the repository root. Both Makefile (`make all`) and CMake (`cmake --build`) auto-generate `include/clogx_version.h` from it. Do not hard-code version strings in source or build files.
+
+## Releases
+
+Bump the version and tag a release with `scripts/release.sh`:
+
+```bash
+./scripts/release.sh [--dry-run] [--push] [patch|minor|major|X.Y.Z]
+```
+
+The script keeps every version reference in sync (`VERSION`, `include/clogx_version.h`, `vcpkg.json`, the Makefile fallback, and the `CHANGELOG.md` heading), extracts the new CHANGELOG section as the annotated tag message, and with `--push` pushes both the commit and the tag. Without an explicit bump it auto-selects from the commit history: BREAKING CHANGE → major, `feat` → minor, else patch.
+
+Safety checks built into the script:
+
+- Refuses to run when the working tree has changes outside the five version files (so release commits never mix with unrelated work).
+- Refuses to run when local HEAD is not equal to `origin/master` — it fetches first, so a stale local copy of the remote cannot mask an outdated branch.
+- On an aborted run it prints rollback hints for the version files and the tag.
+
+The GitHub Release itself is not created by the script — create it manually from the tag:
+
+```bash
+gh release create vX.Y.Z --generate-notes
+```
+
+CI enforces version consistency on every push/PR via `scripts/check_version_consistency.sh`.
