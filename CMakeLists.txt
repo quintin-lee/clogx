@@ -147,11 +147,23 @@ target_include_directories(clogx
         $<INSTALL_INTERFACE:include>
 )
 
+# SOVERSION bumps ONLY on ABI-breaking changes; additive changes are carried
+# by symbol versioning (clogx.map). Do not derive from PROJECT_VERSION.
 set_target_properties(clogx PROPERTIES
     OUTPUT_NAME clogx
     VERSION ${PROJECT_VERSION}
     SOVERSION 0
 )
+
+if(CLOG_BUILD_SHARED)
+    if(APPLE)
+        target_link_options(clogx PRIVATE
+            "-Wl,-exported_symbols_list,${CMAKE_CURRENT_SOURCE_DIR}/clogx.exports")
+    else()
+        target_link_options(clogx PRIVATE
+            "-Wl,--version-script,${CMAKE_CURRENT_SOURCE_DIR}/clogx.map")
+    endif()
+endif()
 
 target_link_libraries(clogx PUBLIC Threads::Threads yaml)
 if(WIN32)
