@@ -80,6 +80,23 @@ jobs:
           make clean
           make test CC=clang CFLAGS='-std=c99 -Wall -Wextra -Iinclude -O2 -D_GNU_SOURCE -fsanitize=address -fno-omit-frame-pointer'
 
+  tsan:
+    runs-on: ${{ matrix.os }}
+    strategy:
+      fail-fast: false
+      matrix:
+        os: [ubuntu-latest, macos-latest]
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v7
+
+      - name: Install libyaml (macOS)
+        if: matrix.os == 'macos-latest'
+        run: brew install libyaml
+
+      - name: Build and test with ThreadSanitizer
+        run: make tsan
+
   valgrind:
     runs-on: ubuntu-latest
     steps:
@@ -123,6 +140,21 @@ jobs:
 
       - name: Verify version references match VERSION
         run: ./scripts/check_version_consistency.sh
+
+  abi-exports:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v7
+
+      - name: Install dependencies
+        run: sudo apt-get update && sudo apt-get install -y libyaml-dev
+
+      - name: Build shared library
+        run: make build/libclogx.so
+
+      - name: Verify exported symbols match whitelist
+        run: ./scripts/check_abi_exports.sh
 
   clang-tidy:
     runs-on: ubuntu-latest

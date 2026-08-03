@@ -165,8 +165,8 @@ static void *prometheus_worker_thread(void *arg)
          * mutex across the blocking accept() below: stop() must lock it to
          * shutdown() the socket and unblock this thread. */
         clog_mutex_lock(&g_prom_mutex);
-        bool            p_running = g_prom_running;
-        clog_socket_t   p_server_fd = g_prom_server_fd;
+        bool          p_running   = g_prom_running;
+        clog_socket_t p_server_fd = g_prom_server_fd;
         clog_mutex_unlock(&g_prom_mutex);
         if (!p_running) {
             break;
@@ -175,8 +175,7 @@ static void *prometheus_worker_thread(void *arg)
         struct sockaddr_in client_addr;
         socklen_t          client_len = sizeof(client_addr);
 
-        clog_socket_t client_fd =
-            accept(p_server_fd, (struct sockaddr *)&client_addr, &client_len);
+        clog_socket_t client_fd = accept(p_server_fd, (struct sockaddr *)&client_addr, &client_len);
         if (client_fd == CLOG_INVALID_SOCKET) {
             clog_mutex_lock(&g_prom_mutex);
             p_running = g_prom_running;

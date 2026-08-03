@@ -266,6 +266,8 @@ check:
 	@if command -v clang-tidy >/dev/null 2>&1; then $(MAKE) tidy-check; fi
 	$(MAKE) clean
 	$(MAKE) all
+	$(MAKE) build/libclogx.so
+	./scripts/check_abi_exports.sh
 	$(MAKE) test
 	@echo "=== check passed ==="
 
