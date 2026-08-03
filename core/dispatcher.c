@@ -200,27 +200,32 @@ int log_dispatcher_dispatch_for(logger_t *logger, log_record_t *record)
         }
     }
 
-    CLOG_MUTEXGUARDED(&logger->dispatcher_mutex, {
-        for (int i = 0; i < logger->sink_count; i++) {
-            log_sink_t *sink = logger->sinks[i];
-            if (!sink) {
-                continue;
-            }
-            if ((int)record->level < (int)sink->min_level) {
-                continue;
-            }
-            const char *write_buf = formatted_buf;
-            size_t      write_len = (size_t)len;
-            if (colored_len > 0 && console_sink_is_color_enabled(sink)) {
-                write_buf = colored_buf;
-                write_len = (size_t)colored_len;
-            }
-            sink->write(sink, write_buf, write_len);
-            if (write_len > 0 && write_buf[write_len - 1] != '\n') {
-                sink->write(sink, "\n", 1);
-            }
+    /* Explicit lock/unlock (not CLOG_MUTEXGUARDED) — ThreadSanitizer on
+     * macOS arm64 does not properly recognize pthread mutex operations
+     * through __attribute__((cleanup)). The prometheus exporter fix
+     * (commit 48797d5) used the same explicit pattern and passes TSan.
+     */
+    clog_mutex_lock(&logger->dispatcher_mutex);
+    for (int i = 0; i < logger->sink_count; i++) {
+        log_sink_t *sink = logger->sinks[i];
+        if (!sink) {
+            continue;
         }
-    });
+        if ((int)record->level < (int)sink->min_level) {
+            continue;
+        }
+        const char *write_buf = formatted_buf;
+        size_t      write_len = (size_t)len;
+        if (colored_len > 0 && console_sink_is_color_enabled(sink)) {
+            write_buf = colored_buf;
+            write_len = (size_t)colored_len;
+        }
+        sink->write(sink, write_buf, write_len);
+        if (write_len > 0 && write_buf[write_len - 1] != '\n') {
+            sink->write(sink, "\n", 1);
+        }
+    }
+    clog_mutex_unlock(&logger->dispatcher_mutex);
 
     return 0;
 }

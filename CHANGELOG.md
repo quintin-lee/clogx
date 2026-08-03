@@ -21,6 +21,7 @@ All notable changes to this project will be documented in this file.
 
 ### Fixed
 - Data race in the Prometheus exporter: the HTTP worker thread read `g_prom_running` / `g_prom_server_fd` without holding `g_prom_mutex`, while `start()`/`stop()` wrote them under the lock. The loop now snapshots the shared state under the mutex before blocking on `accept()` and re-checks after an invalid socket, eliminating the unsynchronized read (visible under ThreadSanitizer)
+- ThreadSanitizer data race in `log_dispatcher_dispatch_for` on macOS: the `CLOG_MUTEXGUARDED` macro uses `__attribute__((cleanup))` for automatic unlock, which macOS arm64 TSan does not properly recognize as a mutex release. Replaced with explicit `clog_mutex_lock`/`clog_mutex_unlock` calls (same pattern used by the Prometheus exporter fix), eliminating the false-positive race on `file_sink.c:112` (`current_size += written`)
 
 ## [0.2.1] - 2026-08-02
 
