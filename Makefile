@@ -86,6 +86,7 @@ BENCHMARK_BINS = $(patsubst benchmarks/%.c,$(BUILD_DIR)/%,$(BENCHMARK_SOURCES))
 # Sanitizer configs (O1 -g for meaningful stack traces)
 ASAN_CFLAGS = -std=c99 -Wall -Wextra -Wconversion -Iinclude -Icore -O1 -g -D_GNU_SOURCE -fPIC -fvisibility=hidden -fsanitize=address -fno-omit-frame-pointer -fno-optimize-sibling-calls
 UBSAN_CFLAGS = -std=c99 -Wall -Wextra -Wconversion -Iinclude -Icore -O1 -g -D_GNU_SOURCE -fPIC -fvisibility=hidden -fsanitize=undefined
+TSAN_CFLAGS = -std=c99 -Wall -Wextra -Wconversion -Iinclude -Icore -O1 -g -D_GNU_SOURCE -fPIC -fvisibility=hidden -fsanitize=thread -fno-omit-frame-pointer
 
 VERSION := $(shell if [ -f VERSION ]; then head -n 1 VERSION; else echo "0.2.1"; fi)
 VERSION_MAJOR := $(shell echo $(VERSION) | cut -d. -f1)
@@ -117,7 +118,7 @@ $(VERSION_H): VERSION | include
 
 PUBLIC_HEADERS := include/log.h include/log_config.h include/log_limits.h include/log_record.h include/log_sink.h include/clogx_plugin.h
 
-.PHONY: all clean example test docs format check-format check test-valgrind install uninstall asan ubsan test-asan test-ubsan fuzz-build fuzz-config fuzz-formatter benchmark tidy-check
+.PHONY: all clean example test docs format check-format check test-valgrind install uninstall asan ubsan tsan test-asan test-ubsan fuzz-build fuzz-config fuzz-formatter benchmark tidy-check
 
 FORMAT_FILES := $(shell find include core sinks example tests fuzz benchmarks -name '*.c' -o -name '*.h' 2>/dev/null)
 
@@ -219,6 +220,10 @@ asan:
 ubsan:
 	$(MAKE) clean
 	$(MAKE) test CC=$(CC) CFLAGS="$(UBSAN_CFLAGS)" EXTRA_LDFLAGS="$(UBSAN_CFLAGS)"
+
+tsan:
+	$(MAKE) clean
+	TSAN_OPTIONS=halt_on_error=1:suppressions=tsan.supp:die_after_fork=0 $(MAKE) test CC=$(CC) CFLAGS="$(TSAN_CFLAGS)" EXTRA_LDFLAGS="$(TSAN_CFLAGS)"
 
 ASAN_SO := $(shell $(CC) -print-file-name=libasan.so 2>/dev/null)
 
