@@ -7,10 +7,20 @@ All notable changes to this project will be documented in this file.
 ### Added
 - `scripts/check_version_consistency.sh` version-reference consistency checker, wired into CI to verify `VERSION`, `include/clogx_version.h`, `vcpkg.json`, the Makefile fallback, and the `CHANGELOG.md` heading stay in sync
 - CI shell-syntax check job (`bash -n`) for `scripts/*.sh`
+- Locked-ABI export surface: `clogx.map` (GNU/ELF `CLOGX_0_2` version script) and `clogx.exports` (macOS export whitelist) pin the 67-symbol shared-library export set, wired into both Makefile and CMake shared builds
+- `scripts/check_abi_exports.sh` dual-direction ABI export checker, run in `make check` and the new `abi-exports` CI job
+- `make tsan` target and CMake `CLOG_ENABLE_TSAN` option to build and run the full test suite under ThreadSanitizer, with `tsan.supp` suppression file
+- `tsan` CI job (ubuntu + macOS) running the TSan suite
+- MSVC `CLOGX_API` `__declspec(dllexport)`/`dllimport` branch in `clog_port.h` for Windows shared builds
+- ABI Stability policy documented in `docs/CONTRIBUTING.md`
 
 ### Changed
 - `scripts/release.sh` pre-flight safety checks: refuses to release from a dirty worktree or when local HEAD diverges from `origin/master` (fetching the remote first), and prints rollback hints when a run aborts partway
 - Documented the release workflow (bump rules, safety checks, manual GitHub Release creation) in `docs/CONTRIBUTING.md`
+- Makefile and CMake now pass a version script (`--version-script` / `-exported_symbols_list`) and soname when building the shared library, so only `CLOGX_API` symbols are exported
+
+### Fixed
+- Data race in the Prometheus exporter: the HTTP worker thread read `g_prom_running` / `g_prom_server_fd` without holding `g_prom_mutex`, while `start()`/`stop()` wrote them under the lock. The loop now snapshots the shared state under the mutex before blocking on `accept()` and re-checks after an invalid socket, eliminating the unsynchronized read (visible under ThreadSanitizer)
 
 ## [0.2.1] - 2026-08-02
 

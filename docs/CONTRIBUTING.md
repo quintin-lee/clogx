@@ -90,6 +90,15 @@ Semantic versioning is followed: `MAJOR.MINOR.PATCH`.
 
 The canonical project version lives in the `VERSION` file at the repository root. Both Makefile (`make all`) and CMake (`cmake --build`) auto-generate `include/clogx_version.h` from it. Do not hard-code version strings in source or build files.
 
+## ABI Stability
+
+clogx ships a versioned shared library (`@@CLOGX_0_2` on Linux via `clogx.map`, an `-exported_symbols_list` whitelist in `clogx.exports` on macOS) and a plugin ABI (`CLOGX_PLUGIN_ABI_VERSION`). The rule: **the export surface is a reviewed, explicit list, never an accident of what compiles.**
+
+- The exported symbol set is generated from the `CLOGX_API`-marked public functions and locked in `clogx.map` (GNU/ELF version script) and `clogx.exports` (macOS export list). Any new public symbol must be added to both files, and removed public symbols must be deleted from both.
+- `scripts/check_abi_exports.sh` (run as part of `make check` and the `abi-exports` CI job) verifies both directions: every symbol in the shared library is whitelisted, and every whitelisted symbol is actually exported. A leaked export or a missing symbol fails the gate.
+- `SO_VERSION` is bumped only on a `MAJOR` release. Together with the version script it makes the soname (`libclogx.so.0`) the ABI contract downstream linkers enforce.
+- Public symbols must be marked `CLOGX_API` (defined in `clog_port.h`) or `-fvisibility=hidden` will silently strip them from the shared library. Check `nm -D build/libclogx.so` after adding one.
+
 ## Releases
 
 Bump the version and tag a release with `scripts/release.sh`:
