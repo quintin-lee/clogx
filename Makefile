@@ -91,6 +91,9 @@ VERSION := $(shell if [ -f VERSION ]; then head -n 1 VERSION; else echo "0.2.1";
 VERSION_MAJOR := $(shell echo $(VERSION) | cut -d. -f1)
 VERSION_MINOR := $(shell echo $(VERSION) | cut -d. -f2)
 VERSION_PATCH := $(shell echo $(VERSION) | cut -d. -f3)
+# ABI version for the shared library. Bump ONLY on ABI-breaking changes
+# (removing/changing a public function signature). Additive changes are
+# carried by symbol versioning (clogx.map), not by this value.
 SO_VERSION = 0
 PREFIX ?= /usr/local
 LIBDIR ?= $(PREFIX)/lib
@@ -132,8 +135,18 @@ $(BUILD_DIR)/%.o: sinks/%.c | $(BUILD_DIR)
 $(LIB_TARGET): $(ALL_OBJS)
 	ar rcs $@ $^
 
+# Linux/ELF: version script gives symbols @@CLOGX_0_2 and hides everything else.
+# macOS: Mach-O has no GNU versioning; the exported-symbols list is the
+# link-time whitelist equivalent.
+UNAME_S := $(shell uname -s)
+ifeq ($(UNAME_S),Darwin)
+SO_ABI_FLAGS := -Wl,-exported_symbols_list,clogx.exports
+else
+SO_ABI_FLAGS := -Wl,-soname,libclogx.so.$(SO_VERSION) -Wl,--version-script,clogx.map
+endif
+
 $(SO_TARGET): $(ALL_OBJS)
-	$(CC) $(EXTRA_LDFLAGS) -shared -Wl,-soname,libclogx.so.$(SO_VERSION) -o $@ $^ $(LDFLAGS)
+	$(CC) $(EXTRA_LDFLAGS) -shared $(SO_ABI_FLAGS) -o $@ $^ $(LDFLAGS)
 
 $(EXAMPLE_BIN): example/main.c $(LIB_TARGET) | $(BUILD_DIR)
 	$(CC) $(EXTRA_LDFLAGS) $(CFLAGS) -o $@ example/main.c $(LIB_TARGET) $(LDFLAGS)
