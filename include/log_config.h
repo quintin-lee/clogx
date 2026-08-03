@@ -22,7 +22,13 @@
 
 /* Reuse CLOGX_API from log.h if already included, otherwise define it. */
 #ifndef CLOGX_API
-#if defined(__GNUC__) || defined(__clang__)
+#if defined(_MSC_VER) && defined(CLOGX_BUILD_SHARED)
+#if defined(CLOGX_BUILD)
+#define CLOGX_API __declspec(dllexport)
+#else
+#define CLOGX_API __declspec(dllimport)
+#endif
+#elif defined(__GNUC__) || defined(__clang__)
 #define CLOGX_API __attribute__((visibility("default")))
 #else
 #define CLOGX_API

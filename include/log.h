@@ -80,7 +80,14 @@
 #include <string.h>
 
 /* Compiler portability macros. */
-#if defined(__GNUC__) || defined(__clang__)
+#if defined(_MSC_VER) && defined(CLOGX_BUILD_SHARED)
+#define CLOGX_PRINTF_FMT(n, m)
+#if defined(CLOGX_BUILD)
+#define CLOGX_API __declspec(dllexport)
+#else
+#define CLOGX_API __declspec(dllimport)
+#endif
+#elif defined(__GNUC__) || defined(__clang__)
 #define CLOGX_PRINTF_FMT(n, m) __attribute__((format(printf, n, m)))
 #define CLOGX_API __attribute__((visibility("default")))
 #else

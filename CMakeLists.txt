@@ -126,6 +126,13 @@ if(CLOG_ENABLE_TLS)
     target_compile_definitions(clogx_objects PRIVATE CLOG_USE_TLS)
     target_link_libraries(clogx_objects PUBLIC OpenSSL::SSL OpenSSL::Crypto)
 endif()
+# Windows shared library: the source compilation (clogx_objects) needs CLOGX_BUILD
+# so CLOGX_API expands to __declspec(dllexport); consumers inherit CLOGX_BUILD_SHARED
+# from the clogx INTERFACE and get __declspec(dllimport) instead.
+if(WIN32 AND CLOG_BUILD_SHARED)
+    target_compile_definitions(clogx_objects PRIVATE CLOGX_BUILD CLOGX_BUILD_SHARED)
+    target_compile_definitions(clogx INTERFACE CLOGX_BUILD_SHARED)
+endif()
 if(CLOG_USE_SYSTEM_YAML)
     target_include_directories(clogx_objects SYSTEM PUBLIC ${YAML_INCLUDE_DIRS})
     target_compile_options(clogx_objects PUBLIC ${YAML_CFLAGS_OTHER})
