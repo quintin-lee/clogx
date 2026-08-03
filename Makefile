@@ -1,5 +1,5 @@
 CC = gcc
-override CFLAGS := -std=c99 -Wall -Wextra -Wconversion -Iinclude -Icore -O2 -D_GNU_SOURCE -fPIC -fvisibility=hidden $(CFLAGS)
+override CFLAGS := -std=c99 -Wall -Wextra -Wconversion -Iinclude -Icore -O2 -D_GNU_SOURCE -fPIC -fvisibility=hidden $(YAML_CFLAGS) $(CFLAGS)
 LDFLAGS = -lpthread
 
 TLS ?= 0
@@ -9,6 +9,7 @@ LDFLAGS += -lssl -lcrypto
 endif
 
 YAML_LIBS = $(shell pkg-config --libs yaml-0.1 2>/dev/null || echo "-lyaml")
+YAML_CFLAGS = $(shell pkg-config --cflags yaml-0.1 2>/dev/null)
 LDFLAGS += $(YAML_LIBS)
 BUILD_DIR = build
 LIB_TARGET = $(BUILD_DIR)/libclogx.a
@@ -84,9 +85,9 @@ BENCHMARK_SOURCES = $(wildcard benchmarks/*.c)
 BENCHMARK_BINS = $(patsubst benchmarks/%.c,$(BUILD_DIR)/%,$(BENCHMARK_SOURCES))
 
 # Sanitizer configs (O1 -g for meaningful stack traces)
-ASAN_CFLAGS = -std=c99 -Wall -Wextra -Wconversion -Iinclude -Icore -O1 -g -D_GNU_SOURCE -fPIC -fvisibility=hidden -fsanitize=address -fno-omit-frame-pointer -fno-optimize-sibling-calls
-UBSAN_CFLAGS = -std=c99 -Wall -Wextra -Wconversion -Iinclude -Icore -O1 -g -D_GNU_SOURCE -fPIC -fvisibility=hidden -fsanitize=undefined
-TSAN_CFLAGS = -std=c99 -Wall -Wextra -Wconversion -Iinclude -Icore -O1 -g -D_GNU_SOURCE -fPIC -fvisibility=hidden -fsanitize=thread -fno-omit-frame-pointer
+ASAN_CFLAGS = -std=c99 -Wall -Wextra -Wconversion -Iinclude -Icore -O1 -g -D_GNU_SOURCE -fPIC -fvisibility=hidden -fsanitize=address -fno-omit-frame-pointer -fno-optimize-sibling-calls $(YAML_CFLAGS)
+UBSAN_CFLAGS = -std=c99 -Wall -Wextra -Wconversion -Iinclude -Icore -O1 -g -D_GNU_SOURCE -fPIC -fvisibility=hidden -fsanitize=undefined $(YAML_CFLAGS)
+TSAN_CFLAGS = -std=c99 -Wall -Wextra -Wconversion -Iinclude -Icore -O1 -g -D_GNU_SOURCE -fPIC -fvisibility=hidden -fsanitize=thread -fno-omit-frame-pointer $(YAML_CFLAGS)
 
 VERSION := $(shell if [ -f VERSION ]; then head -n 1 VERSION; else echo "0.2.1"; fi)
 VERSION_MAJOR := $(shell echo $(VERSION) | cut -d. -f1)
