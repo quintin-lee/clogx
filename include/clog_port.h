@@ -32,6 +32,10 @@
 #include <stdlib.h>
 #include <time.h>
 
+#ifndef __has_feature
+#define __has_feature(x) 0
+#endif
+
 #if defined(_WIN32) || defined(_WIN64)
 #ifndef _CRT_SECURE_NO_WARNINGS
 #define _CRT_SECURE_NO_WARNINGS
