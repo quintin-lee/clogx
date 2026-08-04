@@ -688,14 +688,14 @@ The global default logger (`log_init()` / `LOG_INFO()` etc.) coexists with multi
 
 ### 61 Async Fallback Callback
 
-When the async queue is full (producer faster than consumer), the library falls back to synchronous logging. Register a callback to be notified:
+When the async queue is full (producer faster than consumer), the log record is **dropped** (not written synchronously) and the async fallback callback is invoked to notify the application. Register a callback to be notified:
 
 ```c
 #include "log.h"
 
 void async_fallback_callback(void) {
     /* Log to stderr or another mechanism — avoid clogging! */
-    fprintf(stderr, "[clogx] async queue full, falling back to sync\n");
+    fprintf(stderr, "[clogx] async queue full, dropping log messages\n");
 }
 
 int main(void) {
@@ -856,7 +856,7 @@ The handler sets a global pending signal flag; the main loop calls `log_process_
 | `void log_flush(void)` | Wait until async queue empty, flush all sinks | None |
 | `clogx_errno_t log_reload(void)` | Re-read config, atomically rebuild sinks, restart async worker | Error code on failure |
 | `const char *log_strerror(int err)` | Return descriptive string for error code | Static string |
-| `void log_set_async_fallback_cb(void (*cb)(void))` | Set callback when async queue falls back to sync | None |
+| `void log_set_async_fallback_cb(void (*cb)(void))` | Set callback when async queue is full (messages are dropped) | None |
 | `void (*log_get_async_fallback_cb(void))(void)` | Get currently registered fallback callback | Function pointer |
 | `void log_set_module(const char *module)` | Set process-wide module name (NULL resets to "main") | None |
 | `void log_get_module(char *buf, size_t n)` | Copy module name into caller-provided buffer | None |
@@ -919,7 +919,7 @@ LOGGER_ERROR(logger, fmt, ...)   /* ERROR level on a specific logger instance */
 LOGGER_FATAL(logger, fmt, ...)   /* FATAL level on a specific logger instance */
 ```
 
-Each expands to a call to `log_writevprintf()` or `logger_writevprintf_internal()` respectively, with:
+Each expands to a call to `log_writevprintf()` or `logger_writevprintf()` respectively, with:
 - Automatic source location injection (`__FILE__`, `__LINE__`, `__func__`)
 - Compile-time format string validation (GCC/Clang `format(printf, n, m)` attribute)
 - Thread-safe formatting with per-thread buffers

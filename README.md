@@ -387,9 +387,9 @@ logger_t *logger_create_from_config(const log_config_t *cfg);
 void     logger_destroy(logger_t *logger);
 void     logger_flush(logger_t *logger);
 clogx_errno_t logger_reload(logger_t *logger);
-void     logger_writevprintf_internal(logger_t *logger, log_level_t level,
-                                      const char *file, int line, const char *func,
-                                      const char *fmt, ...);
+void     logger_writevprintf(logger_t *logger, log_level_t level,
+                               const char *file, int line, const char *func,
+                               const char *fmt, ...);
 int      logger_add_sink(logger_t *logger, log_sink_t *sink);
 int      logger_remove_sink(logger_t *logger, log_sink_t *sink);
 int      logger_set_level(logger_t *logger, log_level_t level);

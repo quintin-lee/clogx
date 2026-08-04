@@ -10,30 +10,38 @@
  *
  * ## Solution: Self-Pipe Trick
  *
- * 1. At init, create a pipe (`signal_pipe_fd[2]`).
+ * 1. At init, create a non-blocking pipe (`signal_pipe_fd[2]`).
  * 2. The signal handler writes a single byte to `signal_pipe_fd[1]`
  *    (async-signal-safe `write()`).
- * 3. A dedicated thread (`signal_monitor_thread`) blocks on `read()`
- *    from `signal_pipe_fd[0]`.
- * 4. When a byte arrives, the monitor thread performs the safe cleanup:
- *    flush logs, restore default handler, re-raise the signal.
+ * 3. Each write-path log call checks for a pending signal via
+ *    `log_get_pending_signal()` and, if set, calls
+ *    `log_process_pending_signals()` inline — no dedicated monitor
+ *    thread. `log_get_signal_fd()` is also available for callers that
+ *    integrate the self-pipe into their own event loop.
+ * 4. `log_process_pending_signals()` drains the pipe, flushes all
+ *    pending log records, restores the previous signal handler, and
+ *    re-raises the signal for default processing (e.g. process exit).
  *
  * ## Signals Handled
  *
- * | Signal        | Default Action     | Notes                     |
- * |---------------|--------------------|---------------------------|
- * | `SIGINT`      | Flush + re-raise   | Ctrl+C                    |
- * | `SIGTERM`     | Flush + re-raise   | `kill` / systemd stop     |
- * | `SIGHUP`      | Flush + re-raise   | Config reload hint        |
- * | `SIGUSR1`     | Flush + re-raise   | User-defined (e.g. rotate)|
- * | `SIGUSR2`     | Flush + re-raise   | User-defined              |
- * | `SIGPIPE`     | Ignore             | Broken pipe (common in network sinks) |
+ * Only `SIGTERM` and `SIGINT` are installed by `log_install_signal_handlers()`.
+ * All other signals are left at their default disposition; users who need
+ * custom handling for `SIGHUP`, `SIGUSR1`, or `SIGUSR2` should install
+ * their own handlers and call `log_get_pending_signal()` /
+ * `log_get_signal_fd()` from their event loop.
+ *
+ * | Signal        | Installed by clogx | Notes                              |
+ * |---------------|--------------------|------------------------------------|
+ * | `SIGINT`      | Yes                | Ctrl+C — flush + re-raise          |
+ * | `SIGTERM`     | Yes                | `kill` / systemd stop — flush + re-raise |
+ * | `SIGPIPE`     | No                 | Not explicitly ignored by clogx    |
  *
  * ## Windows Fallback
  *
  * On Windows, `signal()` is used instead of `sigaction`. The self-pipe
- * trick is unavailable; the handler calls `log_flush()` directly (which
- * is technically unsafe but acceptable for Windows console apps).
+ * trick is unavailable; `log_signal_handler()` merely sets a flag
+ * (`g_signal_pending`), and `log_process_pending_signals()` (called
+ * from the write path) performs the actual flush + re-raise.
  */
 
 #include "clog_port.h"
@@ -214,7 +222,9 @@ int log_get_pending_signal(void)
  * 3. Re-raises the signal for default handler processing (core dump / exit).
  *
  * Must be called from a normal (non-signal) execution context, typically
- * from logger_writevprintf_internal() or the signal monitor thread.
+ * from the write path (`log_process_pending_signals` is invoked inline by
+ * `logger_writevprintf_internal` on each log call for the default logger)
+ * or from an application event loop integrating `log_get_signal_fd()`.
  */
 void log_process_pending_signals(void)
 {

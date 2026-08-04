@@ -290,7 +290,7 @@ CLOGX_API log_sink_t *file_sink_create(const char *path, uint64_t max_size, int 
  *
  * @return New sink pointer, or NULL on invalid arguments / allocation failure.
  *
- * Note Requires linking with clogx (no TLS unless compiled with TLS enabled). The sink
+ * Note: Requires linking with clogx (no TLS unless compiled with TLS enabled). The sink
  *       maintains its own socket descriptor; automatic reconnection happens on write errors.
  *       Fork safety: the atfork_child handler closes and re-establishes the connection.
  */

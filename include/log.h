@@ -1135,8 +1135,8 @@ CLOGX_API void logger_flush(logger_t *logger);
  *         for detailed error message.
  *
  * Note Hot-reload is designed for scenarios where configuration is changed externally
- *       (e.g., via SIGHUP signal handler). The caller must ensure that concurrent logging
- *       does not interfere; the implementation uses snapshotting internally to maintain
+ *       (e.g., via a caller-installed SIGHUP handler). The caller must ensure that concurrent
+ * logging does not interfere; the implementation uses snapshotting internally to maintain
  *       consistency during the transition. Any custom sinks added via direct pointer
  *       manipulation not present in the config will be lost after reload.
  */

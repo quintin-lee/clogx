@@ -11,7 +11,7 @@ All notable changes to this project will be documented in this file.
 - `scripts/check_abi_exports.sh` dual-direction ABI export checker, run in `make check` and the new `abi-exports` CI job
 - `make tsan` target and CMake `CLOG_ENABLE_TSAN` option to build and run the full test suite under ThreadSanitizer, with `tsan.supp` suppression file
 - `tsan` CI job (ubuntu + macOS) running the TSan suite
-- MSVC `CLOGX_API` `__declspec(dllexport)`/`dllimport` branch in `clog_port.h` for Windows shared builds
+- MSVC `CLOGX_API` `__declspec(dllexport)`/`dllimport` branch in `log.h` for Windows shared builds
 - ABI Stability policy documented in `docs/CONTRIBUTING.md`
 
 ### Changed
@@ -22,6 +22,12 @@ All notable changes to this project will be documented in this file.
 ### Fixed
 - Data race in the Prometheus exporter: the HTTP worker thread read `g_prom_running` / `g_prom_server_fd` without holding `g_prom_mutex`, while `start()`/`stop()` wrote them under the lock. The loop now snapshots the shared state under the mutex before blocking on `accept()` and re-checks after an invalid socket, eliminating the unsynchronized read (visible under ThreadSanitizer)
 - ThreadSanitizer data race in `log_dispatcher_dispatch_for` on macOS: the `CLOG_MUTEXGUARDED` macro uses `__attribute__((cleanup))` for automatic unlock, which macOS arm64 TSan does not properly recognize as a mutex release. Replaced with explicit `clog_mutex_lock`/`clog_mutex_unlock` calls (same pattern used by the Prometheus exporter fix), eliminating the false-positive race on `file_sink.c:112` (`current_size += written`)
+- Documentation: `signal_handler.c` file header overstated signal coverage — claimed `SIGHUP`/`SIGUSR1`/`SIGUSR2` are installed (only `SIGTERM`/`SIGINT` are) and referenced a non-existent `signal_monitor_thread` (signal processing is inline in the write path). Fixed to match actual implementation; corrected Windows fallback description
+- Documentation: `README.md` public API listing referenced `logger_writevprintf_internal` (a `static` internal function) instead of `logger_writevprintf` (the exported public API entry point called by `LOGGER_*` macros)
+- Documentation: `docs/user_manual.md` §6.1 incorrectly described async queue overflow as "falls back to synchronous logging" — the actual behavior is message drop + fallback callback; §7.3 similarly referenced `logger_writevprintf_internal` instead of `logger_writevprintf`
+- Documentation: `docs/CONTRIBUTING.md` and `CHANGELOG.md` attributed `CLOGX_API` to `clog_port.h`; it is actually defined in `log.h` with `#ifndef` re-export guards in other public headers
+- Documentation: `include/log.h` `logger_reload()` docstring referenced "SIGHUP signal handler" ambiguously; clarified to "caller-installed SIGHUP handler" since clogx does not install one
+- Documentation: `include/log_sink.h` `socket_sink_create` docstring had a missing colon ("Note Requires" → "Note: Requires")
 
 ## [0.2.1] - 2026-08-02
 
