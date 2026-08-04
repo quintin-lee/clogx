@@ -266,15 +266,9 @@ static inline struct tm *clog_gmtime_r(const time_t *timep, struct tm *result)
 #if (defined(__SANITIZE_THREAD__) || (defined(__clang__) && __has_feature(thread_sanitizer))) &&   \
     defined(__APPLE__)
 #include <sanitizer/tsan_interface.h>
-#define CLOG_TSAN_MUTEX_CREATE(m) __tsan_mutex_create((m), __tsan_mutex_not_static)
-#define CLOG_TSAN_MUTEX_DESTROY(m) __tsan_mutex_destroy((m), __tsan_mutex_not_static)
-#define CLOG_TSAN_ACQUIRE(m) __tsan_acquire(m)
-#define CLOG_TSAN_RELEASE(m) __tsan_release(m)
+#define CLOG_MUTEX_INLINE __attribute__((noinline)) static
 #else
-#define CLOG_TSAN_MUTEX_CREATE(m)
-#define CLOG_TSAN_MUTEX_DESTROY(m)
-#define CLOG_TSAN_ACQUIRE(m)
-#define CLOG_TSAN_RELEASE(m)
+#define CLOG_MUTEX_INLINE static inline
 #endif
 
 typedef struct stat clog_stat_t;
@@ -287,16 +281,16 @@ typedef struct stat clog_stat_t;
 #define clog_unlink(path) unlink(path)
 #define clog_mkdir(path) mkdir((path), 0755)
 
-typedef int       clog_socket_t;
-typedef size_t    clog_sock_size_t;
+typedef int           clog_socket_t;
+typedef size_t        clog_sock_size_t;
 #define CLOG_INVALID_SOCKET (-1)
 #define clog_is_invalid_socket(s) ((s) < 0)
 #define clog_close_socket(s) close(s)
-static inline int clog_net_init(void)
+CLOG_MUTEX_INLINE int clog_net_init(void)
 {
     return 0;
 }
-static inline void clog_net_cleanup(void)
+CLOG_MUTEX_INLINE void clog_net_cleanup(void)
 {
 }
 
@@ -305,25 +299,20 @@ static inline void clog_net_cleanup(void)
 typedef pthread_mutex_t clog_mutex_t;
 #define CLOG_MUTEX_INITIALIZER PTHREAD_MUTEX_INITIALIZER
 
-static inline int clog_mutex_init(clog_mutex_t *m)
+CLOG_MUTEX_INLINE int clog_mutex_init(clog_mutex_t *m)
 {
-    int ret = pthread_mutex_init(m, NULL);
-    CLOG_TSAN_MUTEX_CREATE(m);
-    return ret;
+    return pthread_mutex_init(m, NULL);
 }
-static inline void clog_mutex_destroy(clog_mutex_t *m)
+CLOG_MUTEX_INLINE void clog_mutex_destroy(clog_mutex_t *m)
 {
-    CLOG_TSAN_MUTEX_DESTROY(m);
     pthread_mutex_destroy(m);
 }
-static inline void clog_mutex_lock(clog_mutex_t *m)
+CLOG_MUTEX_INLINE void clog_mutex_lock(clog_mutex_t *m)
 {
     pthread_mutex_lock(m);
-    CLOG_TSAN_ACQUIRE(m);
 }
-static inline void clog_mutex_unlock(clog_mutex_t *m)
+CLOG_MUTEX_INLINE void clog_mutex_unlock(clog_mutex_t *m)
 {
-    CLOG_TSAN_RELEASE(m);
     pthread_mutex_unlock(m);
 }
 

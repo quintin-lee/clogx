@@ -232,7 +232,6 @@ int clog_prometheus_exporter_start(int port)
         return CLOG_ERR_INVALID_ARG;
     }
 
-    clog_mutex_init(&g_prom_mutex);
     clog_mutex_lock(&g_prom_mutex);
     if (g_prom_running) {
         clog_mutex_unlock(&g_prom_mutex);
