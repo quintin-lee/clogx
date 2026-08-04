@@ -264,9 +264,13 @@ static inline struct tm *clog_gmtime_r(const time_t *timep, struct tm *result)
 #include <sanitizer/tsan_interface.h>
 #define CLOG_TSAN_MUTEX_CREATE(m) __tsan_mutex_create((m), __tsan_mutex_not_static)
 #define CLOG_TSAN_MUTEX_DESTROY(m) __tsan_mutex_destroy((m), __tsan_mutex_not_static)
+#define CLOG_TSAN_ACQUIRE(m) __tsan_acquire(m)
+#define CLOG_TSAN_RELEASE(m) __tsan_release(m)
 #else
 #define CLOG_TSAN_MUTEX_CREATE(m)
 #define CLOG_TSAN_MUTEX_DESTROY(m)
+#define CLOG_TSAN_ACQUIRE(m)
+#define CLOG_TSAN_RELEASE(m)
 #endif
 
 typedef struct stat clog_stat_t;
@@ -311,9 +315,11 @@ static inline void clog_mutex_destroy(clog_mutex_t *m)
 static inline void clog_mutex_lock(clog_mutex_t *m)
 {
     pthread_mutex_lock(m);
+    CLOG_TSAN_ACQUIRE(m);
 }
 static inline void clog_mutex_unlock(clog_mutex_t *m)
 {
+    CLOG_TSAN_RELEASE(m);
     pthread_mutex_unlock(m);
 }
 
