@@ -268,8 +268,8 @@ static inline struct tm *clog_gmtime_r(const time_t *timep, struct tm *result)
 #include <sanitizer/tsan_interface.h>
 #define CLOG_TSAN_MUTEX_CREATE(m) __tsan_mutex_create((m), __tsan_mutex_not_static)
 #define CLOG_TSAN_MUTEX_DESTROY(m) __tsan_mutex_destroy((m), __tsan_mutex_not_static)
-#define CLOG_TSAN_ACQUIRE(m) __tsan_acquire(m)
-#define CLOG_TSAN_RELEASE(m) __tsan_release(m)
+#define CLOG_TSAN_ACQUIRE(m) __tsan_mutex_post_lock((m), __tsan_mutex_not_static, 0)
+#define CLOG_TSAN_RELEASE(m) __tsan_mutex_pre_unlock((m), __tsan_mutex_not_static)
 #else
 #define CLOG_TSAN_MUTEX_CREATE(m)
 #define CLOG_TSAN_MUTEX_DESTROY(m)
