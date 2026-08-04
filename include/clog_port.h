@@ -266,11 +266,15 @@ static inline struct tm *clog_gmtime_r(const time_t *timep, struct tm *result)
 #if (defined(__SANITIZE_THREAD__) || (defined(__clang__) && __has_feature(thread_sanitizer))) &&   \
     defined(__APPLE__)
 #include <sanitizer/tsan_interface.h>
+#define CLOG_TSAN_MUTEX_CREATE(m) __tsan_mutex_create((m), 0)
+#define CLOG_TSAN_MUTEX_DESTROY(m) __tsan_mutex_destroy((m), 0)
 #define CLOG_TSAN_PRE_LOCK(m) __tsan_mutex_pre_lock((m), 0)
 #define CLOG_TSAN_POST_LOCK(m) __tsan_mutex_post_lock((m), 0, 0)
 #define CLOG_TSAN_PRE_UNLOCK(m) __tsan_mutex_pre_unlock((m), 0)
 #define CLOG_TSAN_POST_UNLOCK(m) __tsan_mutex_post_unlock((m), 0)
 #else
+#define CLOG_TSAN_MUTEX_CREATE(m)
+#define CLOG_TSAN_MUTEX_DESTROY(m)
 #define CLOG_TSAN_PRE_LOCK(m)
 #define CLOG_TSAN_POST_LOCK(m)
 #define CLOG_TSAN_PRE_UNLOCK(m)
@@ -307,14 +311,18 @@ typedef pthread_mutex_t clog_mutex_t;
 
 static inline int clog_mutex_init(clog_mutex_t *m)
 {
-    return pthread_mutex_init(m, NULL);
+    int ret = pthread_mutex_init(m, NULL);
+    CLOG_TSAN_MUTEX_CREATE(m);
+    return ret;
 }
 static inline void clog_mutex_destroy(clog_mutex_t *m)
 {
+    CLOG_TSAN_MUTEX_DESTROY(m);
     pthread_mutex_destroy(m);
 }
 static inline void clog_mutex_lock(clog_mutex_t *m)
 {
+    CLOG_TSAN_MUTEX_CREATE(m);
     CLOG_TSAN_PRE_LOCK(m);
     pthread_mutex_lock(m);
     CLOG_TSAN_POST_LOCK(m);
