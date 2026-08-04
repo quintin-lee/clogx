@@ -62,6 +62,188 @@
 
 ---
 
+## Architecture Overview
+
+```mermaid
+flowchart TB
+    subgraph User["👤 User Application"]
+        App["Application Code"]
+    end
+
+    subgraph API["📝 Public API (log.h)"]
+        LogInit["log_init()"]
+        LogDestroy["log_destroy()"]
+        LogFlush["log_flush()"]
+        LogReload["log_reload()"]
+        Macros["LOG_INFO / LOG_DEBUG / LOG_WARN / LOG_ERROR / LOG_FATAL / LOG_TRACE"]
+        MultiInst["logger_create() / LOGGER_INFO() / logger_destroy()"]
+    end
+
+    subgraph Core["⚙️ Core Engine (core/)"]
+        Config["Config Parser\n(YAML / programmatic)"]
+        Formatter["Formatter\n(Token Engine)"]
+        Dispatcher["Dispatcher\n(Sink Router)"]
+        Queue["MPSC Queue\n(Async Buffer)"]
+        AsyncWorker["Async Worker\n(Batch Consumer)"]
+        RateLimiter["Rate Limiter\n(Token Bucket)"]
+        Rotation["Rotation\n(Size-based)"]
+        SignalHandler["Signal Handler\n(SIGTERM/SIGINT)"]
+        PluginLoader["Plugin Loader\n(dlopen)"]
+        Prometheus["Prometheus Exporter\n(/metrics)"]
+    end
+
+    subgraph Sinks["🔌 Sinks (sinks/)"]
+        Console["Console Sink\n(stdout/stderr)"]
+        File["File Sink\n(with rotation)"]
+        Socket["Socket Sink\n(TCP / TLS / async)"]
+        Syslog["Syslog Sink\n(POSIX)"]
+        OTLP["OTLP Sink\n(OpenTelemetry)"]
+        Custom["Custom Sink\n(user-defined)"]
+    end
+
+    subgraph Headers["📦 Public Headers (include/)"]
+        HLog["log.h"]
+        HConfig["log_config.h"]
+        HLimits["log_limits.h"]
+        HRecord["log_record.h"]
+        HSink["log_sink.h"]
+        HPrometheus["log_prometheus.h"]
+        HPlugin["clogx_plugin.h"]
+        HPort["clog_port.h"]
+    end
+
+    User --> API
+    API --> Core
+    Core --> Sinks
+    API --> Headers
+    Dispatcher --> RateLimiter
+    Dispatcher --> Queue
+    Queue --> AsyncWorker
+    AsyncWorker --> Dispatcher
+    Dispatcher --> Console
+    Dispatcher --> File
+    Dispatcher --> Socket
+    Dispatcher --> Syslog
+    Dispatcher --> OTLP
+    Dispatcher --> Custom
+    File --> Rotation
+    Config --> Formatter
+    Config --> Dispatcher
+    Config --> RateLimiter
+    SignalHandler --> Dispatcher
+    PluginLoader --> Custom
+    Prometheus --> Dispatcher
+```
+
+The diagram above shows the high-level architecture of clogx:
+
+- **User API** — `log_init()`, `LOG_INFO()` macros, and the multi-instance `logger_t` API
+- **Core Engine** — config parsing, token-based formatting, sink dispatching, async queue, rate limiter, file rotation, signal handling, plugin loading, and Prometheus metrics export
+- **Sinks** — console, file (with rotation), TCP/TLS socket, POSIX syslog, OpenTelemetry OTLP, and custom user-defined sinks
+- **Public Headers** — all stable API headers under `include/`
+
+### Log Message Flow
+
+```mermaid
+sequenceDiagram
+    participant App as Application
+    participant Macro as LOG_* Macro
+    participant Format as Formatter
+    participant Dispatch as Dispatcher
+    participant Filter as Level Filter
+    participant Sink as Sinks
+
+    App->>Macro: LOG_INFO("message")
+    Macro->>Format: log_writevprintf(level, file, line, func, fmt, ...)
+    Format->>Format: Format message with token substitution
+    Format-->>Macro: Formatted string
+    Macro->>Dispatch: log_dispatcher_dispatch(record)
+
+    alt Sync Mode
+        Dispatch->>Filter: Check record.level >= sink.min_level
+        Filter-->>Dispatch: Pass/Fail
+        Dispatch->>Sink: sink.write(buf, len)
+        Sink-->>Dispatch: bytes written
+    else Async Mode
+        Dispatch->>Dispatch: Deep-copy record
+        Dispatch->>Queue: Enqueue record (MPSC)
+        Queue-->>Dispatch: Enqueued
+        Note over Queue,Dispatch: Async worker dequeues in batches
+        Dispatch->>Filter: Check record.level >= sink.min_level
+        Filter-->>Dispatch: Pass/Fail
+        Dispatch->>Sink: sink.write(buf, len)
+        Sink-->>Dispatch: bytes written
+    end
+
+    Note over App,Sink: log_flush() drains queue and flushes all sinks
+```
+
+In **sync mode**, the LOG macro formats the message and dispatches it directly to all enabled sinks. In **async mode**, the record is deep-copied into the MPSC queue and dequeued in batches by the background worker thread, which then dispatches to sinks. `log_flush()` drains the queue and flushes all sinks before returning.
+
+### Multi-Instance Logger
+
+```mermaid
+flowchart TB
+    subgraph Global["🌍 Global Singleton Logger (log_init / log_destroy)"]
+        GInit["log_init()"]
+        GConfig["Global Config"]
+        GSinks["Global Sink List"]
+        GDispatch["Global Dispatcher"]
+        GQueue["Global Async Queue"]
+    end
+
+    subgraph Instance1["📦 Logger Instance A (logger_create)"]
+        I1Config["Instance A Config"]
+        I1Sinks["Instance A Sinks"]
+        I1Dispatch["Instance A Dispatcher"]
+        I1Queue["Instance A Async Queue"]
+        I1Stats["Instance A Stats"]
+    end
+
+    subgraph Instance2["📦 Logger Instance B (logger_create)"]
+        I2Config["Instance B Config"]
+        I2Sinks["Instance B Sinks"]
+        I2Dispatch["Instance B Dispatcher"]
+        I2Queue["Instance B Async Queue"]
+        I2Stats["Instance B Stats"]
+    end
+
+    subgraph Shared["🔗 Shared Resources"]
+        Mutex["Global Mutexes"]
+        RNG["Random State"]
+        ThreadLocal["Thread-Local Storage\n(MDC, trace context)"]
+    end
+
+    GInit --> GConfig
+    GConfig --> GSinks
+    GSinks --> GDispatch
+    GDispatch --> GQueue
+    GQueue --> GDispatch
+
+    I1Config --> I1Sinks
+    I1Sinks --> I1Dispatch
+    I1Dispatch --> I1Queue
+    I1Queue --> I1Dispatch
+
+    I2Config --> I2Sinks
+    I2Sinks --> I2Dispatch
+    I2Dispatch --> I2Queue
+    I2Queue --> I2Dispatch
+
+    GInit -.-> Shared
+    I1Config -.-> Shared
+    I2Config -.-> Shared
+
+    GDispatch -.->|"fork safety\npthread_atfork"| Shared
+
+    Note["📝 All instances are fully isolated —\nindependent config, sinks, queues, and stats"]
+    style Note fill:#FFF9C4,stroke:#333,stroke-width:1px,color:black
+```
+
+The global singleton logger (created by `log_init()`) coexists with independent `logger_t` instances (created by `logger_create()`). Each instance has its own config, sink list, async queue, rate limiter, and statistics. All instances share thread-local storage for MDC context and trace/span IDs.
+
+---
+
 ## 2. Building and Installation
 
 ### 21 Build with Makefile

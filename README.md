@@ -37,6 +37,79 @@ Lightweight C99 logging library: config-driven, multi-sink output, optional asyn
 - C-Source Branch Coverage: POSIX shell/AWK gcov branch coverage tool (`make coverage-gcov`) with **97.8%+** branch coverage across core C files and 75% CI gate
 - Signal Safety: POSIX self-pipe signal handler with zero-lock design (`log_get_signal_fd()`) for event loop integration, plus graceful `SIGTERM`/`SIGINT` handling
 
+## Architecture
+
+```mermaid
+flowchart TB
+    subgraph User["👤 User Application"]
+        App["Application Code"]
+    end
+
+    subgraph API["📝 Public API (log.h)"]
+        LogInit["log_init()"]
+        LogDestroy["log_destroy()"]
+        LogFlush["log_flush()"]
+        LogReload["log_reload()"]
+        Macros["LOG_INFO / LOG_DEBUG / LOG_WARN / LOG_ERROR / LOG_FATAL / LOG_TRACE"]
+        MultiInst["logger_create() / LOGGER_INFO() / logger_destroy()"]
+    end
+
+    subgraph Core["⚙️ Core Engine (core/)"]
+        Config["Config Parser\n(YAML / programmatic)"]
+        Formatter["Formatter\n(Token Engine)"]
+        Dispatcher["Dispatcher\n(Sink Router)"]
+        Queue["MPSC Queue\n(Async Buffer)"]
+        AsyncWorker["Async Worker\n(Batch Consumer)"]
+        RateLimiter["Rate Limiter\n(Token Bucket)"]
+        Rotation["Rotation\n(Size-based)"]
+        SignalHandler["Signal Handler\n(SIGTERM/SIGINT)"]
+        PluginLoader["Plugin Loader\n(dlopen)"]
+        Prometheus["Prometheus Exporter\n(/metrics)"]
+    end
+
+    subgraph Sinks["🔌 Sinks (sinks/)"]
+        Console["Console Sink\n(stdout/stderr)"]
+        File["File Sink\n(with rotation)"]
+        Socket["Socket Sink\n(TCP / TLS / async)"]
+        Syslog["Syslog Sink\n(POSIX)"]
+        OTLP["OTLP Sink\n(OpenTelemetry)"]
+        Custom["Custom Sink\n(user-defined)"]
+    end
+
+    subgraph Headers["📦 Public Headers (include/)"]
+        HLog["log.h"]
+        HConfig["log_config.h"]
+        HLimits["log_limits.h"]
+        HRecord["log_record.h"]
+        HSink["log_sink.h"]
+        HPrometheus["log_prometheus.h"]
+        HPlugin["clogx_plugin.h"]
+        HPort["clog_port.h"]
+    end
+
+    User --> API
+    API --> Core
+    Core --> Sinks
+    API --> Headers
+    Dispatcher --> RateLimiter
+    Dispatcher --> Queue
+    Queue --> AsyncWorker
+    AsyncWorker --> Dispatcher
+    Dispatcher --> Console
+    Dispatcher --> File
+    Dispatcher --> Socket
+    Dispatcher --> Syslog
+    Dispatcher --> OTLP
+    Dispatcher --> Custom
+    File --> Rotation
+    Config --> Formatter
+    Config --> Dispatcher
+    Config --> RateLimiter
+    SignalHandler --> Dispatcher
+    PluginLoader --> Custom
+    Prometheus --> Dispatcher
+```
+
 ## Directory Layout
 
 ```
