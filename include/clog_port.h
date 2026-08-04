@@ -268,13 +268,17 @@ static inline struct tm *clog_gmtime_r(const time_t *timep, struct tm *result)
 #include <sanitizer/tsan_interface.h>
 #define CLOG_TSAN_MUTEX_CREATE(m) __tsan_mutex_create((m), __tsan_mutex_not_static)
 #define CLOG_TSAN_MUTEX_DESTROY(m) __tsan_mutex_destroy((m), __tsan_mutex_not_static)
-#define CLOG_TSAN_ACQUIRE(m) __tsan_mutex_post_lock((m), __tsan_mutex_not_static, 0)
-#define CLOG_TSAN_RELEASE(m) __tsan_mutex_pre_unlock((m), __tsan_mutex_not_static)
+#define CLOG_TSAN_PRE_LOCK(m) __tsan_mutex_pre_lock((m), __tsan_mutex_not_static)
+#define CLOG_TSAN_POST_LOCK(m) __tsan_mutex_post_lock((m), __tsan_mutex_not_static, 0)
+#define CLOG_TSAN_PRE_UNLOCK(m) __tsan_mutex_pre_unlock((m), __tsan_mutex_not_static)
+#define CLOG_TSAN_POST_UNLOCK(m) __tsan_mutex_post_unlock((m), __tsan_mutex_not_static)
 #else
 #define CLOG_TSAN_MUTEX_CREATE(m)
 #define CLOG_TSAN_MUTEX_DESTROY(m)
-#define CLOG_TSAN_ACQUIRE(m)
-#define CLOG_TSAN_RELEASE(m)
+#define CLOG_TSAN_PRE_LOCK(m)
+#define CLOG_TSAN_POST_LOCK(m)
+#define CLOG_TSAN_PRE_UNLOCK(m)
+#define CLOG_TSAN_POST_UNLOCK(m)
 #endif
 
 typedef struct stat clog_stat_t;
@@ -318,13 +322,15 @@ static inline void clog_mutex_destroy(clog_mutex_t *m)
 }
 static inline void clog_mutex_lock(clog_mutex_t *m)
 {
+    CLOG_TSAN_PRE_LOCK(m);
     pthread_mutex_lock(m);
-    CLOG_TSAN_ACQUIRE(m);
+    CLOG_TSAN_POST_LOCK(m);
 }
 static inline void clog_mutex_unlock(clog_mutex_t *m)
 {
-    CLOG_TSAN_RELEASE(m);
+    CLOG_TSAN_PRE_UNLOCK(m);
     pthread_mutex_unlock(m);
+    CLOG_TSAN_POST_UNLOCK(m);
 }
 
 /* ── RWLock via pthread_rwlock_t ── */
