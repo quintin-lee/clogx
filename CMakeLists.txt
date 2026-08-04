@@ -233,6 +233,7 @@ if(CLOG_BUILD_TESTS)
         test_rate_limit
         test_fork_safety
         test_signal_handler
+        test_sigpipe
         test_custom_sink
         test_observability_stats
         test_syslog_sink
@@ -444,6 +445,17 @@ if(BASH_EXECUTABLE)
         COMMAND ${BASH_EXECUTABLE} ${CMAKE_CURRENT_SOURCE_DIR}/scripts/gcov_branch_summary.sh ${CMAKE_BINARY_DIR} 75.0
         WORKING_DIRECTORY ${CMAKE_CURRENT_SOURCE_DIR}
         COMMENT "Running gcov -b C-source branch coverage summary"
+        VERBATIM
+    )
+endif()
+
+# --- Mermaid Diagram Validation Target ---
+find_program(MMDM_EXECUTABLE NAMES "mmdc")
+if(MMDM_EXECUTABLE)
+    add_custom_target(mermaid-check
+        COMMAND ${BASH_EXECUTABLE} ${CMAKE_CURRENT_SOURCE_DIR}/scripts/check_mermaid.sh
+        WORKING_DIRECTORY ${CMAKE_CURRENT_SOURCE_DIR}
+        COMMENT "Validating mermaid diagrams in markdown files"
         VERBATIM
     )
 endif()

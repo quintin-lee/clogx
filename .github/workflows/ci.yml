@@ -180,6 +180,18 @@ jobs:
       - name: Check formatting
         run: make check-format
 
+  mermaid:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v7
+
+      - name: Install mmdc
+        run: npm install -g @mermaid-js/mermaid-cli
+
+      - name: Validate mermaid diagrams
+        run: make mermaid-check
+
   coverage:
     needs: build-and-test
     runs-on: ubuntu-latest

@@ -76,7 +76,7 @@ TESTS = test_async_lifecycle test_async_reload test_dispatcher_lifecycle \
         test_module_trunc test_add_sink \
         test_multithread_sync test_config_set test_boundary_config \
         test_socket_sink test_sink_level test_log_level test_json_formatter \
-        test_rate_limit test_fork_safety test_signal_handler test_custom_sink \
+        test_rate_limit test_fork_safety test_signal_handler test_sigpipe test_custom_sink \
         test_observability_stats test_syslog_sink test_thread_context test_coverage_boost test_mutex_guard_raii test_coverage_deep \
         test_plugin_abi test_otel test_prometheus test_multi_instance test_coverage_gaps test_async_edge test_socket_async test_tls test_fast_ascii test_kv_logging
 TEST_BINS = $(addprefix $(BUILD_DIR)/,$(TESTS))
@@ -119,7 +119,7 @@ $(VERSION_H): VERSION | include
 
 PUBLIC_HEADERS := include/log.h include/log_config.h include/log_limits.h include/log_record.h include/log_sink.h include/clogx_plugin.h
 
-.PHONY: all clean example test docs format check-format check test-valgrind install uninstall asan ubsan tsan test-asan test-ubsan fuzz-build fuzz-config fuzz-formatter benchmark tidy-check
+.PHONY: all clean example test docs format check-format check test-valgrind install uninstall asan ubsan tsan test-asan test-ubsan fuzz-build fuzz-config fuzz-formatter benchmark tidy-check mermaid-check
 
 FORMAT_FILES := $(shell find include core sinks example tests fuzz benchmarks -name '*.c' -o -name '*.h' 2>/dev/null)
 
@@ -264,6 +264,7 @@ coverage-gcov:
 check:
 	$(MAKE) check-format
 	@if command -v clang-tidy >/dev/null 2>&1; then $(MAKE) check-tidy; fi
+	@if command -v mmdc >/dev/null 2>&1; then $(MAKE) mermaid-check; fi
 	@if command -v clang-tidy >/dev/null 2>&1; then $(MAKE) tidy-check; fi
 	$(MAKE) clean
 	$(MAKE) all
@@ -305,6 +306,10 @@ tidy:
 check-tidy:
 	@command -v clang-tidy >/dev/null || { echo "clang-tidy not found; check-tidy skipped"; exit 0; }
 	clang-tidy $(CLOG_SRCS) $(EXAMPLE_SRCS) -- -Iinclude -Icore -D_GNU_SOURCE
+
+mermaid-check:
+	@command -v mmdc >/dev/null 2>&1 || { echo "mmdc (mermaid-cli) not found; mermaid-check skipped"; exit 0; }
+	./scripts/check_mermaid.sh
 
 # Custom clang-tidy checks (clogx-unused-includes)
 # The plugin is compiled directly with clang++ (no CMake required).
