@@ -259,6 +259,15 @@ static inline struct tm *clog_gmtime_r(const time_t *timep, struct tm *result)
 #include <sys/stat.h>
 #include <unistd.h>
 
+#if defined(__SANITIZE_THREAD__) && defined(__APPLE__)
+#include <sanitizer/tsan_interface.h>
+#define CLOG_TSAN_MUTEX_CREATE(m) __tsan_mutex_create((m), __tsan_mutex_not_static)
+#define CLOG_TSAN_MUTEX_DESTROY(m) __tsan_mutex_destroy((m), __tsan_mutex_not_static)
+#else
+#define CLOG_TSAN_MUTEX_CREATE(m)
+#define CLOG_TSAN_MUTEX_DESTROY(m)
+#endif
+
 typedef struct stat clog_stat_t;
 #define clog_fstat(fd, st) fstat((fd), (st))
 #define clog_stat(path, st) stat((path), (st))
@@ -289,10 +298,13 @@ typedef pthread_mutex_t clog_mutex_t;
 
 static inline int clog_mutex_init(clog_mutex_t *m)
 {
-    return pthread_mutex_init(m, NULL);
+    int ret = pthread_mutex_init(m, NULL);
+    CLOG_TSAN_MUTEX_CREATE(m);
+    return ret;
 }
 static inline void clog_mutex_destroy(clog_mutex_t *m)
 {
+    CLOG_TSAN_MUTEX_DESTROY(m);
     pthread_mutex_destroy(m);
 }
 static inline void clog_mutex_lock(clog_mutex_t *m)
