@@ -259,7 +259,8 @@ static inline struct tm *clog_gmtime_r(const time_t *timep, struct tm *result)
 #include <sys/stat.h>
 #include <unistd.h>
 
-#if defined(__SANITIZE_THREAD__) && defined(__APPLE__)
+#if (defined(__SANITIZE_THREAD__) || (defined(__clang__) && __has_feature(thread_sanitizer))) &&   \
+    defined(__APPLE__)
 #include <sanitizer/tsan_interface.h>
 #define CLOG_TSAN_MUTEX_CREATE(m) __tsan_mutex_create((m), __tsan_mutex_not_static)
 #define CLOG_TSAN_MUTEX_DESTROY(m) __tsan_mutex_destroy((m), __tsan_mutex_not_static)
