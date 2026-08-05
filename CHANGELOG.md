@@ -20,6 +20,13 @@ All notable changes to this project will be documented in this file.
 - Makefile and CMake now pass a version script (`--version-script` / `-exported_symbols_list`) and soname when building the shared library, so only `CLOGX_API` symbols are exported
 
 ### Fixed
+- SIGPIPE default-ignore: `log_install_signal_handlers()` now sets `SIG_IGN` for `SIGPIPE` on POSIX (saves/restores previous disposition), preventing process crashes when socket sinks encounter broken pipes. New test: `tests/test_sigpipe.c`
+- Rotate error propagation: `file_rotate_file()` now returns `-1` for invalid args, `-EACCES` for permission denied, and `-ENOENT` for missing active file. `file_sink.c` checks the return value and logs a warning before retrying reopen instead of silently ignoring failures
+- Windows build: guard `test_sigpipe.c` POSIX-only signal-handling code with `#if defined(_WIN32) || defined(_WIN64)` to prevent undefined `sigaction`/`SIGPIPE` compilation errors on MSVC
+- macOS TSan build: remove `CLOGX_API` from internal mutex declarations in `clog_port.h` TSan block — `CLOGX_API` is not defined in that header, causing "unknown type name 'CLOGX_API'" on macOS when TSan is enabled
+- Mermaid CI: fix npm global path resolution by exporting `NODE_PATH` from `npm root -g` in CI step and rewriting `scripts/check_mermaid.js` to resolve the npm prefix dynamically (NODE_PATH → require.resolve fallback → common system paths)
+
+### Fixed
 - Cross-compiler build error in `include/clog_port.h`: GCC failed with `missing binary operator before token "("` when evaluating `__has_feature(thread_sanitizer)` in preprocessor condition. Defined fallback `#ifndef __has_feature #define __has_feature(x) 0 #endif` macro for non-Clang compilers
 - Data race in the Prometheus exporter: the HTTP worker thread read `g_prom_running` / `g_prom_server_fd` without holding `g_prom_mutex`, while `start()`/`stop()` wrote them under the lock. The loop now snapshots the shared state under the mutex before blocking on `accept()` and re-checks after an invalid socket, eliminating the unsynchronized read (visible under ThreadSanitizer)
 - ThreadSanitizer data race in `log_dispatcher_dispatch_for` on macOS: the `CLOG_MUTEXGUARDED` macro uses `__attribute__((cleanup))` for automatic unlock, which macOS arm64 TSan does not properly recognize as a mutex release. Replaced with explicit `clog_mutex_lock`/`clog_mutex_unlock` calls (same pattern used by the Prometheus exporter fix), eliminating the false-positive race on `file_sink.c:112` (`current_size += written`)

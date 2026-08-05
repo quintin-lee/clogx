@@ -24,7 +24,7 @@ Lightweight C99 logging library: config-driven, multi-sink output, optional asyn
 - Fuzz Testing: built-in AFL / libFuzzer test harnesses for config, formatter, and pipeline (`make fuzz-build`)
 - Sync / async switchable; async path deep-copies records to avoid dangling stack pointers
 - Fork Safety: POSIX `pthread_atfork` handlers prevent deadlocks and restart async worker in child processes
-- Graceful Shutdown: POSIX `sigaction` signal handlers for `SIGTERM`/`SIGINT` (`catch_signals: true` or `log_install_signal_handlers()`)
+- Graceful Shutdown: POSIX `sigaction` signal handlers for `SIGTERM`/`SIGINT` (`catch_signals: true` or `log_install_signal_handlers()`); `SIGPIPE` is ignored by default on POSIX to prevent crashes from broken socket connections
 - Hot reload: `log_reload()` re-reads config and atomically rebuilds sinks / async worker
 - Per-sink level filtering: `log_sink_set_level()` / `log_sink_get_level()` on any sink
 - Config validation: rejects invalid `queue_size`, `port`, `backups`, and unknown log levels
@@ -35,7 +35,7 @@ Lightweight C99 logging library: config-driven, multi-sink output, optional asyn
 - Build: Makefile and CMake (with CTest, `find_package(clogx)`); ASan/UBSan/Valgrind/clang-tidy check targets
 - Static Analysis: zero-warning `clang-tidy` policy (`make check-tidy` / `CLOG_ENABLE_CLANG_TIDY=ON`)
 - C-Source Branch Coverage: POSIX shell/AWK gcov branch coverage tool (`make coverage-gcov`) with **97.8%+** branch coverage across core C files and 75% CI gate
-- Signal Safety: POSIX self-pipe signal handler with zero-lock design (`log_get_signal_fd()`) for event loop integration, plus graceful `SIGTERM`/`SIGINT` handling
+- Signal Safety: POSIX self-pipe signal handler with zero-lock design (`log_get_signal_fd()`) for event loop integration; `SIGPIPE` default-ignore; graceful `SIGTERM`/`SIGINT` handling
 
 ## Architecture
 

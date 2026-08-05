@@ -1025,6 +1025,8 @@ log:
 
 The handler sets a global pending signal flag; the main loop calls `log_process_pending_signals()` to flush logs before raising the original signal for normal termination.
 
+**SIGPIPE handling**: On POSIX, `log_install_signal_handlers()` also sets `SIGPIPE` to `SIG_IGN` (saving the previous disposition for restoration via `log_restore_signal_handlers()`). This prevents the process from being killed when a socket sink encounters a broken pipe. The previous `SIGPIPE` disposition is restored on `log_destroy()` or when `log_restore_signal_handlers()` is called explicitly.
+
 ---
 
 ## 7. API Reference
