@@ -271,10 +271,10 @@ typedef pthread_mutex_t clog_mutex_t;
 #if (defined(__SANITIZE_THREAD__) || (defined(__clang__) && __has_feature(thread_sanitizer))) &&   \
     defined(__APPLE__)
 #include <sanitizer/tsan_interface.h>
-CLOGX_API int  clog_mutex_init(clog_mutex_t *m);
-CLOGX_API void clog_mutex_destroy(clog_mutex_t *m);
-CLOGX_API void clog_mutex_lock(clog_mutex_t *m);
-CLOGX_API void clog_mutex_unlock(clog_mutex_t *m);
+int  clog_mutex_init(clog_mutex_t *m);
+void clog_mutex_destroy(clog_mutex_t *m);
+void clog_mutex_lock(clog_mutex_t *m);
+void clog_mutex_unlock(clog_mutex_t *m);
 #else
 static inline int clog_mutex_init(clog_mutex_t *m)
 {
