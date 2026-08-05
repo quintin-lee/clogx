@@ -7,7 +7,15 @@ import { createRequire } from "module";
 const req = createRequire(import.meta.url);
 
 // Resolve mermaid from the global mermaid-cli install (avoids npm install)
-const npmGlobalRoot = process.env.NPM_GLOBAL_ROOT || "/home/quintin/.npm-global/lib/node_modules";
+// Resolve npm global modules path dynamically (works in CI and local dev)
+const npmGlobalRoot = (() => {
+  try {
+    const { execSync } = require("child_process");
+    const root = execSync("npm root -g", { encoding: "utf8", stdio: ["pipe", "pipe", "ignore"] }).trim();
+    if (root) return root;
+  } catch { /* fall through */ }
+  return "/usr/lib/node_modules";
+})();
 const mermaidPath = path.join(npmGlobalRoot, "@mermaid-js/mermaid-cli/node_modules/mermaid/dist/mermaid.core.mjs");
 const dompurifyPath = path.join(npmGlobalRoot, "@mermaid-js/mermaid-cli/node_modules/dompurify/dist/purify.cjs.js");
 
