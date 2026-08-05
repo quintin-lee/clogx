@@ -10,17 +10,20 @@
 #include "clog_port.h"
 #include "log.h"
 #include "log_signal.h"
+
+#if defined(_WIN32) || defined(_WIN64)
+int main(void)
+{
+    printf("sigpipe test skipped on Windows\n");
+    return 0;
+}
+#else
 #include <signal.h>
 #include <stdio.h>
 #include <stdlib.h>
 
 int main(void)
 {
-#ifdef _WIN32
-    printf("sigpipe test skipped on Windows\n");
-    return 0;
-#endif
-
     /* Save current SIGPIPE disposition */
     struct sigaction sa_before = {0};
     sigaction(SIGPIPE, NULL, &sa_before);
@@ -66,3 +69,4 @@ int main(void)
     printf("sigpipe test passed\n");
     return 0;
 }
+#endif
