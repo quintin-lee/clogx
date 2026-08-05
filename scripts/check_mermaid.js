@@ -12,7 +12,7 @@ const mermaidPath = path.join(npmGlobalRoot, "@mermaid-js/mermaid-cli/node_modul
 const dompurifyPath = path.join(npmGlobalRoot, "@mermaid-js/mermaid-cli/node_modules/dompurify/dist/purify.cjs.js");
 
 // Polyfill DOM before importing mermaid (DOMPurify 3.x needs a real DOM)
-const { JSDOM } = req("/home/quintin/.npm-global/lib/node_modules/jsdom");
+const { JSDOM } = req(path.join(npmGlobalRoot, "jsdom"));
 const dom = new JSDOM("<!DOCTYPE html><html><body></body></html>", { url: "http://localhost" });
 globalThis.window = dom.window;
 globalThis.document = dom.window.document;
