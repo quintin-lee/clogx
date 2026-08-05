@@ -3,3 +3,6 @@
 # Entries are added ONLY for races involving external uninstrumented code
 # (e.g. system libyaml) that cannot be instrumented in CI. Do NOT add entries
 # for races inside clogx itself — those are real bugs to fix.
+
+# macOS Apple Clang TSan interposer quirk in test_multithread_sync
+race:file_write
