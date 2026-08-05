@@ -25,8 +25,8 @@
  * with the logging pipeline, so no additional synchronisation is needed.
  */
 #include "clog_port.h"
-#include <stdio.h>
 #include <errno.h>
+#include <stdio.h>
 
 /**
  * @brief Rotate a log file using a numbered backup chain.

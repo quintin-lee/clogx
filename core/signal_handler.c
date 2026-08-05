@@ -58,7 +58,7 @@
 
 static volatile sig_atomic_t g_signal_pending = 0;
 static bool                  g_installed      = false;
-static void (*g_old_sigpipe)(int) = SIG_DFL;
+static void (*g_old_sigpipe)(int)             = SIG_DFL;
 
 #if defined(_WIN32) || defined(_WIN64)
 typedef void (*sig_handler_t)(int);
