@@ -193,7 +193,9 @@ jobs:
         run: npm install -g @mermaid-js/mermaid-cli jsdom
 
       - name: Validate mermaid diagrams
-        run: node scripts/check_mermaid.js .
+        run: |
+          export NODE_PATH=$(npm root -g)
+          node scripts/check_mermaid.js .
 
   coverage:
     needs: build-and-test
