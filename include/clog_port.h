@@ -267,10 +267,14 @@ static inline struct tm *clog_gmtime_r(const time_t *timep, struct tm *result)
     defined(__APPLE__)
 #include <sanitizer/tsan_interface.h>
 #define CLOG_MUTEX_INLINE __attribute__((noinline)) static
+#define CLOG_TSAN_MUTEX_CREATE(m) __tsan_mutex_create((m), 0)
+#define CLOG_TSAN_MUTEX_DESTROY(m) __tsan_mutex_destroy((m), 0)
 #define CLOG_TSAN_ACQUIRE(m) __tsan_acquire(m)
 #define CLOG_TSAN_RELEASE(m) __tsan_release(m)
 #else
 #define CLOG_MUTEX_INLINE static inline
+#define CLOG_TSAN_MUTEX_CREATE(m)
+#define CLOG_TSAN_MUTEX_DESTROY(m)
 #define CLOG_TSAN_ACQUIRE(m)
 #define CLOG_TSAN_RELEASE(m)
 #endif
@@ -305,10 +309,13 @@ typedef pthread_mutex_t clog_mutex_t;
 
 CLOG_MUTEX_INLINE int clog_mutex_init(clog_mutex_t *m)
 {
-    return pthread_mutex_init(m, NULL);
+    int ret = pthread_mutex_init(m, NULL);
+    CLOG_TSAN_MUTEX_CREATE(m);
+    return ret;
 }
 CLOG_MUTEX_INLINE void clog_mutex_destroy(clog_mutex_t *m)
 {
+    CLOG_TSAN_MUTEX_DESTROY(m);
     pthread_mutex_destroy(m);
 }
 CLOG_MUTEX_INLINE void clog_mutex_lock(clog_mutex_t *m)
