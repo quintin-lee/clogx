@@ -268,6 +268,22 @@ static inline struct tm *clog_gmtime_r(const time_t *timep, struct tm *result)
 typedef pthread_mutex_t clog_mutex_t;
 #define CLOG_MUTEX_INITIALIZER PTHREAD_MUTEX_INITIALIZER
 
+#ifndef CLOGX_API
+#if defined(_WIN32) || defined(_WIN64)
+#if defined(CLOG_BUILD_DLL)
+#define CLOGX_API __declspec(dllexport)
+#elif defined(CLOG_USE_DLL)
+#define CLOGX_API __declspec(dllimport)
+#else
+#define CLOGX_API
+#endif
+#elif defined(__GNUC__) && __GNUC__ >= 4
+#define CLOGX_API __attribute__((visibility("default")))
+#else
+#define CLOGX_API
+#endif
+#endif
+
 #if (defined(__SANITIZE_THREAD__) || (defined(__clang__) && __has_feature(thread_sanitizer))) &&   \
     defined(__APPLE__)
 #include <sanitizer/tsan_interface.h>
