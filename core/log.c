@@ -1147,3 +1147,31 @@ log_config_t *logger_config_get(const logger_t *logger)
 {
     return logger ? (log_config_t *)&logger->config : NULL;
 }
+
+#if (defined(__SANITIZE_THREAD__) || (defined(__clang__) && __has_feature(thread_sanitizer))) &&   \
+    defined(__APPLE__)
+int clog_mutex_init(clog_mutex_t *m)
+{
+    int ret = pthread_mutex_init(m, NULL);
+    __tsan_mutex_create(m, 0);
+    return ret;
+}
+
+void clog_mutex_destroy(clog_mutex_t *m)
+{
+    __tsan_mutex_destroy(m, 0);
+    pthread_mutex_destroy(m);
+}
+
+void clog_mutex_lock(clog_mutex_t *m)
+{
+    pthread_mutex_lock(m);
+    __tsan_acquire(m);
+}
+
+void clog_mutex_unlock(clog_mutex_t *m)
+{
+    __tsan_release(m);
+    pthread_mutex_unlock(m);
+}
+#endif
