@@ -46,8 +46,10 @@
  * @param[in] max_backups Maximum number of numbered backups to retain.
  *                        The oldest backup beyond this count is deleted.
  *                        Pass 0 to keep no backups (only delete the active file).
- * @retval 0  Always (best-effort — individual rename/unlink errors are logged
- *            but not propagated).
+ * @retval 0          Success — all operations completed.
+ * @retval -1         Invalid arguments (NULL path or max_backups <= 0).
+ * @retval -EACCES    Permission denied on a rename or unlink.
+ * @retval -ENOENT    Base path does not exist (no active file to rotate).
  *
  * @note Not thread-safe. The caller must ensure exclusive access to the file
  *       during rotation (the file sink uses a per-sink mutex).

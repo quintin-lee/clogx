@@ -450,10 +450,10 @@ if(BASH_EXECUTABLE)
 endif()
 
 # --- Mermaid Diagram Validation Target ---
-find_program(MMDM_EXECUTABLE NAMES "mmdc")
-if(MMDM_EXECUTABLE)
+find_program(NODE_EXECUTABLE NAMES "node")
+if(NODE_EXECUTABLE)
     add_custom_target(mermaid-check
-        COMMAND ${BASH_EXECUTABLE} ${CMAKE_CURRENT_SOURCE_DIR}/scripts/check_mermaid.sh
+        COMMAND ${NODE_EXECUTABLE} ${CMAKE_CURRENT_SOURCE_DIR}/scripts/check_mermaid.js .
         WORKING_DIRECTORY ${CMAKE_CURRENT_SOURCE_DIR}
         COMMENT "Validating mermaid diagrams in markdown files"
         VERBATIM

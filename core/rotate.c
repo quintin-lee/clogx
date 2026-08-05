@@ -26,6 +26,7 @@
  */
 #include "clog_port.h"
 #include <stdio.h>
+#include <errno.h>
 
 /**
  * @brief Rotate a log file using a numbered backup chain.
@@ -36,19 +37,24 @@
  *
  * @param base_path    Path to the active log file (e.g. "logs/app.log").
  * @param max_backups  Maximum number of backup files to retain.
- * @return 0 always (filesystem errors are silently ignored).
+ * @retval 0          Success — all operations completed.
+ * @retval -1         Invalid arguments (NULL path or max_backups <= 0).
+ * @retval -EACCES    Permission denied on a rename or unlink.
+ * @retval -ENOENT    Base path does not exist (no active file to rotate).
  */
 int file_rotate_file(const char *base_path, int max_backups)
 {
     if (!base_path || max_backups <= 0) {
-        return 0;
+        return -1;
     }
 
     char path[512];
 
     /* Drop the oldest backup that would fall out of the window */
     snprintf(path, sizeof(path), "%s.%d", base_path, max_backups);
-    clog_unlink(path);
+    if (clog_unlink(path) != 0 && errno != ENOENT) {
+        return -EACCES;
+    }
 
     /* Shift .N-1 -> .N, ..., .1 -> .2 */
     for (int i = max_backups - 1; i >= 1; i--) {
@@ -56,14 +62,20 @@ int file_rotate_file(const char *base_path, int max_backups)
         snprintf(src, sizeof(src), "%s.%d", base_path, i);
         snprintf(dst, sizeof(dst), "%s.%d", base_path, i + 1);
         if (clog_access(src, F_OK) == 0) {
-            rename(src, dst);
+            if (rename(src, dst) != 0) {
+                return -EACCES;
+            }
         }
     }
 
     /* Active file becomes .1 */
     snprintf(path, sizeof(path), "%s.1", base_path);
     if (clog_access(base_path, F_OK) == 0) {
-        rename(base_path, path);
+        if (rename(base_path, path) != 0) {
+            return -EACCES;
+        }
+    } else {
+        return -ENOENT;
     }
 
     return 0;

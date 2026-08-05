@@ -118,7 +118,12 @@ static int file_write(log_sink_t *sink, const char *buf, size_t len)
         fclose(data->file);
         data->file = NULL;
 
-        file_rotate_file(data->path, data->backups);
+        int rot_rc = file_rotate_file(data->path, data->backups);
+        if (rot_rc != 0) {
+            /* Rotation failed — try to reopen anyway; the old rotated file
+             * may still be usable. */
+            fprintf(stderr, "[clogx] rotation failed (err=%d), retrying\n", rot_rc);
+        }
 
         data->file = fopen(data->path, "ab");
         if (!data->file) {

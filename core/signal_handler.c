@@ -34,7 +34,7 @@
  * |---------------|--------------------|------------------------------------|
  * | `SIGINT`      | Yes                | Ctrl+C — flush + re-raise          |
  * | `SIGTERM`     | Yes                | `kill` / systemd stop — flush + re-raise |
- * | `SIGPIPE`     | No                 | Not explicitly ignored by clogx    |
+ * | `SIGPIPE`     | Ignored            | Set to SIG_IGN to prevent crashes  |
  *
  * ## Windows Fallback
  *
@@ -58,6 +58,7 @@
 
 static volatile sig_atomic_t g_signal_pending = 0;
 static bool                  g_installed      = false;
+static void (*g_old_sigpipe)(int) = SIG_DFL;
 
 #if defined(_WIN32) || defined(_WIN64)
 typedef void (*sig_handler_t)(int);
@@ -111,6 +112,10 @@ clogx_errno_t log_install_signal_handlers(void)
     g_old_sigterm = signal(SIGTERM, log_signal_handler);
     g_old_sigint  = signal(SIGINT, log_signal_handler);
 
+#ifndef _WIN32
+    g_old_sigpipe = signal(SIGPIPE, SIG_IGN);
+#endif
+
     g_installed      = true;
     g_signal_pending = 0;
     return CLOG_OK;
@@ -127,6 +132,11 @@ void log_restore_signal_handlers(void)
     if (g_old_sigint) {
         signal(SIGINT, g_old_sigint);
     }
+#ifndef _WIN32
+    if (g_old_sigpipe != SIG_ERR) {
+        signal(SIGPIPE, g_old_sigpipe);
+    }
+#endif
     g_installed      = false;
     g_signal_pending = 0;
 }
@@ -259,6 +269,11 @@ void log_process_pending_signals(void)
             sigaction(SIGINT, &g_old_sigint, NULL);
         }
     } else {
+#ifndef _WIN32
+        if (g_old_sigpipe != SIG_ERR) {
+            signal(SIGPIPE, g_old_sigpipe);
+        }
+#endif
         signal(sig, SIG_DFL);
     }
 

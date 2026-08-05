@@ -308,8 +308,8 @@ check-tidy:
 	clang-tidy $(CLOG_SRCS) $(EXAMPLE_SRCS) -- -Iinclude -Icore -D_GNU_SOURCE
 
 mermaid-check:
-	@command -v mmdc >/dev/null 2>&1 || { echo "mmdc (mermaid-cli) not found; mermaid-check skipped"; exit 0; }
-	./scripts/check_mermaid.sh
+	@command -v node >/dev/null 2>&1 || { echo "node not found; mermaid-check skipped"; exit 0; }
+	node scripts/check_mermaid.js .
 
 # Custom clang-tidy checks (clogx-unused-includes)
 # The plugin is compiled directly with clang++ (no CMake required).

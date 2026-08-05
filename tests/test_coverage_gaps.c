@@ -5,6 +5,7 @@
 
 #include <assert.h>
 #include <signal.h>
+#include <errno.h>
 #include <stdio.h>
 #include <stdlib.h>
 #include <string.h>
@@ -761,9 +762,9 @@ static void test_socket_sink_broken_pipe(void)
 
 static void test_rotate_edge_cases(void)
 {
-    assert(file_rotate_file(NULL, 10) == 0);
-    assert(file_rotate_file("build/nonexistent.log", -1) == 0);
-    assert(file_rotate_file("build/nonexistent.log", 0) == 0);
+    assert(file_rotate_file(NULL, 10) == -1);
+    assert(file_rotate_file("build/nonexistent.log", -1) == -1);
+    assert(file_rotate_file("build/nonexistent.log", 0) == -1);
     printf("test_rotate_edge_cases PASSED\n");
 }
 

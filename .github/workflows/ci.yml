@@ -186,11 +186,14 @@ jobs:
       - name: Checkout
         uses: actions/checkout@v7
 
-      - name: Install mmdc
-        run: npm install -g @mermaid-js/mermaid-cli
+      - name: Set up Node.js
+        uses: actions/setup-node@v7
+
+      - name: Install jsdom
+        run: npm install -g jsdom
 
       - name: Validate mermaid diagrams
-        run: make mermaid-check
+        run: node scripts/check_mermaid.js .
 
   coverage:
     needs: build-and-test
