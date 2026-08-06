@@ -5,14 +5,20 @@ on:
     branches: [main, master]
   workflow_dispatch:
 
+# Least privilege by default; the deploy job elevates what it needs.
 permissions:
-  contents: write
-  pages: write
-  id-token: write
+  contents: read
+
+# Serialize Pages deployments. Without this, overlapping pushes create
+# competing deployments that queue behind each other and time out.
+concurrency:
+  group: pages
+  cancel-in-progress: false
 
 jobs:
   build-docs:
     runs-on: ubuntu-latest
+    timeout-minutes: 15
     steps:
       - uses: actions/checkout@v7
 
@@ -30,6 +36,10 @@ jobs:
   deploy:
     needs: build-docs
     runs-on: ubuntu-latest
+    timeout-minutes: 45
+    permissions:
+      pages: write
+      id-token: write
     environment:
       name: github-pages
       url: ${{ steps.deployment.outputs.page_url }}
@@ -37,3 +47,10 @@ jobs:
       - name: Deploy to GitHub Pages
         id: deployment
         uses: actions/deploy-pages@v4
+        with:
+          # GitHub Pages deployments can sit in `deployment_queued` for a long
+          # time during Pages platform degradation. The action default of 10
+          # minutes is too aggressive and turns provider lag into a red build.
+          timeout: 2400000
+          error_count: 20
+          reporting_interval: 10000
