@@ -253,19 +253,13 @@ tsan:
 	$(MAKE) clean
 	TSAN_OPTIONS=halt_on_error=1:suppressions=tsan.supp:die_after_fork=0 $(MAKE) test CONFIG=tsan
 
-ASAN_SO := $(shell $(CC) -print-file-name=libasan.so 2>/dev/null)
-
 test-asan:
 	$(MAKE) clean
 	$(MAKE) $(TEST_BINS) CONFIG=asan
 	@status=0; \
 	for t in $(TEST_BINS); do \
 		echo "=== $$t ==="; \
-		if [ -f "$(ASAN_SO)" ]; then \
-			LD_PRELOAD="$(ASAN_SO)" ASAN_OPTIONS=detect_leaks=0 ./$$t || status=1; \
-		else \
-			ASAN_OPTIONS=detect_leaks=0 ./$$t || status=1; \
-		fi; \
+		ASAN_OPTIONS=detect_leaks=0 ./$$t || status=1; \
 	done; \
 	exit $$status
 
