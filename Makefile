@@ -32,25 +32,29 @@ override CFLAGS += -DCLOG_USE_TLS
 LDFLAGS += -lssl -lcrypto
 endif
 
-# Detect libyaml: prefer pkg-config, fall back to Homebrew (macOS), then download.
-YAML_LIBS := $(shell pkg-config --libs yaml-0.1 2>/dev/null)
-YAML_CFLAGS := $(shell pkg-config --cflags yaml-0.1 2>/dev/null)
-
-# On macOS, Homebrew installs libyaml to a prefix that pkg-config does not
-# search by default, so pkg-config can report the package as "present" yet
-# return empty cflags. Fall back to the Homebrew prefix directly.
-ifeq ($(YAML_CFLAGS),)
-  YAML_PREFIX := $(shell brew --prefix libyaml 2>/dev/null)
-  ifneq ($(YAML_PREFIX),)
-    YAML_CFLAGS := -I$(YAML_PREFIX)/include
-    YAML_LIBS := -L$(YAML_PREFIX)/lib -lyaml
-    override CFLAGS += $(YAML_CFLAGS)
+# Detect libyaml: explicit LIBYAML_PREFIX (env) > pkg-config > Homebrew > download.
+ifneq ($(LIBYAML_PREFIX),)
+  YAML_CFLAGS := -I$(LIBYAML_PREFIX)/include
+  YAML_LIBS := -L$(LIBYAML_PREFIX)/lib -lyaml
+  override CFLAGS += $(YAML_CFLAGS)
+else
+  YAML_LIBS := $(shell pkg-config --libs yaml-0.1 2>/dev/null)
+  YAML_CFLAGS := $(shell pkg-config --cflags yaml-0.1 2>/dev/null)
+  # On macOS, Homebrew installs libyaml to a prefix pkg-config does not search
+  # by default, so pkg-config can report the package as "present" yet return
+  # empty cflags. Fall back to the Homebrew prefix directly.
+  ifeq ($(YAML_CFLAGS),)
+    YAML_PREFIX := $(shell brew --prefix libyaml 2>/dev/null)
+    ifneq ($(YAML_PREFIX),)
+      YAML_CFLAGS := -I$(YAML_PREFIX)/include
+      YAML_LIBS := -L$(YAML_PREFIX)/lib -lyaml
+      override CFLAGS += $(YAML_CFLAGS)
+    endif
   endif
-endif
-
-# Still unknown: fall back to linking -lyaml and auto-downloading sources.
-ifeq ($(YAML_CFLAGS),)
-  YAML_LIBS := -lyaml
+  # Still unknown: fall back to linking -lyaml and auto-downloading sources.
+  ifeq ($(YAML_CFLAGS),)
+    YAML_LIBS := -lyaml
+  endif
 endif
 
 LDFLAGS += $(YAML_LIBS)
