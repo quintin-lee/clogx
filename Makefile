@@ -32,17 +32,36 @@ override CFLAGS += -DCLOG_USE_TLS
 LDFLAGS += -lssl -lcrypto
 endif
 
-YAML_LIBS = $(shell pkg-config --libs yaml-0.1 2>/dev/null || echo "-lyaml")
-YAML_CFLAGS = $(shell pkg-config --cflags yaml-0.1 2>/dev/null)
+# Detect libyaml: prefer pkg-config, fall back to Homebrew (macOS), then download.
+YAML_LIBS := $(shell pkg-config --libs yaml-0.1 2>/dev/null)
+YAML_CFLAGS := $(shell pkg-config --cflags yaml-0.1 2>/dev/null)
+
+# On macOS, Homebrew installs libyaml to a prefix that pkg-config does not
+# search by default, so pkg-config can report the package as "present" yet
+# return empty cflags. Fall back to the Homebrew prefix directly.
+ifeq ($(YAML_CFLAGS),)
+  YAML_PREFIX := $(shell brew --prefix libyaml 2>/dev/null)
+  ifneq ($(YAML_PREFIX),)
+    YAML_CFLAGS := -I$(YAML_PREFIX)/include
+    YAML_LIBS := -L$(YAML_PREFIX)/lib -lyaml
+    override CFLAGS += $(YAML_CFLAGS)
+  endif
+endif
+
+# Still unknown: fall back to linking -lyaml and auto-downloading sources.
+ifeq ($(YAML_CFLAGS),)
+  YAML_LIBS := -lyaml
+endif
+
 LDFLAGS += $(YAML_LIBS)
 BUILD_DIR = build
 LIB_TARGET = $(BUILD_DIR)/libclogx.a
 SO_TARGET = $(BUILD_DIR)/libclogx.so
 EXAMPLE_BIN = $(BUILD_DIR)/example
 
-# Auto-download libyaml if not available via pkg-config
-ifeq ($(shell pkg-config --exists yaml-0.1 && echo yes 2>/dev/null),)
-$(info libyaml not found via pkg-config, downloading...)
+# Auto-download libyaml if not available via pkg-config or Homebrew
+ifeq ($(YAML_CFLAGS),)
+$(info libyaml not found via pkg-config/Homebrew, downloading...)
 YAML_BUILD := deps/libyaml
 YAML_STATIC_LIB := $(BUILD_DIR)/libyaml.a
 YAML_CFLAGS := -I$(abspath $(YAML_BUILD)/include) -DYAML_VERSION_MAJOR=0 -DYAML_VERSION_MINOR=2 -DYAML_VERSION_PATCH=5 -DYAML_VERSION_STRING=\"0.2.5\"

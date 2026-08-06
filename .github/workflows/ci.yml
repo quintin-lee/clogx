@@ -96,16 +96,9 @@ jobs:
 
       - name: Install libyaml (macOS)
         if: matrix.os == 'macos-latest'
-        run: |
-          brew install libyaml
-          echo "PKG_CONFIG_PATH=$(brew --prefix libyaml)/lib/pkgconfig:${PKG_CONFIG_PATH}" >> $GITHUB_ENV
+        run: brew install libyaml
 
       - name: Build and test with ThreadSanitizer
-        if: matrix.os == 'macos-latest'
-        run: make tsan
-
-      - name: Build and test with ThreadSanitizer
-        if: matrix.os != 'macos-latest'
         run: make tsan
 
   valgrind:
