@@ -103,8 +103,6 @@ jobs:
       - name: Build and test with ThreadSanitizer
         if: matrix.os == 'macos-latest'
         run: make tsan
-        env:
-          PKG_CONFIG_PATH: $(brew --prefix libyaml)/lib/pkgconfig:${PKG_CONFIG_PATH}
 
       - name: Build and test with ThreadSanitizer
         if: matrix.os != 'macos-latest'
