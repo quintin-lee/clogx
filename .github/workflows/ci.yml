@@ -60,10 +60,16 @@ jobs:
         run: cmake --build build -j
 
       - name: Run tests with CMake
-        if: matrix.build_type == 'cmake'
+        if: matrix.build_type == 'cmake' && matrix.os != 'macos-latest'
         run: |
           mkdir -p logs
           ctest --test-dir build -C Debug --output-on-failure --timeout 120
+
+      - name: Run tests with CMake (macOS)
+        if: matrix.build_type == 'cmake' && matrix.os == 'macos-latest'
+        run: |
+          mkdir -p logs
+          ctest --test-dir build -C Debug --output-on-failure --timeout 300
 
       - name: Verify compile_commands.json
         if: matrix.build_type == 'cmake' && matrix.os != 'windows-latest'
@@ -95,6 +101,13 @@ jobs:
           echo "PKG_CONFIG_PATH=$(brew --prefix libyaml)/lib/pkgconfig:${PKG_CONFIG_PATH}" >> $GITHUB_ENV
 
       - name: Build and test with ThreadSanitizer
+        if: matrix.os == 'macos-latest'
+        run: make tsan
+        env:
+          PKG_CONFIG_PATH: $(brew --prefix libyaml)/lib/pkgconfig:${PKG_CONFIG_PATH}
+
+      - name: Build and test with ThreadSanitizer
+        if: matrix.os != 'macos-latest'
         run: make tsan
 
   valgrind:
