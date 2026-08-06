@@ -1,6 +1,30 @@
 CC = gcc
-override CFLAGS := -std=c99 -Wall -Wextra -Wconversion -Iinclude -Icore -O2 -D_GNU_SOURCE -fPIC -fvisibility=hidden $(YAML_CFLAGS) $(CFLAGS)
-LDFLAGS = -lpthread
+
+CONFIG ?= debug
+
+BASE_CFLAGS = -std=c99 -Wall -Wextra -Wconversion -Iinclude -Icore -D_GNU_SOURCE -fPIC -fvisibility=hidden
+
+ifeq ($(CONFIG),debug)
+  CONFIG_CFLAGS = -O0 -g
+  CONFIG_LDFLAGS =
+else ifeq ($(CONFIG),release)
+  CONFIG_CFLAGS = -O3
+  CONFIG_LDFLAGS =
+else ifeq ($(CONFIG),asan)
+  CONFIG_CFLAGS = -O1 -g -fsanitize=address -fno-omit-frame-pointer -fno-optimize-sibling-calls
+  CONFIG_LDFLAGS = -fsanitize=address
+else ifeq ($(CONFIG),tsan)
+  CONFIG_CFLAGS = -O1 -g -fsanitize=thread -fno-omit-frame-pointer
+  CONFIG_LDFLAGS = -fsanitize=thread
+else ifeq ($(CONFIG),ubsan)
+  CONFIG_CFLAGS = -O1 -g -fsanitize=undefined
+  CONFIG_LDFLAGS = -fsanitize=undefined
+else
+  $(error Unknown CONFIG=$(CONFIG). Valid values: debug, release, asan, tsan, ubsan)
+endif
+
+override CFLAGS := $(BASE_CFLAGS) $(CONFIG_CFLAGS) $(YAML_CFLAGS) $(CFLAGS)
+LDFLAGS = -lpthread $(CONFIG_LDFLAGS)
 
 TLS ?= 0
 ifeq ($(TLS),1)
@@ -84,11 +108,6 @@ TEST_BINS = $(addprefix $(BUILD_DIR)/,$(TESTS))
 BENCHMARK_SOURCES = $(wildcard benchmarks/*.c)
 BENCHMARK_BINS = $(patsubst benchmarks/%.c,$(BUILD_DIR)/%,$(BENCHMARK_SOURCES))
 
-# Sanitizer configs (O1 -g for meaningful stack traces)
-ASAN_CFLAGS = -std=c99 -Wall -Wextra -Wconversion -Iinclude -Icore -O1 -g -D_GNU_SOURCE -fPIC -fvisibility=hidden -fsanitize=address -fno-omit-frame-pointer -fno-optimize-sibling-calls $(YAML_CFLAGS)
-UBSAN_CFLAGS = -std=c99 -Wall -Wextra -Wconversion -Iinclude -Icore -O1 -g -D_GNU_SOURCE -fPIC -fvisibility=hidden -fsanitize=undefined $(YAML_CFLAGS)
-TSAN_CFLAGS = -std=c99 -Wall -Wextra -Wconversion -Iinclude -Icore -O1 -g -D_GNU_SOURCE -fPIC -fvisibility=hidden -fsanitize=thread -fno-omit-frame-pointer $(YAML_CFLAGS)
-
 VERSION := $(shell if [ -f VERSION ]; then head -n 1 VERSION; else echo "0.2.1"; fi)
 VERSION_MAJOR := $(shell echo $(VERSION) | cut -d. -f1)
 VERSION_MINOR := $(shell echo $(VERSION) | cut -d. -f2)
@@ -119,7 +138,7 @@ $(VERSION_H): VERSION | include
 
 PUBLIC_HEADERS := include/log.h include/log_config.h include/log_limits.h include/log_record.h include/log_sink.h include/clogx_plugin.h
 
-.PHONY: all clean example test docs format check-format check test-valgrind install uninstall asan ubsan tsan test-asan test-ubsan fuzz-build fuzz-config fuzz-formatter benchmark tidy-check mermaid-check
+.PHONY: all clean example test docs format check-format check test-valgrind install uninstall asan ubsan tsan test-asan test-ubsan fuzz-build fuzz-config fuzz-formatter benchmark tidy-check mermaid-check debug release
 
 FORMAT_FILES := $(shell find include core sinks example tests fuzz benchmarks -name '*.c' -o -name '*.h' 2>/dev/null)
 
@@ -212,25 +231,33 @@ benchmark: $(BENCHMARK_BINS)
 		$$b; \
 	done
 
-## Sanitizer convenience targets
+## Build configuration convenience targets
+
+debug:
+	$(MAKE) clean
+	$(MAKE) all CONFIG=debug
+
+release:
+	$(MAKE) clean
+	$(MAKE) all CONFIG=release
 
 asan:
 	$(MAKE) clean
-	$(MAKE) test-asan CC=$(CC) CFLAGS="$(ASAN_CFLAGS)" EXTRA_LDFLAGS="$(ASAN_CFLAGS)"
+	$(MAKE) test-asan CONFIG=asan
 
 ubsan:
 	$(MAKE) clean
-	$(MAKE) test CC=$(CC) CFLAGS="$(UBSAN_CFLAGS)" EXTRA_LDFLAGS="$(UBSAN_CFLAGS)"
+	$(MAKE) test CONFIG=ubsan
 
 tsan:
 	$(MAKE) clean
-	TSAN_OPTIONS=halt_on_error=1:suppressions=tsan.supp:die_after_fork=0 $(MAKE) test CC=$(CC) CFLAGS="$(TSAN_CFLAGS)" EXTRA_LDFLAGS="$(TSAN_CFLAGS)"
+	TSAN_OPTIONS=halt_on_error=1:suppressions=tsan.supp:die_after_fork=0 $(MAKE) test CONFIG=tsan
 
 ASAN_SO := $(shell $(CC) -print-file-name=libasan.so 2>/dev/null)
 
 test-asan:
 	$(MAKE) clean
-	$(MAKE) $(TEST_BINS) CC=$(CC) CFLAGS="$(ASAN_CFLAGS)" EXTRA_LDFLAGS="$(ASAN_CFLAGS)"
+	$(MAKE) $(TEST_BINS) CONFIG=asan
 	@status=0; \
 	for t in $(TEST_BINS); do \
 		echo "=== $$t ==="; \
@@ -244,8 +271,8 @@ test-asan:
 
 test-ubsan:
 	$(MAKE) clean
-	$(MAKE) all CC=$(CC) CFLAGS="$(UBSAN_CFLAGS)" EXTRA_LDFLAGS="$(UBSAN_CFLAGS)"
-	$(MAKE) test CC=$(CC) CFLAGS="$(UBSAN_CFLAGS)" EXTRA_LDFLAGS="$(UBSAN_CFLAGS)"
+	$(MAKE) all CONFIG=ubsan
+	$(MAKE) test CONFIG=ubsan
 
 coverage:
 	@command -v lcov >/dev/null || { echo "lcov not found; install it to generate coverage report"; exit 1; }
