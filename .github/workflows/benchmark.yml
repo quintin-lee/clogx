@@ -5,11 +5,6 @@ on:
     # Run every Sunday at midnight (UTC)
     - cron: '0 0 * * 0'
   workflow_dispatch:
-    inputs:
-      update_baseline:
-        description: 'Regenerate the benchmark baseline (median of 3 runs)'
-        type: boolean
-        default: false
   push:
     branches: [ main, master ]
     paths:
@@ -25,7 +20,6 @@ jobs:
     env:
       CLOG_BENCH_THRESHOLD: '30'
       CLOG_BASELINE_FILE: benchmarks/.baseline
-      CLOG_CACHE_KEY: clogx-benchmark-baseline-Linux
 
     steps:
       - name: Checkout
@@ -34,41 +28,12 @@ jobs:
       - name: Install dependencies
         run: sudo apt-get update && sudo apt-get install -y libyaml-dev
 
-      - name: Restore benchmark baseline
-        uses: actions/cache/restore@v4
-        id: bench-cache
-        with:
-          path: ${{ env.CLOG_BASELINE_FILE }}
-          key: ${{ env.CLOG_CACHE_KEY }}
-          restore-keys: |
-            ${{ env.CLOG_CACHE_KEY }}
-            clogx-benchmark-baseline-
-
       - name: Build benchmarks
         run: make benchmark
 
-      # Generate a fresh baseline only when explicitly requested (dispatch) or
-      # when no cached baseline exists yet (first run).
-      - name: Generate baseline
-        if: >-
-          (github.event_name == 'workflow_dispatch' && inputs.update_baseline == 'true')
-          || steps.bench-cache.outputs.cache-hit != 'true'
-        run: |
-          scripts/benchmark_check.sh \
-            --results /tmp/bench_curr.txt \
-            --baseline "$CLOG_BASELINE_FILE" \
-            --samples 3 \
-            --update-baseline
-
-      - name: Save benchmark baseline
-        if: >-
-          (github.event_name == 'workflow_dispatch' && inputs.update_baseline == 'true')
-          || steps.bench-cache.outputs.cache-hit != 'true'
-        uses: actions/cache/save@v4
-        with:
-          path: ${{ env.CLOG_BASELINE_FILE }}
-          key: ${{ env.CLOG_CACHE_KEY }}-${{ github.run_id }}
-
+      # The committed benchmarks/.baseline is the reference of record — it is
+      # checked out above and used directly for the regression comparison.
+      # Refresh it locally with `make benchmark-baseline`, then commit.
       - name: Measure throughput and check regression
         run: |
           scripts/benchmark_check.sh \

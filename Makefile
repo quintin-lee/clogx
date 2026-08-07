@@ -136,6 +136,7 @@ TEST_BINS = $(addprefix $(BUILD_DIR)/,$(TESTS))
 
 BENCHMARK_SOURCES = $(wildcard benchmarks/*.c)
 BENCHMARK_BINS = $(patsubst benchmarks/%.c,$(BUILD_DIR)/%,$(BENCHMARK_SOURCES))
+BENCH_BASELINE_SAMPLES = 3
 
 VERSION := $(shell if [ -f VERSION ]; then head -n 1 VERSION; else echo "0.3.0"; fi)
 VERSION_MAJOR := $(shell echo $(VERSION) | cut -d. -f1)
@@ -265,6 +266,20 @@ benchmark: $(BENCHMARK_BINS)
 		echo "=== $$b ==="; \
 		$$b; \
 	done
+
+## Benchmark baseline recipe: run each benchmark --samples times, record the
+## median as benchmarks/.baseline (used by scripts/benchmark_check.sh as the
+## regression reference). Baselines are committed to the repo so CI compares
+## against a fixed, reviewed reference rather than an ephemeral cache.
+benchmark-baseline: benchmark
+	@mkdir -p logs
+	scripts/benchmark_check.sh \
+		--results /tmp/bench_curr.txt \
+		--baseline benchmarks/.baseline \
+		--samples $(BENCH_BASELINE_SAMPLES) \
+		--update-baseline
+	@echo "recorded benchmarks/.baseline (median of $(BENCH_BASELINE_SAMPLES) samples)"
+	@cat benchmarks/.baseline
 
 ## Build configuration convenience targets
 

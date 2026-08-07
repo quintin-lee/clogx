@@ -122,3 +122,39 @@ gh release create vX.Y.Z --generate-notes
 ```
 
 CI enforces version consistency on every push/PR via `scripts/check_version_consistency.sh`.
+
+## Performance Benchmarks
+
+Two benchmarks live in `benchmarks/` and are built by `make benchmark` (also part of CMake):
+
+- `benchmark_throughput` — raw single-threaded log throughput.
+- `benchmark_async_vs_sync` — async queue vs synchronous path.
+
+`scripts/benchmark_check.sh` runs both, extracts three metrics (`throughput`, `sync`, `async` — all in msgs/sec), and compares each against `benchmarks/.baseline`, failing when any metric regresses by more than the threshold (default 30%).
+
+### The baseline is committed
+
+`benchmarks/.baseline` is a **committed** reference of record (median of `BENCH_BASELINE_SAMPLES` runs, default 3). CI compares against it directly on every scheduled/`push` run; it is never generated on the fly in CI. This makes the regression guard deterministic — no reliance on an ephemeral actions cache.
+
+### Refreshing the baseline
+
+Regenerate it locally and commit the updated file:
+
+```bash
+make benchmark-baseline
+# inspect benchmarks/.baseline, then:
+git add benchmarks/.baseline && git commit -m "chore(bench): refresh benchmark baseline"
+```
+
+`make benchmark-baseline` runs the benchmarks `BENCH_BASELINE_SAMPLES` times and records the median of each metric. Run it on a representative, quiet machine — the numbers are compared against future runs, so a noisy or overloaded host will distort the reference.
+
+Adjust the regression tolerance per invocation with `--threshold`:
+
+```bash
+scripts/benchmark_check.sh --results /tmp/bench_curr.txt \
+    --baseline benchmarks/.baseline --threshold 20
+```
+
+## Platform Support
+
+Windows support is partial — see [PLATFORM_SUPPORT.md](PLATFORM_SUPPORT.md) for the per-feature status matrix.
