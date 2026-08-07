@@ -191,6 +191,7 @@ make tidy-check   # run custom clang-tidy checks (auto-compiled, no CMake needed
 make check        # full quality gate: format check → clang-tidy → unused-includes → clean → build → test
 make test-valgrind  # all tests under Valgrind leak check (skipped if not installed)
 make fuzz-build   # builds AFL fuzzing binaries (fuzz_config, fuzz_formatter, fuzz_pipeline)
+make benchmark-baseline  # re-run benchmarks and record the committed regression baseline
 make format       # apply clang-format to all sources
 make docs         # generate Doxygen API docs
 make install      # install library + headers + pkg-config
@@ -287,6 +288,16 @@ CheckOptions:
   - key: clogx-unused-includes.IgnoreMacros
     value: false  # Set to true to skip macro-expanded includes
 ```
+
+## Platform Support
+
+clogx targets POSIX (Linux, macOS, BSD) as first-class; Windows support is **partial**.
+The per-feature status matrix (which sinks and core components are fully functional,
+degraded, or stubbed on Windows) is maintained in
+[docs/PLATFORM_SUPPORT.md](docs/PLATFORM_SUPPORT.md). In short: the console, file,
+OTLP, and custom sinks are fully portable (pure `stdio`); the socket sink works via
+a Winsock abstraction with minor gaps; the POSIX `syslog` sink and the `dlopen`-based
+plugin loader remain unimplemented on Windows.
 
 ## Configuration
 

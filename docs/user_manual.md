@@ -1193,6 +1193,9 @@ See `sinks/console_sink.c`, `sinks/file_sink.c`, `sinks/socket_sink.c`, `sinks/s
 
 Partial Windows support is provided via `include/clog_port.h`, which abstracts OS primitives:
 
+> For the authoritative per-feature status matrix (which sinks / components are fully
+> functional, degraded, or stubbed on Windows), see [PLATFORM_SUPPORT.md](PLATFORM_SUPPORT.md).
+
 - **Threads / mutexes / condition variables**: mapped to Windows `SRWLOCK`, `CONDITION_VARIABLE`, `CreateThread` / `WaitForSingleObject` / `CloseHandle`
 - **Sockets**: Winsock2 (`SOCKET`, `closesocket`, `SD_BOTH`) wrapped behind `clog_socket_t`, `clog_close_socket()`, `clog_net_init()` / `clog_net_cleanup()`
 - **File / process utilities**: `_stat64`, `_mkdir`, `_unlink`, `_access`, `GetCurrentProcessId()`, `Sleep()`

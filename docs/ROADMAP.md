@@ -1,7 +1,8 @@
 # clogx Roadmap
 
-> 版本: 基于当前 `master`(0.2.1, 439 commits)代码分析与现状整理。
+> 版本: 基于当前 `master`(0.3.0)代码分析与现状整理。
 > 目的: 记录项目现状评估、薄弱点与后续方向,供后续迭代与发布规划参考。
+> Windows 各特性的支持状态见 [PLATFORM_SUPPORT.md](PLATFORM_SUPPORT.md)。
 
 ## 1. 现状全景
 
@@ -50,12 +51,12 @@ flowchart TB
 
 ## 2. 薄弱点与具体差距(基于代码实况)
 
-1. **Windows 为 best-effort**:`plugin_loader.c`(dlopen)、`signal_handler.c`(self-pipe)、自旋锁等价物在 Windows 上是 **stub**,真实 Windows 能力受限。
-2. **benchmark 无回归护栏**: 已有 `.github/workflows/benchmark.yml`,但**只运行并记录日志,不设 baseline 阈值,倒退不会让 CI 失败**。
+1. **Windows 为 best-effort**:`plugin_loader.c`(dlopen)、`signal_handler.c`(self-pipe)、自旋锁等价物在 Windows 上是 **stub**(详见 [PLATFORM_SUPPORT.md](PLATFORM_SUPPORT.md)),真实 Windows 能力受限。
+2. **benchmark 回归护栏 ✅ 已完成**: `.github/workflows/benchmark.yml` 以**提交库内的 `benchmarks/.baseline`**(中位数,`make benchmark-baseline` 刷新)为基准,任一指标倒退超过 30%(默认)会让 CI 失败。
 3. **vcpkg/构建依赖不一致(bug)**: [vcpkg.json](/data/home/quintin/workspace/source/c/clog/vcpkg.json) 声明 `yaml-cpp`,
    而 CMake/CPack 实际用的是 **`libyaml`**(`yaml_parser_*`, C 解析器),拉包会拉错依赖。
-4. **发布定制只到 0.2.1**: ABI 以 `0_2` 锁定;ECS 到 0.3.0 需走 CONTRIBUTING 的 bump 规则。
-5. 文档(README/user_manual 中英文并存)历史上做过多次小型修正,但**无集中 roadmap 追踪**。
+4. **发布定制到 0.3.0**: ABI `0_2` 仍锁定;未来 bump 需走 CONTRIBUTING 的规则。
+5. 文档(README/user_manual 中英文并存)历史上做过多次小型修正,但**无集中 roadmap 跟踪**。
 
 > 注: 运行时无 C++ 依赖 —— 唯一 C++ 是 clang-tidy 自定义检查(仅用期构建工具)。'去 C++ 依赖' 结论已达成,无需作为目标。
 
@@ -65,10 +66,10 @@ flowchart TB
 
 | 项 | 工作 | 优先级 |
 |----|------|--------|
-| A1 | **benchmark 回归护栏** — benchmark.yml 加入 baseline 存储 + 阈值退出(吞吐/延迟倒退 >X% 则失败) | 高(小) |
-| A2 | **修复 vcpkg/gh 依赖一致 Bug** — vcpkg.json 改 `libyaml`、删除 `yaml-cpp`,对齐 CMake/CPack | ✅ 已完成 |
-| A3 | **Windows(以线) 实现** — 信号(WaitForSingleObject 等价物)、插件(LoadLibrary)、自旋 pipe → socket 等价;添加 Windows CI | 中(大) |
-| A4 | **0.3.0 preflight** — ABI `0_2`→`0_3` bump、VERSION/CHANGELOG/版本一致性检查、release 流程演练 | 中(小) |
+| A1 | **benchmark 回归护栏 ✅ 已完成** — 提交库 `benchmarks/.baseline` + 阈值退出(`make benchmark-baseline` 刷新,默认 30%) | 高(小) |
+| A2 | **修复 vcpkg/gh 依赖一致 Bug ✅ 已完成** — vcpkg.json 改 `libyaml`、删除 `yaml-cpp`,对齐 CMake/CPack | ✅ 已完成 |
+| A3 | **Windows 落地** — 状态审计已文档化([PLATFORM_SUPPORT.md](PLATFORM_SUPPORT.md));真实实现(信号/插件 `LoadLibrary`/syslog Event Log)未做;添加 Windows CI | 中(大) |
+| A4 | **0.3.0 preflight ✅ 已完成** — v0.3.0 已发布(含 macOS dylib 符号修饰修复);未来 bump 复用同一流程 | ✅ 已完成 |
 
 ### 方向 B: 能力拓展
 
@@ -85,13 +86,13 @@ flowchart TB
 
 ```mermaid
 flowchart LR
-    A2["✅ A2 依赖修复(已完成)"] --> A1["A1 benchmark 护栏"]
-    A1 --> A4["A4 发版 preflight"]
-    A4 --> A3["A3 Windows 落地 (可选,最大工作量)"]
+    A2["✅ A2 依赖修复"] --> A1["✅ A1 benchmark 护栏"]
+    A1 --> A4["✅ A4 发版 preflight (v0.3.0)"]
+    A4 --> A3["A3 Windows 落地(可选,最大工作量)"]
     A3 --> B["B 能力拓展 / C 治理"]
 ```
 
-- 阶段 1: A2 + A1 + A4(老小、确定的硬化,可直接发 0.3.0)
+- 阶段 1: A2 + A1 + A4 ✅ 已全部完成(交付 0.3.0)
 - 阶段 2: A3(Windows 真实落地),视资源取舍
 - 阶段 3: B / C(生态与能力扩展)
 

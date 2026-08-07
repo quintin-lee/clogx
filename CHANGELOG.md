@@ -4,6 +4,15 @@ All notable changes to this project will be documented in this file.
 
 ## [Unreleased]
 
+### Fixed
+- macOS Release shared-library build: `clogx.exports` symbols are now underscore-mangled (`sed 's/^/_/'`) before being passed to `-Wl,-exported_symbols_list`, fixing the `Undefined symbols ... referenced from: <initial-undefines>` link failure for all exported API symbols on AppleClang/ld64. Applied in both Makefile and CMake shared builds.
+
+### Changed
+- Benchmark regression guard: the baseline is now a **committed reference** (`benchmarks/.baseline`, median of 3 samples) instead of a CI cache artifact. `make benchmark-baseline` re-records it; the `benchmark.yml` workflow compares every run against the checked-in baseline and fails on regressions beyond the threshold (default 30%). The `actions/cache` restore/save steps and the `update_baseline` workflow-dispatch input were removed.
+
+### Added
+- `docs/PLATFORM_SUPPORT.md`: per-feature Windows status matrix documenting which sinks/core components are fully functional, degraded, or stubbed on Windows (syslog sink and plugin loader are stubs; console/file/OTLP/custom sinks are fully portable).
+
 ## [0.3.0] - 2026-08-07
 
 ### Added
