@@ -35,7 +35,7 @@ jobs:
         run: sudo apt-get update && sudo apt-get install -y libyaml-dev
 
       - name: Restore benchmark baseline
-        uses: actions/cache/restore@v4
+        uses: actions/cache/restore@v6
         id: bench-cache
         with:
           path: ${{ env.CLOG_BASELINE_FILE }}
@@ -64,7 +64,7 @@ jobs:
         if: >-
           (github.event_name == 'workflow_dispatch' && inputs.update_baseline == 'true')
           || steps.bench-cache.outputs.cache-hit != 'true'
-        uses: actions/cache/save@v4
+        uses: actions/cache/save@v6
         with:
           path: ${{ env.CLOG_BASELINE_FILE }}
           key: ${{ env.CLOG_CACHE_KEY }}-${{ github.run_id }}
