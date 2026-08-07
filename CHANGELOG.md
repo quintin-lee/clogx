@@ -4,6 +4,8 @@ All notable changes to this project will be documented in this file.
 
 ## [Unreleased]
 
+## [0.3.0] - 2026-08-07
+
 ### Added
 - `scripts/check_version_consistency.sh` version-reference consistency checker, wired into CI to verify `VERSION`, `include/clogx_version.h`, `vcpkg.json`, the Makefile fallback, and the `CHANGELOG.md` heading stay in sync
 - CI shell-syntax check job (`bash -n`) for `scripts/*.sh`
@@ -225,7 +227,8 @@ All notable changes to this project will be documented in this file.
 - 17 test cases covering lifecycle, reload, rotation, config validation,
   async fallback, and error paths
 
-[Unreleased]: https://github.com/quintin-lee/clogx/compare/v0.2.1...HEAD
+[Unreleased]: https://github.com/quintin-lee/clogx/compare/v0.3.0...HEAD
+[0.3.0]: https://github.com/quintin-lee/clogx/releases/tag/v0.3.0
 [0.2.1]: https://github.com/quintin-lee/clogx/releases/tag/v0.2.1
 [0.2.0]: https://github.com/quintin-lee/clogx/releases/tag/v0.2.0
 [0.1.0]: https://github.com/quintin-lee/clogx/releases/tag/v0.1.0
