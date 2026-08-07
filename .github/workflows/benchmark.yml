@@ -25,7 +25,7 @@ jobs:
     env:
       CLOG_BENCH_THRESHOLD: '30'
       CLOG_BASELINE_FILE: benchmarks/.baseline
-      CLOG_CACHE_KEY: clogx-benchmark-baseline-${{ runner.os }}
+      CLOG_CACHE_KEY: clogx-benchmark-baseline-Linux
 
     steps:
       - name: Checkout
