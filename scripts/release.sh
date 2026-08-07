@@ -72,6 +72,20 @@ if [ -n "$dirty" ]; then
     exit 1
 fi
 
+# Format gate: refuse to cut a release from a tree that fails clang-format.
+# Best-effort only -- a release must not be blocked on a machine without
+# clang-format installed, but when present the gate is enforced.
+if command -v clang-format >/dev/null 2>&1; then
+    if ! make check-format >/dev/null 2>&1; then
+        echo "error: code does not pass 'make check-format'" >&2
+        echo "run 'make format' to fix, then re-run the release" >&2
+        exit 1
+    fi
+    echo "format: 'make check-format' clean"
+else
+    echo "format: clang-format not found; skipping format gate" >&2
+fi
+
 # Refuse to tag behind the remote: a pushed release tag must be an ancestor
 # of origin's tip so the tag points at a commit reachable upstream. Fetch
 # first so a stale local copy of origin/master cannot mask an outdated branch.
