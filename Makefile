@@ -187,16 +187,22 @@ $(LIB_TARGET): $(ALL_OBJS)
 
 # Linux/ELF: version script gives symbols @@CLOGX_0_2 and hides everything else.
 # macOS: Mach-O has no GNU versioning; the exported-symbols list is the
-# link-time whitelist equivalent.
+# link-time whitelist equivalent. ld64 matches Mach-O names verbatim, and C
+# symbols are stored with a leading underscore, so clogx.exports (unmangled,
+# source of truth) is rewritten with an "_" prefix for the link.
 UNAME_S := $(shell uname -s)
 ifeq ($(UNAME_S),Darwin)
-SO_ABI_FLAGS := -Wl,-exported_symbols_list,clogx.exports
+SO_ABI_FLAGS := -Wl,-exported_symbols_list,$(BUILD_DIR)/clogx.exports.mangled
+SO_MANGLED_DEPS := $(BUILD_DIR)/clogx.exports.mangled
+$(BUILD_DIR)/clogx.exports.mangled: clogx.exports | $(BUILD_DIR)
+	sed 's/^/_/' $< > $@
 else
 SO_ABI_FLAGS := -Wl,-soname,libclogx.so.$(SO_VERSION) -Wl,--version-script,clogx.map
+SO_MANGLED_DEPS :=
 endif
 
-$(SO_TARGET): $(ALL_OBJS)
-	$(CC) $(EXTRA_LDFLAGS) -shared $(SO_ABI_FLAGS) -o $@ $^ $(LDFLAGS)
+$(SO_TARGET): $(ALL_OBJS) $(SO_MANGLED_DEPS)
+	$(CC) $(EXTRA_LDFLAGS) -shared $(SO_ABI_FLAGS) -o $@ $(ALL_OBJS) $(LDFLAGS)
 
 $(EXAMPLE_BIN): example/main.c $(LIB_TARGET) | $(BUILD_DIR)
 	$(CC) $(EXTRA_LDFLAGS) $(CFLAGS) -o $@ example/main.c $(LIB_TARGET) $(LDFLAGS)

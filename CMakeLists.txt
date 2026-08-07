@@ -192,8 +192,26 @@ set_target_properties(clogx PROPERTIES
 
 if(CLOG_BUILD_SHARED)
     if(APPLE)
+        # ld64's -exported_symbols_list matches Mach-O names verbatim, and C
+        # symbols are stored with a leading underscore (_clog_*). clogx.exports
+        # stores the unmangled API names (matching clogx.map), so rewrite it
+        # with an "_" prefix. A custom command (not configure-time file(WRITE))
+        # keeps the mangled copy in sync whenever clogx.exports changes; the
+        # sed transform matches the Makefile path exactly.
+        set(CLOGX_EXPORTS_MANGLED
+            "${CMAKE_CURRENT_BINARY_DIR}/clogx.exports.mangled")
+        add_custom_command(
+            OUTPUT "${CLOGX_EXPORTS_MANGLED}"
+            COMMAND sed -e "s/^/_/" "${CMAKE_CURRENT_SOURCE_DIR}/clogx.exports" > "${CLOGX_EXPORTS_MANGLED}"
+            DEPENDS "${CMAKE_CURRENT_SOURCE_DIR}/clogx.exports"
+            VERBATIM
+            COMMENT "Generating mangled export list for ld64"
+        )
+        add_custom_target(clogx_gen_exports ALL
+            DEPENDS "${CLOGX_EXPORTS_MANGLED}")
+        add_dependencies(clogx clogx_gen_exports)
         target_link_options(clogx PRIVATE
-            "-Wl,-exported_symbols_list,${CMAKE_CURRENT_SOURCE_DIR}/clogx.exports")
+            "-Wl,-exported_symbols_list,${CLOGX_EXPORTS_MANGLED}")
     else()
         target_link_options(clogx PRIVATE
             "-Wl,--version-script,${CMAKE_CURRENT_SOURCE_DIR}/clogx.map")
