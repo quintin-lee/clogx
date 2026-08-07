@@ -41,7 +41,7 @@ flowchart TB
     end
 
     subgraph Sinks["🔌 Sinks"]
-        Console / File / Socket(TLS+async) / Syslog / OTLP / Custom
+        SinkKinds["Console / File / Socket(TLS+async) / Syslog / OTLP / Custom"]
     end
 
     API --> Core
