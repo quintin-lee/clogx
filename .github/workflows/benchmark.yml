@@ -5,6 +5,11 @@ on:
     # Run every Sunday at midnight (UTC)
     - cron: '0 0 * * 0'
   workflow_dispatch:
+    inputs:
+      update_baseline:
+        description: 'Regenerate the benchmark baseline (median of 3 runs)'
+        type: boolean
+        default: false
   push:
     branches: [ main, master ]
     paths:
@@ -17,6 +22,11 @@ jobs:
     name: Run Performance Benchmarks
     runs-on: ubuntu-latest
 
+    env:
+      CLOG_BENCH_THRESHOLD: '30'
+      CLOG_BASELINE_FILE: benchmarks/.baseline
+      CLOG_CACHE_KEY: clogx-benchmark-baseline-${{ runner.os }}
+
     steps:
       - name: Checkout
         uses: actions/checkout@v7
@@ -24,24 +34,52 @@ jobs:
       - name: Install dependencies
         run: sudo apt-get update && sudo apt-get install -y libyaml-dev
 
+      - name: Restore benchmark baseline
+        uses: actions/cache/restore@v4
+        id: bench-cache
+        with:
+          path: ${{ env.CLOG_BASELINE_FILE }}
+          key: ${{ env.CLOG_CACHE_KEY }}
+          restore-keys: |
+            ${{ env.CLOG_CACHE_KEY }}
+            clogx-benchmark-baseline-
+
       - name: Build benchmarks
         run: make benchmark
 
-      - name: Run throughput benchmark
+      # Generate a fresh baseline only when explicitly requested (dispatch) or
+      # when no cached baseline exists yet (first run).
+      - name: Generate baseline
+        if: >-
+          (github.event_name == 'workflow_dispatch' && inputs.update_baseline == 'true')
+          || steps.bench-cache.outputs.cache-hit != 'true'
         run: |
-          ./build/benchmark_throughput > throughput.log
-          cat throughput.log
+          scripts/benchmark_check.sh \
+            --results /tmp/bench_curr.txt \
+            --baseline "$CLOG_BASELINE_FILE" \
+            --samples 3 \
+            --update-baseline
 
-      - name: Run async vs sync benchmark
+      - name: Save benchmark baseline
+        if: >-
+          (github.event_name == 'workflow_dispatch' && inputs.update_baseline == 'true')
+          || steps.bench-cache.outputs.cache-hit != 'true'
+        uses: actions/cache/save@v4
+        with:
+          path: ${{ env.CLOG_BASELINE_FILE }}
+          key: ${{ env.CLOG_CACHE_KEY }}-${{ github.run_id }}
+
+      - name: Measure throughput and check regression
         run: |
-          ./build/benchmark_async_vs_sync > async_vs_sync.log
-          cat async_vs_sync.log
+          scripts/benchmark_check.sh \
+            --results /tmp/bench_curr.txt \
+            --baseline "$CLOG_BASELINE_FILE" \
+            --threshold "$CLOG_BENCH_THRESHOLD"
 
       - name: Generate Benchmark Summary
+        if: always()
         run: |
           echo "## 🚀 Performance Benchmark Results" >> $GITHUB_STEP_SUMMARY
           echo '```text' >> $GITHUB_STEP_SUMMARY
-          cat throughput.log >> $GITHUB_STEP_SUMMARY
-          echo "" >> $GITHUB_STEP_SUMMARY
-          cat async_vs_sync.log >> $GITHUB_STEP_SUMMARY
+          cat /tmp/bench_curr.txt >> $GITHUB_STEP_SUMMARY
           echo '```' >> $GITHUB_STEP_SUMMARY

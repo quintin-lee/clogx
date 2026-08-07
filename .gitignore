@@ -14,4 +14,7 @@ compile_commands.json
 config_*.yaml
 *.bak
 
+# Benchmark regression baseline (cache-generated, not committed)
+benchmarks/.baseline
+
 AGENTS.md
