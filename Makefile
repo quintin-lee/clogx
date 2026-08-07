@@ -2,7 +2,13 @@ CC = gcc
 
 CONFIG ?= debug
 
-BASE_CFLAGS = -std=c99 -Wall -Wextra -Wconversion -Iinclude -Icore -D_GNU_SOURCE -fPIC -fvisibility=hidden
+# -fvisibility=hidden is the ELF default-export control: clogx.map promotes
+# the whitelisted API symbols. Mach-O's -exported_symbols_list CANNOT promote
+# hidden symbols (they become "undefined" at dylib link), so macOS keeps
+# symbols visible and relies on the exports list to restrict them.
+UNAME_S := $(shell uname -s)
+BASE_CFLAGS = -std=c99 -Wall -Wextra -Wconversion -Iinclude -Icore -D_GNU_SOURCE -fPIC \
+              $(if $(filter Darwin,$(UNAME_S)),,-fvisibility=hidden)
 
 ifeq ($(CONFIG),debug)
   CONFIG_CFLAGS = -O0 -g

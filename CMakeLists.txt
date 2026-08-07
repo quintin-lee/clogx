@@ -132,9 +132,14 @@ target_include_directories(clogx_objects
         $<BUILD_INTERFACE:${CMAKE_CURRENT_SOURCE_DIR}/core>
 )
 target_compile_definitions(clogx_objects PRIVATE _GNU_SOURCE)
+# -fvisibility=hidden is the ELF default-export control: clogx.map promotes
+# the whitelisted API symbols. Mach-O's -exported_symbols_list CANNOT promote
+# hidden symbols (they become "undefined" at dylib link), so macOS keeps
+# symbols visible and relies on the exports list to restrict them.
 target_compile_options(clogx_objects
     PRIVATE
-        $<$<C_COMPILER_ID:GNU,Clang,AppleClang>:-Wall -Wextra -Wconversion -fvisibility=hidden>
+        $<$<C_COMPILER_ID:GNU,Clang,AppleClang>:-Wall -Wextra -Wconversion>
+        $<$<AND:$<C_COMPILER_ID:GNU,Clang,AppleClang>,$<NOT:$<PLATFORM_ID:Darwin>>>:-fvisibility=hidden>
 )
 target_link_libraries(clogx_objects PUBLIC Threads::Threads ${CLOG_YAML_TARGET})
 if(WIN32)
