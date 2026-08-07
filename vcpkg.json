@@ -5,7 +5,7 @@
   "homepage": "https://github.com/quintin-lee/clogx",
   "license": "MIT",
   "dependencies": [
-    "yaml-cpp",
+    "libyaml",
     "openssl"
   ],
   "features": {
