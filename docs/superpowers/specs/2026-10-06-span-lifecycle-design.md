@@ -36,6 +36,10 @@ CLOGX_API clog_span_t clog_span_join(const char *traceparent);
 
 - 线程内定长栈，深度 **16**；槽位 = `trace_id[16]` + `span_id[8]` + `flags(1)`，
   静态数组，零堆分配。与现有 thread-local trace 上下文存同一处。
+- flags 来源（现有上下文无 flags 字段，`parse_traceparent` 亦不解析 flags）：
+  base 槽 flags 恒为 `0x00`（现有 `set` 系列 setter 无 flags 通道，改签名会破 ABI，
+  故保持 0x00 不变）；`start` 继承父槽 flags；`join` 原样保留入站 traceparent 的
+  flags（只透传，不做任何采样决策）。
 - `clog_set_trace_context[_hex]` 写**栈底 base**；`start` 继承 base/栈顶的 trace_id、
   生成全新 span_id 后压栈；栈空时 `get` 返回 base —— **从不调新 API 的老用户行为逐字节不变**。
 - `clog_clear_trace_context` 同时清空 base 和栈（请求边界语义）。
@@ -58,10 +62,13 @@ CLOGX_API clog_span_t clog_span_join(const char *traceparent);
 
 - 沿用 W3C `traceparent`：`00-<32hex>-<16hex>-<flags>`，复用现有 hex 编解码 helper。
 - `export` 要求 `len >= 56`（55 字符 + NUL），`buf == NULL` 或不足返回
-  `CLOG_ERR_INVALID_ARG`。
+  `CLOG_ERR_INVALID_ARG`；导出当前 ids（栈顶；栈空则 base）及对应槽 flags。
+  无活跃上下文（trace_id 全零）时返回 `CLOG_ERR_INVALID_ARG`（不向下游传播
+  全零 traceparent）。
 - `join` 按 `parse_traceparent` 同款规则校验版本/长度/hex 合法性；非法返回
   `CLOG_ERR_INVALID_ARG` 且不改状态；合法则设为 parent 并**直接派生 child 入栈**、
-  返回 token（服务端 accept 一步到位）。
+  返回 token（服务端 accept 一步到位）。child 槽 flags 原样取入站 flags 字段
+  （2 hex；非法 hex 视为非法输入拒绝）。
 
 ## 5. ABI / 版本 / 测试 / 文档影响
 
@@ -73,7 +80,8 @@ CLOGX_API clog_span_t clog_span_join(const char *traceparent);
 - 测试：新建 `tests/test_span_lifecycle.c`（无框架纯 C；同时注册 Makefile `TESTS`
   与 CMake `CLOG_TEST_SOURCES`，参考 `tests/test_otel.c` 现有 trace 用例风格）。
   用例：嵌套 ids 正确（child 继承 trace_id、span_id 不同且非零）、错序 `end`
-  报错且状态不动、16 深溢出返回 0、`export`/`join` roundtrip、
+   报错且状态不动、16 深溢出返回 0、`export`/`join` roundtrip（含 flags 透传、
+   全零上下文 export 被拒）、
   非法 `traceparent` 被拒且状态不动、`clear` 连栈清空、老 `set/get` 行为不变。
 - 文档：`docs/user_manual.md` 加一小节（span 模型 + 跨线程 recipe）；
   `CHANGELOG.md` Unreleased 下 `### Added` 记一笔。
