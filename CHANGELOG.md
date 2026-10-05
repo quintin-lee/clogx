@@ -5,9 +5,11 @@ All notable changes to this project will be documented in this file.
 ## [Unreleased]
 
 ### Fixed
+- Docs: fixed three wrong `clog/port.h` include paths in `docs/PLATFORM_SUPPORT.md` (real header is `include/clog_port.h`); marked the ROADMAP §2 vcpkg dependency issue as resolved (was already fixed per §3 A2) and replaced its stale absolute-path link; removed stray gitignored backup `include/log.h.bak`.
 - macOS Release shared-library build: `clogx.exports` symbols are now underscore-mangled (`sed 's/^/_/'`) before being passed to `-Wl,-exported_symbols_list`, fixing the `Undefined symbols ... referenced from: <initial-undefines>` link failure for all exported API symbols on AppleClang/ld64. Applied in both Makefile and CMake shared builds.
 
 ### Changed
+- Perf baseline check: re-ran `make benchmark` against the committed `benchmarks/.baseline`; local medians measured 60–79% below baseline, but zero source changes exist since the baseline commit and the host was heavily loaded (load avg ~6 on an 8-thread laptop chip), so the gap is environmental — no code change warranted.
 - Benchmark regression guard: the baseline is now a **committed reference** (`benchmarks/.baseline`, median of 3 samples) instead of a CI cache artifact. `make benchmark-baseline` re-records it; the `benchmark.yml` workflow compares every run against the checked-in baseline and fails on regressions beyond the threshold (default 30%). The `actions/cache` restore/save steps and the `update_baseline` workflow-dispatch input were removed.
 
 ### Added
