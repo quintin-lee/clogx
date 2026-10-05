@@ -1,4 +1,5 @@
 # clogx User Manual (English Version)
+> 中文版尚未提供,欢迎按 CONTRIBUTING 提交翻译。
 
 ## Table of Contents
 

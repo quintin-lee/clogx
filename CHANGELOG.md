@@ -15,6 +15,10 @@ All notable changes to this project will be documented in this file.
 ### Added
 - `docs/PLATFORM_SUPPORT.md`: per-feature Windows status matrix documenting which sinks/core components are fully functional, degraded, or stubbed on Windows (syslog sink and plugin loader are stubs; console/file/OTLP/custom sinks are fully portable).
 
+### Docs
+- Docs: de-snapshotted `docs/ROADMAP.md` (test count, coverage %, ABI tag, release number) in favor of pointer-style references (`clogx.map` / `clogx.exports`, `make test`, `make coverage-gcov`); added a 3-line English purpose/status summary.
+- Docs: clarified `include/` (flat in-tree) vs installed `include/clogx/` layout in `README.md`; noted the Chinese user manual is not yet available in `docs/user_manual.md`.
+
 ## [0.3.0] - 2026-08-07
 
 ### Added

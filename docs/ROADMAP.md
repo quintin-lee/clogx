@@ -1,8 +1,11 @@
 # clogx Roadmap
 
-> 版本: 基于当前 `master`(0.3.0)代码分析与现状整理。
+> 版本: 基于当前 `master` 代码分析与现状整理(快照数字不写入本文,取数位置见各节)。
 > 目的: 记录项目现状评估、薄弱点与后续方向,供后续迭代与发布规划参考。
 > Windows 各特性的支持状态见 [PLATFORM_SUPPORT.md](PLATFORM_SUPPORT.md)。
+> **Purpose**: record project status, weak spots, and follow-up directions for release planning.
+> **Status**: feature-complete C99 logging lib; see §1 for the pointer-style (non-snapshot) status table.
+> **Pointers**: per-feature Windows status lives in [PLATFORM_SUPPORT.md](PLATFORM_SUPPORT.md).
 
 ## 1. 现状全景
 
@@ -12,8 +15,8 @@
 |------|------|
 | 架构层次 | Core(`core/`) / Sinks(`sinks/`) / 公共 API(`include/`)三层清晰解耦 |
 | 代码规模 | 核心 + sink 约 7,868 行 C |
-| 测试 | 44 个测试全部通过(100%),覆盖多实例、fork 安全、信号、TLS、KV、OTLP、queue、rotate 等 |
-| 硬化 | 67 符号锁定 ABI(`clogx.map` / `clogx.exports`)、97.8%+ 分支覆盖、clang-tidy 零警告、ASan/TSan/UBSan 可构建 |
+| 测试 | 测试全部通过(数量与覆盖范围见 CI / `make test`),覆盖多实例、fork 安全、信号、TLS、KV、OTLP、queue、rotate 等 |
+| 硬化 | 符号锁定 ABI(见 `clogx.map` / `clogx.exports` 的符号数)、分支覆盖以 `make coverage-gcov` 门禁为准、clang-tidy 零警告、ASan/TSan/UBSan 可构建 |
 | 性能 | 无锁 MPSC 环(seq CAS)、格式串预编译缓存、批量出队(64/批)、fast_ascii LUT |
 | 可观测 | Prometheus /metrics、stats API、MDC 线程上下文、trace_id/span_id |
 | 打包 | vcpkg + Conan 双发行、Doxygen + GitHub Pages |
@@ -55,7 +58,7 @@ flowchart TB
 2. **benchmark 回归护栏 ✅ 已完成**: `.github/workflows/benchmark.yml` 以**提交库内的 `benchmarks/.baseline`**(中位数,`make benchmark-baseline` 刷新)为基准,任一指标倒退超过 30%(默认)会让 CI 失败。
 3. **vcpkg/构建依赖不一致 ✅ 已修复**: [vcpkg.json](../vcpkg.json) 声明 `yaml-cpp`,
    而 CMake/CPack 实际用的是 **`libyaml`**(`yaml_parser_*`, C 解析器),拉包会拉错依赖。(修复见 §3 A2)
-4. **发布定制到 0.3.0**: ABI `0_2` 仍锁定;未来 bump 需走 CONTRIBUTING 的规则。
+4. **发布定制**: ABI 版本以 `clogx.map` / `clogx.exports` 为准;未来 bump 需走 CONTRIBUTING 的规则。
 5. 文档(README/user_manual 中英文并存)历史上做过多次小型修正,但**无集中 roadmap 跟踪**。
 
 > 注: 运行时无 C++ 依赖 —— 唯一 C++ 是 clang-tidy 自定义检查(仅用期构建工具)。'去 C++ 依赖' 结论已达成,无需作为目标。

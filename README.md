@@ -495,6 +495,7 @@ LOGGER_FATAL(logger, "...");
 *Note on Rate Limiter Performance*: When rate limiting is disabled (`rate_limit_enable: false`), a lock-free fast-path bypasses mutex overhead. When enabled, a mutex protects the token bucket calculations.
 
 Installed public headers: `log.h`, `log_config.h`, `log_limits.h`, `log_record.h`, `log_sink.h`, `log_prometheus.h`, `clog_port.h`, `clogx_plugin.h` under `include/clogx/`.
+> 注:仓库源码树中头文件平铺于 `include/`;`cmake --install` 后安装到 `<prefix>/include/clogx/`。
 
 ## Prometheus Metrics
 
