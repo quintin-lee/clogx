@@ -55,6 +55,9 @@
 #include <stdio.h>
 #include <stdlib.h>
 #include <string.h>
+#if defined(__linux__) || defined(__APPLE__)
+#include <sys/random.h>
+#endif
 #include <time.h>
 
 logger_t g_default_logger = {0};
@@ -65,6 +68,95 @@ volatile uint64_t   g_prometheus_level_counts[6] = {0};
 static clog_thread_local uint8_t g_thread_trace_id[16];
 static clog_thread_local uint8_t g_thread_span_id[8];
 static clog_thread_local bool    g_has_thread_trace_context = false;
+
+#define CLOG_SPAN_MAX_DEPTH 16
+
+typedef struct {
+    uint8_t trace_id[16];
+    uint8_t span_id[8];
+    uint8_t flags;
+} clog_span_slot_t;
+
+static clog_thread_local clog_span_slot_t g_span_stack[CLOG_SPAN_MAX_DEPTH];
+static clog_thread_local unsigned         g_span_depth = 0;
+
+static bool span_is_zero(const uint8_t *id, size_t n)
+{
+    size_t i;
+    for (i = 0; i < n; i++) {
+        if (id[i] != 0) {
+            return false;
+        }
+    }
+    return true;
+}
+
+/* Top frame wins; empty stack falls back to the legacy base context. */
+static void span_current_ids(uint8_t trace_id[16], uint8_t span_id[8])
+{
+    if (g_span_depth > 0) {
+        const clog_span_slot_t *top = &g_span_stack[g_span_depth - 1u];
+        memcpy(trace_id, top->trace_id, 16);
+        memcpy(span_id, top->span_id, 8);
+    } else if (g_has_thread_trace_context) {
+        memcpy(trace_id, g_thread_trace_id, 16);
+        memcpy(span_id, g_thread_span_id, 8);
+    } else {
+        memset(trace_id, 0, 16);
+        memset(span_id, 0, 8);
+    }
+}
+
+/* Uniqueness, not cryptographic strength (documented in the user manual). */
+static void span_random_bytes(uint8_t *out, size_t n)
+{
+#if defined(__linux__)
+    {
+        ssize_t got = getrandom(out, n, 0);
+        if (got == (ssize_t)n) {
+            return;
+        }
+    }
+#endif
+#if defined(__APPLE__)
+    if (getentropy(out, n) == 0) {
+        return;
+    }
+#endif
+    {
+        uint64_t s =
+            clog_get_timestamp_us() ^ ((uint64_t)clog_getpid() << 32) ^ (uint64_t)(uintptr_t)out;
+        size_t i = 0;
+        if (s == 0) {
+            s = 0x9e3779b97f4a7c15ULL;
+        }
+        while (i < n) {
+            size_t chunk;
+            size_t k;
+            s ^= s << 13;
+            s ^= s >> 7;
+            s ^= s << 17;
+            if (s == 0) {
+                s = 0x9e3779b97f4a7c15ULL;
+            }
+            chunk = (n - i) < 8 ? (n - i) : 8;
+            for (k = 0; k < chunk; k++) {
+                out[i + k] = (uint8_t)((s >> (k * 8)) & 0xffU);
+            }
+            i += chunk;
+        }
+    }
+}
+
+static void span_new_span_id(uint8_t span_id[8])
+{
+    span_random_bytes(span_id, 8);
+    if (span_is_zero(span_id, 8)) {
+        span_id[7] = 0x01;
+    }
+}
+
+static int parse_hex_nibble(char c);
 
 const char *log_strerror(int err)
 {
@@ -298,13 +390,7 @@ static void logger_writevprintf_internal(logger_t   *logger,
     record.module    = module_buf;
     record.tag       = NULL;
     record.message   = message;
-    if (g_has_thread_trace_context) {
-        memcpy(record.trace_id, g_thread_trace_id, 16);
-        memcpy(record.span_id, g_thread_span_id, 8);
-    } else {
-        memset(record.trace_id, 0, 16);
-        memset(record.span_id, 0, 8);
-    }
+    span_current_ids(record.trace_id, record.span_id);
 
     uint64_t suppressed = 0;
     if (!log_rate_limit_allow_for(logger, &suppressed)) {
@@ -420,13 +506,7 @@ static void logger_write_kv_internal(logger_t        *logger,
         record.kv[i] = kvs[i];
     }
 
-    if (g_has_thread_trace_context) {
-        memcpy(record.trace_id, g_thread_trace_id, 16);
-        memcpy(record.span_id, g_thread_span_id, 8);
-    } else {
-        memset(record.trace_id, 0, 16);
-        memset(record.span_id, 0, 8);
-    }
+    span_current_ids(record.trace_id, record.span_id);
 
     uint64_t suppressed = 0;
     if (!log_rate_limit_allow_for(logger, &suppressed)) {
@@ -597,6 +677,16 @@ void clog_set_trace_context(const uint8_t trace_id[16], const uint8_t span_id[8]
 
 void clog_get_trace_context(uint8_t trace_id[16], uint8_t span_id[8])
 {
+    if (g_span_depth > 0) {
+        const clog_span_slot_t *top = &g_span_stack[g_span_depth - 1u];
+        if (trace_id) {
+            memcpy(trace_id, top->trace_id, 16);
+        }
+        if (span_id) {
+            memcpy(span_id, top->span_id, 8);
+        }
+        return;
+    }
     if (trace_id) {
         if (g_has_thread_trace_context) {
             memcpy(trace_id, g_thread_trace_id, 16);
@@ -617,7 +707,136 @@ void clog_clear_trace_context(void)
 {
     memset(g_thread_trace_id, 0, 16);
     memset(g_thread_span_id, 0, 8);
+    memset(g_span_stack, 0, sizeof(g_span_stack));
+    g_span_depth               = 0;
     g_has_thread_trace_context = false;
+}
+
+clog_span_t clog_span_start(void)
+{
+    uint8_t trace_id[16];
+    uint8_t flags = 0x00;
+
+    if (g_span_depth >= CLOG_SPAN_MAX_DEPTH) {
+        return 0;
+    }
+    if (g_span_depth > 0) {
+        const clog_span_slot_t *top = &g_span_stack[g_span_depth - 1u];
+        memcpy(trace_id, top->trace_id, 16);
+        flags = top->flags;
+    } else if (g_has_thread_trace_context) {
+        memcpy(trace_id, g_thread_trace_id, 16);
+    } else {
+        span_random_bytes(trace_id, 16);
+        if (span_is_zero(trace_id, 16)) {
+            trace_id[15] = 0x01;
+        }
+    }
+
+    {
+        clog_span_slot_t *slot = &g_span_stack[g_span_depth];
+        memcpy(slot->trace_id, trace_id, 16);
+        span_new_span_id(slot->span_id);
+        slot->flags = flags;
+        g_span_depth++;
+    }
+    return (clog_span_t)g_span_depth;
+}
+
+clogx_errno_t clog_span_end(clog_span_t tok)
+{
+    if (tok == 0 || tok != (clog_span_t)g_span_depth) {
+        return CLOG_ERR_INVALID_ARG;
+    }
+    {
+        clog_span_slot_t *top = &g_span_stack[g_span_depth - 1u];
+        memset(top, 0, sizeof(*top));
+    }
+    g_span_depth--;
+    return CLOG_OK;
+}
+
+clogx_errno_t clog_span_export(char *buf, size_t len)
+{
+    static const char hexd[] = "0123456789abcdef";
+    uint8_t           trace_id[16];
+    uint8_t           span_id[8];
+    uint8_t           flags = 0x00;
+    size_t            pos   = 0;
+    size_t            i;
+
+    if (buf == NULL || len < 56) {
+        return CLOG_ERR_INVALID_ARG;
+    }
+    span_current_ids(trace_id, span_id);
+    if (g_span_depth > 0) {
+        flags = g_span_stack[g_span_depth - 1u].flags;
+    }
+    if (span_is_zero(trace_id, 16)) {
+        return CLOG_ERR_INVALID_ARG;
+    }
+    buf[pos++] = '0';
+    buf[pos++] = '0';
+    buf[pos++] = '-';
+    for (i = 0; i < 16; i++) {
+        buf[pos++] = hexd[(size_t)((trace_id[i] >> 4) & 0x0f)];
+        buf[pos++] = hexd[(size_t)(trace_id[i] & 0x0f)];
+    }
+    buf[pos++] = '-';
+    for (i = 0; i < 8; i++) {
+        buf[pos++] = hexd[(size_t)((span_id[i] >> 4) & 0x0f)];
+        buf[pos++] = hexd[(size_t)(span_id[i] & 0x0f)];
+    }
+    buf[pos++] = '-';
+    buf[pos++] = hexd[(size_t)((flags >> 4) & 0x0f)];
+    buf[pos++] = hexd[(size_t)(flags & 0x0f)];
+    buf[pos++] = '\0';
+    return CLOG_OK;
+}
+
+clog_span_t clog_span_join(const char *traceparent)
+{
+    uint8_t tid[16];
+    uint8_t flags;
+    size_t  i;
+
+    if (traceparent == NULL || strlen(traceparent) < 55 || g_span_depth >= CLOG_SPAN_MAX_DEPTH) {
+        return 0;
+    }
+    if (traceparent[2] != '-' || traceparent[35] != '-' || traceparent[52] != '-') {
+        return 0;
+    }
+    for (i = 0; i < 16; i++) {
+        int hi = parse_hex_nibble(traceparent[3 + i * 2]);
+        int lo = parse_hex_nibble(traceparent[3 + i * 2 + 1]);
+        if (hi < 0 || lo < 0) {
+            return 0;
+        }
+        tid[i] = (uint8_t)((hi << 4) | lo);
+    }
+    for (i = 0; i < 8; i++) {
+        if (parse_hex_nibble(traceparent[36 + i * 2]) < 0 ||
+            parse_hex_nibble(traceparent[36 + i * 2 + 1]) < 0) {
+            return 0;
+        }
+    }
+    {
+        int hi = parse_hex_nibble(traceparent[53]);
+        int lo = parse_hex_nibble(traceparent[54]);
+        if (hi < 0 || lo < 0) {
+            return 0;
+        }
+        flags = (uint8_t)((hi << 4) | lo);
+    }
+
+    {
+        clog_span_slot_t *slot = &g_span_stack[g_span_depth];
+        memcpy(slot->trace_id, tid, 16);
+        span_new_span_id(slot->span_id);
+        slot->flags = flags;
+        g_span_depth++;
+    }
+    return (clog_span_t)g_span_depth;
 }
 
 /**

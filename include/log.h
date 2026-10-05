@@ -624,6 +624,68 @@ CLOGX_API void clog_clear_trace_context(void);
 CLOGX_API clogx_errno_t clog_set_trace_context_hex(const char *trace_id_hex,
                                                    const char *span_id_hex);
 
+/**
+ * @brief Opaque token identifying a pushed span frame (1-based stack depth).
+ *
+ * Value 0 is never a valid token; it signals "no span" (stack full on
+ * @ref clog_span_start, or rejected input on @ref clog_span_join).
+ */
+typedef uint32_t clog_span_t;
+
+/**
+ * @brief Push a new child span frame onto the calling thread's span stack.
+ *
+ * Inherits the parent frame's trace ID (or the thread-local base context set
+ * via @ref clog_set_trace_context when the stack is empty; a fresh trace ID
+ * is generated when no context exists at all) and assigns a newly generated
+ * span ID. The parent frame's flags are inherited. Log records written while
+ * this frame is on top carry its IDs.
+ *
+ * @return 1-based depth token for @ref clog_span_end, or 0 when the stack
+ * (depth 16) is full. Never fails otherwise.
+ *
+ * Note Thread-local: only affects the calling thread. Zero heap allocation.
+ */
+CLOGX_API clog_span_t clog_span_start(void);
+
+/**
+ * @brief Pop the top span frame. Must be called LIFO with the matching token.
+ *
+ * @param[in] tok Token returned by @ref clog_span_start or @ref clog_span_join.
+ * @return CLOG_OK on success, CLOG_ERR_INVALID_ARG when `tok` is 0 or does not
+ * equal the current depth. On failure no state is modified.
+ */
+CLOGX_API clogx_errno_t clog_span_end(clog_span_t tok);
+
+/**
+ * @brief Export the current trace context as a W3C `traceparent` string.
+ *
+ * Exports the top frame's IDs (or the base context when the stack is empty)
+ * in `00-<32hex>-<16hex>-<flags>` form for propagation to downstream services
+ * or worker threads (pair with @ref clog_span_join).
+ *
+ * @param[out] buf Caller buffer receiving the NUL-terminated string.
+ * @param[in] len Buffer size in bytes; must be >= 56 (55 chars + NUL).
+ * @return CLOG_OK on success, CLOG_ERR_INVALID_ARG when `buf` is NULL,
+ * `len` < 56, or no active (non-zero trace ID) context exists. On failure
+ * `buf` is left untouched.
+ */
+CLOGX_API clogx_errno_t clog_span_export(char *buf, size_t len);
+
+/**
+ * @brief Accept an inbound `traceparent` and push a derived child frame.
+ *
+ * Validates dash positions/length/hex with the same strictness as the
+ * `traceparent` handling in the formatter; the inbound flags field is
+ * preserved verbatim (no sampling decision is made). The inbound span ID is
+ * validated but not retained (frames carry their own span ID).
+ *
+ * @param[in] traceparent `00-<32hex>-<16hex>-<flags>` string, >= 55 chars.
+ * @return Token for @ref clog_span_end, or 0 on NULL/short/malformed input
+ * or a full stack. On failure no state is modified.
+ */
+CLOGX_API clog_span_t clog_span_join(const char *traceparent);
+
 /* The Plugin ABI API (log_plugin_load, log_plugin_unload, log_plugin_create_sink,
  * log_plugin_info, log_plugin_scan) is declared in <clogx_plugin.h> included above. */
 

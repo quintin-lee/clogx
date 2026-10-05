@@ -288,6 +288,7 @@ if(CLOG_BUILD_TESTS)
         test_tls
         test_fast_ascii
         test_kv_logging
+        test_span_lifecycle
     )
 
     # Tests that directly reference internal symbols (not exported from shared lib)
