@@ -31,7 +31,7 @@ All of these are real, present code paths — nothing here is aspirational.
   `stdio` (`fwrite`, `fprintf`, `fopen`). No POSIX-only calls, no guards. They
   build and run unchanged on Windows.
 
-- **socket** — built on the Winsock abstraction in `include/clog/port.h`
+- **socket** — built on the Winsock abstraction in `include/clog_port.h`
   (`clog_socket_t`, `clog_net_init`, `clog_close_socket`,
   `clog_is_invalid_socket`, `clog_sock_size_t`), which map to `SOCKET`,
   `WSAStartup`, `closesocket`, `INVALID_SOCKET`. Sends work on Windows.
@@ -62,7 +62,7 @@ All of these are real, present code paths — nothing here is aspirational.
   `core/plugin_loader.c` returns `NULL`/`0` from every function
   (`log_plugin_load`, `log_plugin_create_sink`, `log_plugin_scan`,
   `log_plugin_create_sinks_from_config`), and `log_plugin_shutdown_all()`
-  is a no-op. Even though `include/clog/port.h` provides `clog_dlopen`
+  is a no-op. Even though `include/clog_port.h` provides `clog_dlopen`
   (`LoadLibrary`) / `clog_dlsym` (`GetProcAddress`) wrappers, they are **not
   used** — the plugin subsystem is disabled on Windows so the rest of the
   pipeline links without dynamic loading.
@@ -73,7 +73,7 @@ All of these are real, present code paths — nothing here is aspirational.
    (`RegisterEventSourceW` / `ReportEventW` / `DeregisterEventSource`),
    mapping severity → event type, inside the existing `_WIN32` branch.
 2. **plugin loader (Windows)** → drive the existing `clog_dlopen` /
-   `clog_dlsym` / `clog_dlclose` wrappers in `clog/port.h` to implement
+   `clog_dlsym` / `clog_dlclose` wrappers in `clog_port.h` to implement
    `log_plugin_*` instead of returning `NULL`. DSO filename conventions
    (`.dll` vs `.so`) would need `#ifdef` handling in the path plumbing.
 3. **socket timeout on Windows** → apply `SO_RCVTIMEO`/`SO_SNDTIMEO` via
