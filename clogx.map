@@ -8,6 +8,10 @@ CLOGX_0_2 {
     clog_prometheus_render_metrics;
     clog_set_trace_context;
     clog_set_trace_context_hex;
+    clog_span_end;
+    clog_span_export;
+    clog_span_join;
+    clog_span_start;
     console_sink_create;
     console_sink_create_stderr;
     console_sink_is_color_enabled;
