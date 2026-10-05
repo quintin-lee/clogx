@@ -53,8 +53,8 @@ flowchart TB
 
 1. **Windows 为 best-effort**:`plugin_loader.c`(dlopen)、`signal_handler.c`(self-pipe)、自旋锁等价物在 Windows 上是 **stub**(详见 [PLATFORM_SUPPORT.md](PLATFORM_SUPPORT.md)),真实 Windows 能力受限。
 2. **benchmark 回归护栏 ✅ 已完成**: `.github/workflows/benchmark.yml` 以**提交库内的 `benchmarks/.baseline`**(中位数,`make benchmark-baseline` 刷新)为基准,任一指标倒退超过 30%(默认)会让 CI 失败。
-3. **vcpkg/构建依赖不一致(bug)**: [vcpkg.json](/data/home/quintin/workspace/source/c/clog/vcpkg.json) 声明 `yaml-cpp`,
-   而 CMake/CPack 实际用的是 **`libyaml`**(`yaml_parser_*`, C 解析器),拉包会拉错依赖。
+3. **vcpkg/构建依赖不一致 ✅ 已修复**: [vcpkg.json](../vcpkg.json) 声明 `yaml-cpp`,
+   而 CMake/CPack 实际用的是 **`libyaml`**(`yaml_parser_*`, C 解析器),拉包会拉错依赖。(修复见 §3 A2)
 4. **发布定制到 0.3.0**: ABI `0_2` 仍锁定;未来 bump 需走 CONTRIBUTING 的规则。
 5. 文档(README/user_manual 中英文并存)历史上做过多次小型修正,但**无集中 roadmap 跟踪**。
 
