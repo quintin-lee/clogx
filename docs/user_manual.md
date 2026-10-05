@@ -34,6 +34,7 @@
    - [Hot Reload Configuration](#64-hot-reload-configuration)
    - [Fork Safety](#65-fork-safety)
    - [Signal Handling and Graceful Shutdown](#66-signal-handling-and-graceful-shutdown)
+   - [Span Lifecycle and Cross-Thread Propagation](#67-span-lifecycle-and-cross-thread-propagation)
 7. [API Reference](#7-api-reference)
    - [Core Functions](#71-core-functions)
    - [Sink Management](#72-sink-management)
@@ -1027,6 +1028,48 @@ log:
 The handler sets a global pending signal flag; the main loop calls `log_process_pending_signals()` to flush logs before raising the original signal for normal termination.
 
 **SIGPIPE handling**: On POSIX, `log_install_signal_handlers()` also sets `SIGPIPE` to `SIG_IGN` (saving the previous disposition for restoration via `log_restore_signal_handlers()`). This prevents the process from being killed when a socket sink encounters a broken pipe. The previous `SIGPIPE` disposition is restored on `log_destroy()` or when `log_restore_signal_handlers()` is called explicitly.
+
+### 67 Span Lifecycle and Cross-Thread Propagation
+
+Thread-local `set/get/clear` covers a single span. For nesting and handoff,
+use the explicit span stack (depth 16, zero heap allocation):
+
+```c
+#include "log.h"
+
+clog_span_t outer = clog_span_start();  /* inherits base trace, new span id */
+clog_span_t inner = clog_span_start();  /* child of outer */
+LOG_INFO("inside inner span");
+clog_span_end(inner);                   /* LIFO: token must equal top depth */
+clog_span_end(outer);
+```
+
+`clog_span_end` rejects out-of-order tokens with `CLOG_ERR_INVALID_ARG` and
+leaves state untouched. `clog_clear_trace_context()` empties the base and the
+whole stack (request-boundary semantics).
+
+Cross-thread / cross-service handoff is explicit — no inter-thread magic.
+Export in the producer, `join` in the consumer (server-side accept pushes a
+derived child and returns its token in one step):
+
+```c
+/* producer thread / upstream service */
+char tp[64];
+if (clog_span_export(tp, sizeof(tp)) == CLOG_OK) {
+    queue_push(tp);  /* hand the 55-char traceparent string over */
+}
+
+/* consumer thread / downstream service */
+clog_span_t t = clog_span_join(tp);
+if (t != 0) {
+    LOG_INFO("handling request under propagated trace");
+    clog_span_end(t);
+}
+```
+
+Notes: span IDs favor uniqueness over cryptographic strength
+(`getrandom`/`getentropy`, xorshift fallback); flags are passed through
+verbatim, never decided; exporting with no active context is rejected.
 
 ---
 
