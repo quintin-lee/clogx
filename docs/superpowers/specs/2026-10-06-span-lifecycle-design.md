@@ -73,7 +73,7 @@ CLOGX_API clog_span_t clog_span_join(const char *traceparent);
 ## 5. ABI / 版本 / 测试 / 文档影响
 
 - ABI：+4 符号同步进 `clogx.map` global 块 + `clogx.exports`
-  （`scripts/check_abi_exports.sh` 双向校验，macOS 下划线修饰由构建 existing 逻辑处理），
+  （`scripts/check_abi_exports.sh` 双向校验，macOS 下划线修饰由构建系统现有逻辑处理），
   符号数 67 → 71。
 - 版本：向后兼容新增 ⇒ **MINOR bump**（CONTRIBUTING 语义化版本规则）；
   实际 bump 走 `scripts/release.sh`，留给 plan 阶段执行，不在本 spec 动 `VERSION`。
