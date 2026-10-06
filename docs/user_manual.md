@@ -35,6 +35,7 @@
    - [Fork Safety](#65-fork-safety)
    - [Signal Handling and Graceful Shutdown](#66-signal-handling-and-graceful-shutdown)
    - [Span Lifecycle and Cross-Thread Propagation](#67-span-lifecycle-and-cross-thread-propagation)
+   - [Log Redaction](#68-log-redaction)
 7. [API Reference](#7-api-reference)
    - [Core Functions](#71-core-functions)
    - [Sink Management](#72-sink-management)
@@ -1070,6 +1071,23 @@ if (t != 0) {
 Notes: span IDs favor uniqueness over cryptographic strength
 (`getrandom`/`getentropy`, xorshift fallback); flags are passed through
 verbatim, never decided; exporting with no active context is rejected.
+
+---
+
+### 68 Log Redaction
+
+Substring rules mask sensitive text before the record reaches any sink:
+
+```c
+clog_redact_add("secret123", NULL);        /* default mask "***" */
+clog_redact_add("password", "[HIDDEN]");   /* custom mask */
+LOG_INFO("token=secret123");               /* logged as "token=***" */
+```
+
+Rules apply process-wide in registration order to messages and string KV
+values (`clog_redact_count` / `clog_redact_clear` manage the table, max 16).
+Zero rules costs a single counter check on the hot path. The async queue
+only ever holds redacted text. No regex: patterns are plain substrings.
 
 ---
 
