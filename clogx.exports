@@ -4,6 +4,9 @@ clog_prometheus_exporter_is_running
 clog_prometheus_exporter_start
 clog_prometheus_exporter_stop
 clog_prometheus_render_metrics
+clog_redact_add
+clog_redact_clear
+clog_redact_count
 clog_set_trace_context
 clog_set_trace_context_hex
 clog_span_end
