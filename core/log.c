@@ -330,6 +330,10 @@ static int logger_init_internal(logger_t *logger, const char *yaml_path)
  * @note Thread-safe: no locks held across the entire path. Module name is
  *       briefly locked; Prometheus counters use atomic increments.
  */
+static void  redact_message_if_needed(char *buf, size_t buf_size);
+static char *redact_apply_all_locked(const char *src);
+static void redact_kv_record_if_needed(log_record_t *record, char **p_owned_msg, char *owned_str[]);
+
 static void logger_writevprintf_internal(logger_t   *logger,
                                          log_level_t level,
                                          const char *file,
@@ -372,6 +376,8 @@ static void logger_writevprintf_internal(logger_t   *logger,
             message[sizeof(message) - 1] = '\0';
         }
     }
+
+    redact_message_if_needed(message, sizeof(message));
 
     char module_buf[64];
     clog_mutex_lock(&logger->module_mutex);
@@ -535,6 +541,12 @@ static void logger_write_kv_internal(logger_t        *logger,
         }
     }
 
+    char  *owned_msg              = NULL;
+    char  *owned_str[CLOG_MAX_KV] = {NULL};
+    size_t vi;
+
+    redact_kv_record_if_needed(&record, &owned_msg, owned_str);
+
     if (logger->config.async) {
         int ar = log_async_write_for(logger, &record);
         if (ar != 0) {
@@ -546,6 +558,10 @@ static void logger_write_kv_internal(logger_t        *logger,
         }
     } else {
         log_dispatcher_dispatch_for(logger, &record);
+    }
+    free(owned_msg);
+    for (vi = 0; vi < record.kv_count; vi++) {
+        free(owned_str[vi]);
     }
 }
 
@@ -754,6 +770,214 @@ clogx_errno_t clog_span_end(clog_span_t tok)
     }
     g_span_depth--;
     return CLOG_OK;
+}
+
+/* ---- Record-time redaction (rule table + appliers) ---- */
+
+#define CLOG_REDACT_DEFAULT_MASK "***"
+
+typedef struct {
+    char pattern[CLOG_REDACT_MAX_PATTERN];
+    char mask[CLOG_REDACT_MAX_MASK];
+} clog_redact_rule_t;
+
+static clog_mutex_t       g_redact_mutex = CLOG_MUTEX_INITIALIZER;
+static clog_redact_rule_t g_redact_rules[CLOG_MAX_REDACT_RULES];
+static size_t             g_redact_count = 0;
+
+clogx_errno_t clog_redact_add(const char *pattern, const char *mask)
+{
+    clogx_errno_t rc = CLOG_OK;
+
+    clog_mutex_lock(&g_redact_mutex);
+    if (pattern == NULL || pattern[0] == '\0' || g_redact_count >= (size_t)CLOG_MAX_REDACT_RULES) {
+        rc = CLOG_ERR_INVALID_ARG;
+    } else {
+        clog_redact_rule_t *slot = &g_redact_rules[g_redact_count];
+
+        snprintf(slot->pattern, sizeof(slot->pattern), "%s", pattern);
+        if (mask == NULL || mask[0] == '\0') {
+            snprintf(slot->mask, sizeof(slot->mask), "%s", CLOG_REDACT_DEFAULT_MASK);
+        } else {
+            snprintf(slot->mask, sizeof(slot->mask), "%s", mask);
+        }
+        g_redact_count++;
+    }
+    clog_mutex_unlock(&g_redact_mutex);
+    return rc;
+}
+
+void clog_redact_clear(void)
+{
+    clog_mutex_lock(&g_redact_mutex);
+    g_redact_count = 0;
+    clog_mutex_unlock(&g_redact_mutex);
+}
+
+size_t clog_redact_count(void)
+{
+    size_t n;
+
+    clog_mutex_lock(&g_redact_mutex);
+    n = g_redact_count;
+    clog_mutex_unlock(&g_redact_mutex);
+    return n;
+}
+
+/* Requires g_redact_mutex held. Replaces every occurrence of each rule's
+ * pattern with its mask, in registration order. Stored masks are never
+ * empty (add() normalizes), so the rescan always advances past the
+ * replacement and cannot loop forever. Overlong results are truncated
+ * with NUL termination (same convention as the message truncation above). */
+static void redact_apply_locked(char *buf, size_t buf_size)
+{
+    size_t r;
+
+    for (r = 0; r < g_redact_count; r++) {
+        const char *pat     = g_redact_rules[r].pattern;
+        const char *msk     = g_redact_rules[r].mask;
+        size_t      pat_len = strlen(pat);
+        size_t      msk_len = strlen(msk);
+        char       *hit;
+
+        if (pat_len == 0 || msk_len == 0) {
+            continue;
+        }
+        hit = strstr(buf, pat);
+        while (hit != NULL) {
+            size_t head = (size_t)(hit - buf);
+            size_t tail = strlen(hit + pat_len);
+
+            if (head + msk_len + tail < buf_size) {
+                memmove(hit + msk_len, hit + pat_len, tail + 1);
+                memcpy(hit, msk, msk_len);
+            } else {
+                size_t avail = buf_size - head - 1;
+                size_t ncpy  = msk_len < avail ? msk_len : avail;
+
+                memcpy(hit, msk, ncpy);
+                buf[head + ncpy] = '\0';
+                break;
+            }
+            hit = strstr(hit + msk_len, pat);
+        }
+    }
+}
+
+/* Hot-path wrapper: a single lock/unlock pair; zero rules costs one
+ * counter check, on the order of the level check. */
+static void redact_message_if_needed(char *buf, size_t buf_size)
+{
+    clog_mutex_lock(&g_redact_mutex);
+    if (g_redact_count > 0) {
+        redact_apply_locked(buf, buf_size);
+    }
+    clog_mutex_unlock(&g_redact_mutex);
+}
+
+/* KV-path hook: swaps record.message and STR KV values for redacted
+ * copies under one lock hold. Owned pointers are returned through
+ * @p p_owned_msg / @p owned_str (indexed by kv slot) for the caller to
+ * free after dispatch; untouched slots stay NULL. */
+static void redact_kv_record_if_needed(log_record_t *record, char **p_owned_msg, char *owned_str[])
+{
+    char  *owned_msg = NULL;
+    size_t vi;
+
+    clog_mutex_lock(&g_redact_mutex);
+    if (g_redact_count > 0) {
+        owned_msg = redact_apply_all_locked(record->message);
+        if (owned_msg != NULL) {
+            record->message = owned_msg;
+        }
+        for (vi = 0; vi < record->kv_count; vi++) {
+            if (record->kv[vi].type == CLOG_KV_TYPE_STR && record->kv[vi].val.str != NULL) {
+                char *rep = redact_apply_all_locked(record->kv[vi].val.str);
+
+                if (rep != NULL) {
+                    record->kv[vi].val.str = rep;
+                    owned_str[vi]          = rep;
+                }
+            }
+        }
+    }
+    clog_mutex_unlock(&g_redact_mutex);
+    *p_owned_msg = owned_msg;
+}
+
+/* Single-rule replace-all on a fresh malloc'd copy. Returns NULL when the
+ * pattern does not occur or on allocation failure (caller then keeps the
+ * original pointer: fail-open, never fail-closed). */
+static char *redact_apply_one(const char *src, const char *pat, const char *msk)
+{
+    size_t      pat_len = strlen(pat);
+    size_t      msk_len = strlen(msk);
+    size_t      count   = 0;
+    size_t      src_len;
+    size_t      new_len;
+    const char *cur;
+    const char *hit;
+    char       *out;
+    char       *dst;
+
+    cur = src;
+    while ((hit = strstr(cur, pat)) != NULL) {
+        count++;
+        cur = hit + pat_len;
+    }
+    if (count == 0) {
+        return NULL;
+    }
+    src_len = strlen(src);
+    new_len = (src_len - count * pat_len) + count * msk_len;
+    out     = (char *)malloc(new_len + 1);
+    if (out == NULL) {
+        return NULL;
+    }
+    dst = out;
+    cur = src;
+    while ((hit = strstr(cur, pat)) != NULL) {
+        size_t head = (size_t)(hit - cur);
+
+        memcpy(dst, cur, head);
+        dst += head;
+        memcpy(dst, msk, msk_len);
+        dst += msk_len;
+        cur = hit + pat_len;
+    }
+    {
+        size_t rest = strlen(cur) + 1;
+
+        memcpy(dst, cur, rest);
+    }
+    return out;
+}
+
+/* Requires g_redact_mutex held. Applies all rules in order to @p src,
+ * returns a fresh string when at least one rule matched, NULL otherwise
+ * (or on allocation failure). Caller owns the result and must free it. */
+static char *redact_apply_all_locked(const char *src)
+{
+    const char *cur   = src;
+    char       *owned = NULL;
+    size_t      r;
+
+    for (r = 0; r < g_redact_count; r++) {
+        const char *pat = g_redact_rules[r].pattern;
+        const char *msk = g_redact_rules[r].mask;
+        char       *rep;
+
+        if (pat[0] == '\0' || msk[0] == '\0') {
+            continue;
+        }
+        rep = redact_apply_one(cur, pat, msk);
+        if (rep != NULL) {
+            free(owned);
+            owned = rep;
+            cur   = owned;
+        }
+    }
+    return owned;
 }
 
 clogx_errno_t clog_span_export(char *buf, size_t len)

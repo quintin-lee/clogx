@@ -19,6 +19,9 @@
  * | @ref CLOG_MAX_PATH_SIZE       | 512      | File paths, socket addresses                   |
  * | @ref CLOG_MAX_PLUGINS         | 8        | Number of concurrently loaded plugins          |
  * | @ref CLOG_MAX_PLUGIN_CONFIG_SIZE | 4096  | Per-plugin YAML/JSON config blob size          |
+ * | @ref CLOG_MAX_REDACT_RULES     | 16       | Max simultaneous redaction rules              |
+ * | @ref CLOG_REDACT_MAX_PATTERN   | 128      | Max bytes per redaction pattern (incl. NUL)   |
+ * | @ref CLOG_REDACT_MAX_MASK      | 64       | Max bytes per redaction mask (incl. NUL)      |
  *
  * ## Safety
  *
@@ -102,6 +105,32 @@
  */
 #ifndef CLOG_MAX_PLUGIN_CONFIG_SIZE
 #define CLOG_MAX_PLUGIN_CONFIG_SIZE 4096
+#endif
+
+/**
+ * @def CLOG_MAX_REDACT_RULES
+ * @brief Maximum number of simultaneous log redaction rules.
+ */
+#ifndef CLOG_MAX_REDACT_RULES
+#define CLOG_MAX_REDACT_RULES 16
+#endif
+
+/**
+ * @def CLOG_REDACT_MAX_PATTERN
+ * @brief Maximum byte length of one redaction pattern, including NUL
+ *        (longer input is silently truncated at registration).
+ */
+#ifndef CLOG_REDACT_MAX_PATTERN
+#define CLOG_REDACT_MAX_PATTERN 128
+#endif
+
+/**
+ * @def CLOG_REDACT_MAX_MASK
+ * @brief Maximum byte length of one redaction mask, including NUL
+ *        (longer input is silently truncated at registration).
+ */
+#ifndef CLOG_REDACT_MAX_MASK
+#define CLOG_REDACT_MAX_MASK 64
 #endif
 
 /**

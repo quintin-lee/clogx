@@ -686,6 +686,33 @@ CLOGX_API clogx_errno_t clog_span_export(char *buf, size_t len);
  */
 CLOGX_API clog_span_t clog_span_join(const char *traceparent);
 
+/**
+ * @brief Add a record-time redaction rule.
+ *
+ * Every subsequent log message and string KV value has all occurrences of
+ * @p pattern replaced with @p mask before the record reaches any sink.
+ * Rules apply in registration order; a later rule may match text written
+ * by an earlier rule. Prefer masks without alphanumerics (e.g. `"***"`).
+ * Overlong inputs are silently truncated to @ref CLOG_REDACT_MAX_PATTERN /
+ * @ref CLOG_REDACT_MAX_MASK bytes.
+ *
+ * @param[in] pattern Substring to mask (must be non-NULL, non-empty).
+ * @param[in] mask Replacement text; NULL/empty selects the default `"***"`.
+ * @return CLOG_OK on success, CLOG_ERR_INVALID_ARG on NULL/empty pattern
+ * or a full rule table.
+ */
+CLOGX_API clogx_errno_t clog_redact_add(const char *pattern, const char *mask);
+
+/**
+ * @brief Remove all redaction rules.
+ */
+CLOGX_API void clog_redact_clear(void);
+
+/**
+ * @brief Return the number of active redaction rules.
+ */
+CLOGX_API size_t clog_redact_count(void);
+
 /* The Plugin ABI API (log_plugin_load, log_plugin_unload, log_plugin_create_sink,
  * log_plugin_info, log_plugin_scan) is declared in <clogx_plugin.h> included above. */
 
