@@ -849,8 +849,12 @@ static void redact_apply_locked(char *buf, size_t buf_size)
             size_t tail = strlen(hit + pat_len);
 
             if (head + msk_len + tail < buf_size) {
+                size_t k;
+
                 memmove(hit + msk_len, hit + pat_len, tail + 1);
-                memcpy(hit, msk, msk_len);
+                for (k = 0; k < msk_len; k++) {
+                    hit[k] = msk[k];
+                }
             } else {
                 size_t avail = buf_size - head - 1;
                 size_t ncpy  = msk_len < avail ? msk_len : avail;
@@ -938,10 +942,13 @@ static char *redact_apply_one(const char *src, const char *pat, const char *msk)
     cur = src;
     while ((hit = strstr(cur, pat)) != NULL) {
         size_t head = (size_t)(hit - cur);
+        size_t k;
 
         memcpy(dst, cur, head);
         dst += head;
-        memcpy(dst, msk, msk_len);
+        for (k = 0; k < msk_len; k++) {
+            dst[k] = msk[k];
+        }
         dst += msk_len;
         cur = hit + pat_len;
     }
