@@ -138,7 +138,7 @@ BENCHMARK_SOURCES = $(wildcard benchmarks/*.c)
 BENCHMARK_BINS = $(patsubst benchmarks/%.c,$(BUILD_DIR)/%,$(BENCHMARK_SOURCES))
 BENCH_BASELINE_SAMPLES = 3
 
-VERSION := $(shell if [ -f VERSION ]; then head -n 1 VERSION; else echo "0.3.0"; fi)
+VERSION := $(shell if [ -f VERSION ]; then head -n 1 VERSION; else echo "0.4.0"; fi)
 VERSION_MAJOR := $(shell echo $(VERSION) | cut -d. -f1)
 VERSION_MINOR := $(shell echo $(VERSION) | cut -d. -f2)
 VERSION_PATCH := $(shell echo $(VERSION) | cut -d. -f3)

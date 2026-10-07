@@ -4,6 +4,8 @@ All notable changes to this project will be documented in this file.
 
 ## [Unreleased]
 
+## [0.4.0] - 2026-10-07
+
 ### Fixed
 - Docs: fixed three wrong `clog/port.h` include paths in `docs/PLATFORM_SUPPORT.md` (real header is `include/clog_port.h`); marked the ROADMAP §2 vcpkg dependency issue as resolved (was already fixed per §3 A2) and replaced its stale absolute-path link; removed stray gitignored backup `include/log.h.bak`.
 - macOS Release shared-library build: `clogx.exports` symbols are now underscore-mangled (`sed 's/^/_/'`) before being passed to `-Wl,-exported_symbols_list`, fixing the `Undefined symbols ... referenced from: <initial-undefines>` link failure for all exported API symbols on AppleClang/ld64. Applied in both Makefile and CMake shared builds.
@@ -244,7 +246,8 @@ All notable changes to this project will be documented in this file.
 - 17 test cases covering lifecycle, reload, rotation, config validation,
   async fallback, and error paths
 
-[Unreleased]: https://github.com/quintin-lee/clogx/compare/v0.3.0...HEAD
+[Unreleased]: https://github.com/quintin-lee/clogx/compare/v0.4.0...HEAD
+[0.4.0]: https://github.com/quintin-lee/clogx/releases/tag/v0.4.0
 [0.3.0]: https://github.com/quintin-lee/clogx/releases/tag/v0.3.0
 [0.2.1]: https://github.com/quintin-lee/clogx/releases/tag/v0.2.1
 [0.2.0]: https://github.com/quintin-lee/clogx/releases/tag/v0.2.0
