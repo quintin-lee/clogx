@@ -533,6 +533,19 @@ static inline size_t clog_atomic_fetch_add_sz(volatile size_t *ptr, size_t n)
 #endif
 }
 
+static inline size_t clog_atomic_fetch_add_sz_ar(volatile size_t *ptr, size_t n)
+{
+#if defined(__GNUC__) || defined(__clang__)
+    return __atomic_fetch_add(ptr, n, __ATOMIC_ACQ_REL);
+#elif defined(_WIN32) || defined(_WIN64)
+    return (size_t)InterlockedExchangeAdd64((volatile LONG64 *)ptr, (LONG64)n);
+#else
+    size_t old = *ptr;
+    *ptr += n;
+    return old;
+#endif
+}
+
 static inline size_t clog_atomic_fetch_sub_sz(volatile size_t *ptr, size_t n)
 {
 #if defined(__GNUC__) || defined(__clang__)
@@ -590,6 +603,28 @@ static inline void clog_atomic_store_int(volatile int *ptr, int val)
     InterlockedExchange((LONG *)ptr, (LONG)val);
 #else
     *ptr = val;
+#endif
+}
+
+static inline int clog_atomic_cas_int(volatile int *ptr, int *expected, int desired)
+{
+#if defined(__GNUC__) || defined(__clang__)
+    return __atomic_compare_exchange_n(
+        ptr, expected, desired, 1, __ATOMIC_ACQ_REL, __ATOMIC_ACQUIRE);
+#elif defined(_WIN32) || defined(_WIN64)
+    int old = InterlockedCompareExchange((LONG *)ptr, desired, *expected);
+    if (old == *expected) {
+        return 1;
+    }
+    *expected = old;
+    return 0;
+#else
+    if (*ptr == *expected) {
+        *ptr = desired;
+        return 1;
+    }
+    *expected = *ptr;
+    return 0;
 #endif
 }
 

@@ -290,10 +290,11 @@ if(CLOG_BUILD_TESTS)
         test_kv_logging
         test_span_lifecycle
         test_redact
+        test_async_producer_pressure
     )
 
     # Tests that directly reference internal symbols (not exported from shared lib)
-    set(CLOG_INTERNAL_TESTS test_queue_try_put test_async_fallback test_async_reload test_coverage_gaps test_socket_async)
+    set(CLOG_INTERNAL_TESTS test_queue_try_put test_async_fallback test_async_reload test_coverage_gaps test_socket_async test_async_producer_pressure)
 
     foreach(test_name IN LISTS CLOG_TEST_SOURCES)
         if(CLOG_BUILD_SHARED AND test_name IN_LIST CLOG_INTERNAL_TESTS)

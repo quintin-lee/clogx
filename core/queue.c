@@ -6,17 +6,21 @@
  *
  * This is a lock-free bounded queue backed by a dynamically-allocated ring
  * buffer of `log_record_t` values. The producer fast path (`try_put`) uses
- * an atomic compare-exchange loop on `head` — no mutex is ever acquired by
- * producers. The single consumer drains via `get_batch` and advances `tail`.
+ * a single `atomic_fetch_add` on `head` (wait-free claim, no retry) — no
+ * mutex is ever acquired by producers. The single consumer drains via
+ * `get_batch` and advances `tail`.
  *
  * Synchronization is handled by:
- * - **Atomic CAS** on `head` for slot claiming (producers).
+ * - **Atomic fetch_add** on `head` for slot claiming (producers); a
+ *   post-claim full-queue check publishes a tombstone for race losers.
  * - **Per-slot sequence numbers**: a producer writes the record, then
  *   release-stores `seq = position + 1`; the consumer acquire-loads `seq`
  *   and only reads slots where it equals `position + 1`. This makes the
  *   record write visible to the consumer and prevents it from reading a
- *   half-written record in the window between the head CAS and the write.
- * - **Semaphore** `items_sem` signals the consumer when new items arrive.
+ *   half-written record in the window between the head fetch_add and
+ *   the write.
+ * - **Semaphore** `items_sem` wakes the consumer, posted only when the
+ *   consumer is parked (coalesced; check-then-park with double-check).
  * - **Semaphore** `slots_sem` signals blocked producers when space frees up.
  * - A small `drain_mutex` + `drain_cond` pair is used *only* by
  *   `wait_empty` during shutdown — never in the hot path.
@@ -28,13 +32,15 @@
  *
  * ## Memory Ordering
  *
- * - Producers: `clog_atomic_load_sz(tail)` (acquire) is performed inside the
- *   CAS loop to check capacity. After claiming a slot via CAS, the record is
- *   written, then the slot is published with a release-store of
- *   `seq = position + 1`, and `sem_post(items_sem)` wakes the consumer.
+ * - Producers: `clog_atomic_load_sz(tail)` (acquire) is the optimistic
+ *   pre-check; the slot is claimed via fetch_add (acq-rel), re-checked
+ *   against tail, then the record is written and the slot published with
+ *   a release-store of `seq = position + 1`. `sem_post(items_sem)` fires
+ *   only on a parked 1->0 claim.
  *
- * - Consumer: `sem_wait(items_sem)` (acquire) → `clog_atomic_load_sz(head)`
- *   (acquire) → for each slot, acquire-load `seq` and only read records where
+ * - Consumer: fast-path `clog_atomic_load_sz(head/tail)` (acquire) → if
+ *   empty and open, set parked, double-check, then `sem_wait(items_sem)`
+ *   → for each slot, acquire-load `seq` and only read records where
  *   `seq == position + 1` → `clog_atomic_store_sz(tail, ...)` (release) →
  *   `sem_post(slots_sem)` to free slots for producers.
  *
@@ -66,6 +72,46 @@ static size_t next_pow2(size_t n)
     return p;
 }
 
+/* A record is inline iff its message points into its own inline_buf.
+ * log_record_clone packs message+module+tag+KV strings all-or-nothing:
+ * total <= CLOG_MAX_INLINE_SIZE goes fully inline, otherwise fully heap.
+ * Empty records (message == NULL) and tombstones are never inline. */
+static int log_record_is_inline(const log_record_t *r)
+{
+    return r->message != NULL && r->message >= r->inline_buf &&
+           r->message < r->inline_buf + CLOG_MAX_INLINE_SIZE;
+}
+
+/* Repoint dst's string pointers into dst's own inline_buf at the same
+ * offsets src uses. Pure pointer arithmetic, no memcpy (struct copy
+ * already carried the bytes). Covers message/module/tag + KV keys/STR vals. */
+static void log_record_rebase_inline(log_record_t *dst, const log_record_t *src)
+{
+    ptrdiff_t off;
+    if (src->message) {
+        off          = src->message - src->inline_buf;
+        dst->message = dst->inline_buf + off;
+    }
+    if (src->module) {
+        off         = src->module - src->inline_buf;
+        dst->module = dst->inline_buf + off;
+    }
+    if (src->tag) {
+        off      = src->tag - src->inline_buf;
+        dst->tag = dst->inline_buf + off;
+    }
+    for (size_t i = 0; i < src->kv_count; i++) {
+        if (src->kv[i].key) {
+            off            = src->kv[i].key - src->inline_buf;
+            dst->kv[i].key = dst->inline_buf + off;
+        }
+        if (src->kv[i].type == CLOG_KV_TYPE_STR && src->kv[i].val.str) {
+            off                = src->kv[i].val.str - src->inline_buf;
+            dst->kv[i].val.str = dst->inline_buf + off;
+        }
+    }
+}
+
 mpsc_queue_t *mpsc_queue_create(size_t capacity)
 {
     mpsc_queue_t *q = malloc(sizeof(mpsc_queue_t));
@@ -84,10 +130,10 @@ mpsc_queue_t *mpsc_queue_create(size_t capacity)
     q->capacity = cap;
     q->mask     = cap - 1;
 
-    q->head   = 0;
-    q->tail   = 0;
-    q->count  = 0;
-    q->closed = 0;
+    q->head            = 0;
+    q->tail            = 0;
+    q->closed          = 0;
+    q->consumer_parked = 0;
 
     /* Initialise per-slot sequence numbers: slot i expects `seq == i + 1`
      * for the first record written at absolute position i. */
@@ -112,6 +158,16 @@ mpsc_queue_t *mpsc_queue_create(size_t capacity)
     return q;
 }
 
+/* Wake the consumer only if it is parked (CAS 1->0 claims the post).
+ * When the consumer is awake and batch-draining, producers pay zero syscall. */
+static void queue_signal_consumer(mpsc_queue_t *q)
+{
+    int expected = 1;
+    if (clog_atomic_cas_int(&q->consumer_parked, &expected, 0)) {
+        clog_sem_post(&q->items_sem);
+    }
+}
+
 int mpsc_queue_try_put(mpsc_queue_t *restrict q, log_record_t *restrict record)
 {
     if (!q || !record) {
@@ -123,34 +179,67 @@ int mpsc_queue_try_put(mpsc_queue_t *restrict q, log_record_t *restrict record)
         return -1;
     }
 
-    /*
-     * CAS loop: each producer atomically claims a write slot by advancing
-     * `head`. If another producer races ahead, we retry with the updated
-     * value. This is the lock-free fast path — no mutex is acquired.
-     */
-    for (;;) {
-        size_t head = clog_atomic_load_sz(&q->head);
-        size_t tail = clog_atomic_load_sz(&q->tail);
-
-        if (head - tail >= q->capacity) {
-            return -1; /* Queue is full. */
-        }
-
-        if (clog_atomic_cas_sz(&q->head, &head, head + 1)) {
-            /*
-             * Successfully claimed slot `head` (the old value). Write the
-             * record, publish it with a release-store of the sequence number
-             * (making the write visible to the consumer), then signal.
-             */
-            mpsc_slot_t *slot = &q->buffer[head & q->mask];
-            slot->rec         = *record;
-            clog_atomic_store_u64(&slot->seq, (uint64_t)head + 1);
-            clog_atomic_fetch_add_sz(&q->count, 1);
-            clog_sem_post(&q->items_sem);
-            return 0;
-        }
-        /* CAS failed — head was advanced by another producer; retry. */
+    /* Optimistic pre-check (same drop semantics as before). */
+    size_t tail_snap = clog_atomic_load_sz(&q->tail);
+    size_t head_snap = clog_atomic_load_sz(&q->head);
+    if (head_snap - tail_snap >= q->capacity) {
+        return -1; /* Queue is full. */
     }
+
+    /*
+     * Wait-free claim: one atomic op, no CAS retry storm under N producers.
+     * head is monotonic — never rolled back (would race concurrent claims).
+     */
+    size_t       pos  = clog_atomic_fetch_add_sz_ar(&q->head, 1);
+    mpsc_slot_t *slot = &q->buffer[pos & q->mask];
+
+    /* Post-claim re-check: losers of the full-queue race must publish a
+     * tombstone (valid seq + is_tombstone, no owned memory) — silent
+     * abandon would stall the consumer, which breaks at the first
+     * unpublished slot. But the ring slot currently holds the UNREAD
+     * record from lap pos-capacity (tail <= pos-capacity proves it):
+     * publishing now would destroy it. Wait until the consumer has eaten
+     * past it (progress is guaranteed: everything before pos is published,
+     * so the consumer advances to the hole), then publish. If the consumer
+     * makes zero progress for the whole bound it is effectively dead —
+     * abandon the claim (the record is already fallback-dispatched
+     * write-side; the queue degrades to sync mode instead of hanging). */
+    tail_snap = clog_atomic_load_sz(&q->tail);
+    if (pos - tail_snap >= q->capacity) {
+        if (pos >= q->capacity) {
+            size_t        last_tail = tail_snap;
+            unsigned long stalls    = 0;
+            for (;;) {
+                tail_snap = clog_atomic_load_sz(&q->tail);
+                if (tail_snap > pos - q->capacity) {
+                    break; /* Old content consumed — overwrite is safe. */
+                }
+                if (tail_snap != last_tail) {
+                    last_tail = tail_snap;
+                    stalls    = 0;
+                } else if (++stalls > 1000000) {
+                    return -1; /* Consumer dead/stalled — abandon, no publish. */
+                }
+                clog_sleep_ms(0);
+            }
+        }
+        log_record_t tomb;
+        memset(&tomb, 0, sizeof(tomb));
+        tomb.is_tombstone = true;
+        slot->rec         = tomb;
+        clog_atomic_store_u64(&slot->seq, (uint64_t)pos + 1);
+        queue_signal_consumer(q);
+        return -1;
+    }
+
+    slot->rec = *record;
+    if (log_record_is_inline(record)) {
+        /* Pointers still reference the producer's stack copy — rebase into the slot. */
+        log_record_rebase_inline(&slot->rec, record);
+    }
+    clog_atomic_store_u64(&slot->seq, (uint64_t)pos + 1);
+    queue_signal_consumer(q);
+    return 0;
 }
 
 int mpsc_queue_put(mpsc_queue_t *restrict q, log_record_t *restrict record)
@@ -187,27 +276,32 @@ int mpsc_queue_wait_for_items(mpsc_queue_t *q)
     if (!q) {
         return -1;
     }
-
-    /*
-     * The semaphore may be posted by close() even when the queue is empty.
-     * Loop until we either find items to consume or confirm the queue is
-     * closed and drained.
-     */
     for (;;) {
-        clog_sem_wait(&q->items_sem);
-
-        /* Load the latest head (producer writes) and tail (consumer reads). */
+        /* Fast path: items already visible — never touch parked/sem. */
         size_t head = clog_atomic_load_sz(&q->head);
-        size_t tail = clog_atomic_load_sz(&q->tail); /* single consumer,
-                                                       wait_empty may read */
-
+        size_t tail = clog_atomic_load_sz(&q->tail);
         if (head - tail > 0) {
             return 0;
         }
         if (clog_atomic_load_int(&q->closed)) {
             return -1;
         }
-        /* Spurious wake-up — re-block. */
+        /* Park, then re-check (check-then-park): a producer that posted
+         * between our first check and park would otherwise be lost. */
+        clog_atomic_store_int(&q->consumer_parked, 1);
+        head = clog_atomic_load_sz(&q->head);
+        tail = clog_atomic_load_sz(&q->tail);
+        if (head - tail > 0) {
+            clog_atomic_store_int(&q->consumer_parked, 0);
+            return 0;
+        }
+        if (clog_atomic_load_int(&q->closed)) {
+            clog_atomic_store_int(&q->consumer_parked, 0);
+            return -1;
+        }
+        clog_sem_wait(&q->items_sem);
+        clog_atomic_store_int(&q->consumer_parked, 0);
+        /* Loop: spurious wake-ups (incl. close's empty post) re-block here. */
     }
 }
 
@@ -242,6 +336,10 @@ int mpsc_queue_get_batch_try(mpsc_queue_t *restrict q,
             break;
         }
         records[n] = slot->rec;
+        if (log_record_is_inline(&slot->rec)) {
+            /* Pointers reference the ring slot — rebase into our own batch copy. */
+            log_record_rebase_inline(&records[n], &slot->rec);
+        }
         n++;
     }
     if (n == 0) {
@@ -250,7 +348,6 @@ int mpsc_queue_get_batch_try(mpsc_queue_t *restrict q,
 
     /* Advance our consumer read position. */
     clog_atomic_store_sz(&q->tail, tail + n);
-    clog_atomic_fetch_sub_sz(&q->count, n);
 
     /* Free up slots for blocked producers. */
     for (size_t i = 0; i < n; i++) {
@@ -285,8 +382,8 @@ int mpsc_queue_get_batch(mpsc_queue_t *restrict q,
     /*
      * Blocking batch dequeue: wait for at least one published record, then
      * drain without blocking again. If all claimed slots are still
-     * unpublished (producers preempted between CAS and write), the committed
-     * producers are guaranteed to publish and post items_sem, so re-wait.
+     * unpublished (producers preempted between fetch_add and write), the
+     * committed producers are guaranteed to publish and wake us, so re-wait.
      */
     for (;;) {
         if (mpsc_queue_wait_for_items(q) != 0) {

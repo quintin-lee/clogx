@@ -4,6 +4,10 @@ All notable changes to this project will be documented in this file.
 
 ## [Unreleased]
 
+### Added
+- Async producer fast-path: wait-free slot claim via `atomic_fetch_add` on `head` (no CAS retry storm), coalesced consumer wakeup (sem post only on parked 1→0 claim), and zero-malloc inline string storage (`CLOG_MAX_INLINE_SIZE`, default 256B, embedded in `log_record_t`); over-claim losers spin-until-safe then publish a tombstone (`is_tombstone`) so the consumer never stalls. Measured +20% async / +14% throughput vs v0.4.0 baseline. Queue `struct` layout changed (ABI movement, `head`/`tail`/`closed`/`consumer_parked` on separate 64B lines, `count` removed in favor of a `head - tail` snapshot).
+- `tests/test_async_producer_pressure.c`: 8 producers × 100k records pressure test (accounting identity `real == ok`, tombstones bounded by fails, final depth 0) plus a deterministic inline-rebase round-trip check.
+
 ## [0.4.0] - 2026-10-07
 
 ### Fixed
