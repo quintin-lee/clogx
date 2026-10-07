@@ -5,6 +5,7 @@ docs/api/
 deps/
 .codegraph/
 .omo/
+.worktrees/
 
 cmake_build/
 .cache/
