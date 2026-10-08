@@ -22,6 +22,7 @@
  * | @ref CLOG_MAX_REDACT_RULES     | 16       | Max simultaneous redaction rules              |
  * | @ref CLOG_REDACT_MAX_PATTERN   | 128      | Max bytes per redaction pattern (incl. NUL)   |
  * | @ref CLOG_REDACT_MAX_MASK      | 64       | Max bytes per redaction mask (incl. NUL)      |
+ * | @ref CLOG_MAX_INLINE_SIZE      | 256      | Per-record inline string bytes (async fast-path) |
  *
  * ## Safety
  *
@@ -139,6 +140,19 @@
  */
 #ifndef CLOG_MAX_KV
 #define CLOG_MAX_KV 16
+#endif
+
+/**
+ * @def CLOG_MAX_INLINE_SIZE
+ * @brief Byte budget for inline string storage inside @ref log_record_t.
+ *
+ * When the async packer's total string bytes fit this budget, strings are
+ * copied into the record's embedded `inline_buf` instead of heap — zero
+ * malloc/free on the producer hot path. Overridable via `-D` like all limits.
+ * Final value to be calibrated by benchmark (spec §3.3).
+ */
+#ifndef CLOG_MAX_INLINE_SIZE
+#define CLOG_MAX_INLINE_SIZE 256
 #endif
 
 #endif /* LOG_LIMITS_H */

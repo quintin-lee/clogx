@@ -54,6 +54,17 @@ static void log_record_free_owned(log_record_t *record)
     if (!record) {
         return;
     }
+    if (record->message != NULL && record->message >= record->inline_buf &&
+        record->message < record->inline_buf + CLOG_MAX_INLINE_SIZE) {
+        /* Inline record: strings live in our own inline_buf, nothing to free. */
+        record->message  = NULL;
+        record->file     = NULL;
+        record->func     = NULL;
+        record->module   = NULL;
+        record->tag      = NULL;
+        record->kv_count = 0;
+        return;
+    }
     const char *block =
         record->message
             ? record->message
@@ -77,9 +88,11 @@ static void log_record_free_owned(log_record_t *record)
  * @brief Deep-copy a log record, allocating independent heap strings.
  *
  * A naive memcpy would create dangling pointers when the original
- * record's stack-allocated strings go out of scope. This function
- * allocates a single contiguous block for message + module + tag + KV strings,
- * copies them, and points the destination fields into that block.
+ * record's stack-allocated strings go out of scope. When the total string
+ * bytes fit @ref CLOG_MAX_INLINE_SIZE, they are packed into the
+ * destination's embedded `inline_buf` (no malloc); otherwise this function
+ * allocates a single contiguous block for message + module + tag + KV
+ * strings, copies them, and points the destination fields into that block.
  * file and func are compile-time constants (no copy needed).
  *
  * @param[out] dst  Destination record (must not be NULL).
@@ -114,6 +127,50 @@ static int log_record_clone(log_record_t *restrict dst, const log_record_t *rest
         dst->message = NULL;
         dst->module  = NULL;
         dst->tag     = NULL;
+        return 0;
+    }
+
+    if (total_bytes <= CLOG_MAX_INLINE_SIZE) {
+        /* Inline fast-path: pack everything into dst's embedded buffer.
+         * No malloc; pointers aim at dst->inline_buf and are rebased into
+         * the ring slot by try_put (never into our stack copy). */
+        char *p = dst->inline_buf;
+        if (src->message) {
+            memcpy(p, src->message, msg_len + 1);
+            dst->message = p;
+            p += msg_len + 1;
+        } else {
+            dst->message = NULL;
+        }
+        if (src->module) {
+            memcpy(p, src->module, mod_len + 1);
+            dst->module = p;
+            p += mod_len + 1;
+        } else {
+            dst->module = NULL;
+        }
+        if (src->tag) {
+            memcpy(p, src->tag, tag_len + 1);
+            dst->tag = p;
+            p += tag_len + 1;
+        } else {
+            dst->tag = NULL;
+        }
+
+        for (size_t i = 0; i < src->kv_count; i++) {
+            if (src->kv[i].key) {
+                size_t klen = strlen(src->kv[i].key);
+                memcpy(p, src->kv[i].key, klen + 1);
+                dst->kv[i].key = p;
+                p += klen + 1;
+            }
+            if (src->kv[i].type == CLOG_KV_TYPE_STR && src->kv[i].val.str) {
+                size_t vlen = strlen(src->kv[i].val.str);
+                memcpy(p, src->kv[i].val.str, vlen + 1);
+                dst->kv[i].val.str = p;
+                p += vlen + 1;
+            }
+        }
         return 0;
     }
 
@@ -196,6 +253,9 @@ static void *async_worker_for(void *arg)
         clog_atomic_store_int(&logger->async_processing, 1);
         int count = mpsc_queue_get_batch_try(logger->queue, batch, ASYNC_BATCH_SIZE);
         for (int i = 0; i < count; i++) {
+            if (batch[i].is_tombstone) {
+                continue; /* Full-queue marker: already counted write-side; skip dispatch. */
+            }
             log_dispatcher_dispatch_for(logger, &batch[i]);
             log_record_free_owned(&batch[i]);
         }
@@ -298,7 +358,8 @@ size_t log_async_get_queue_depth_for(logger_t *logger)
     if (!logger || !logger->queue) {
         return 0;
     }
-    return clog_atomic_load_sz(&logger->queue->count);
+    mpsc_queue_t *q = logger->queue;
+    return clog_atomic_load_sz(&q->head) - clog_atomic_load_sz(&q->tail);
 }
 
 void log_async_atfork_child_for(logger_t *logger)
@@ -313,10 +374,10 @@ void log_async_atfork_child_for(logger_t *logger)
     clog_mutex_destroy(&q->drain_mutex);
     clog_cond_destroy(&q->drain_cond);
 
-    q->head   = 0;
-    q->tail   = 0;
-    q->count  = 0;
-    q->closed = 0;
+    q->head            = 0;
+    q->tail            = 0;
+    q->closed          = 0;
+    q->consumer_parked = 0;
 
     if (clog_sem_init(&q->items_sem, 0) != 0) {
         logger->async_running = 0;

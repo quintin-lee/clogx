@@ -15,7 +15,7 @@
  * these strings before enqueueing to ensure the record remains valid after the caller returns.
  *
  * Size Considerations:
- *   - log_record_t is designed to fit on the stack with minimal overhead (64 bytes on 64-bit).
+ *   - log_record_t is 744 bytes on 64-bit (dominated by kv[16] + 256B inline_buf).
  *     String pointers (8 bytes each) avoid copying the actual message until formatting.
  *   - The fixed-size trace_id/span_id arrays support W3C TraceContext without heap allocation.
  *
@@ -124,8 +124,9 @@ typedef enum {
  *   - Fields like `timestamp`, `tid`, and `pid` are captured at logging time
  *     and reflect the context at the moment the log was issued.
  *
- * Size: 64 bytes on typical 64-bit platforms (12 pointers/arrays + 6 scalars).
- *       Fits comfortably on stack without overflow concerns even in tight loops.
+ * Size: 744 bytes on typical 64-bit platforms (dominated by kv[16] array +
+ *       256B inline_buf). Stack allocation per log call is acceptable; the
+ *       async queue holds capacity × 744B in its ring buffer.
  *
  * @par W3C TraceContext Integration
  * The `trace_id` (16 bytes) and `span_id` (8 bytes) fields carry distributed
@@ -153,6 +154,8 @@ typedef struct {
     uint8_t   span_id[8];   /**< W3C TraceContext span-id; zero bytes indicate no active span. */
     clog_kv_t kv[CLOG_MAX_KV]; /**< Structured key-value attributes array. */
     size_t    kv_count;        /**< Number of valid entries in kv array (0..CLOG_MAX_KV). */
+    bool      is_tombstone;    /**< Queue-full marker: skip dispatch, no owned memory. */
+    char inline_buf[CLOG_MAX_INLINE_SIZE]; /**< Embedded string storage (async inline fast-path). */
 } log_record_t;
 
 /**
