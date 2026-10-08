@@ -220,9 +220,23 @@ int log_dispatcher_dispatch_for(logger_t *logger, log_record_t *record)
             write_buf = colored_buf;
             write_len = (size_t)colored_len;
         }
-        sink->write(sink, write_buf, write_len);
         if (write_len > 0 && write_buf[write_len - 1] != '\n') {
-            sink->write(sink, "\n", 1);
+            /* Fast path: stage content + newline in one stack copy, then a
+             * single write syscall (was: content write + 1-byte "\n" write). */
+            char   staged[CLOG_MAX_FORMATTED_SIZE + 1];
+            size_t cap = (write_buf == colored_buf) ? sizeof(colored_buf) : sizeof(formatted_buf);
+            if (write_len + 1 < cap && write_len + 1 < sizeof(staged)) {
+                memcpy(staged, write_buf, write_len);
+                staged[write_len]     = '\n';
+                staged[write_len + 1] = '\0';
+                sink->write(sink, staged, write_len + 1);
+            } else {
+                /* Full-size line: fall back to two writes (byte-identical). */
+                sink->write(sink, write_buf, write_len);
+                sink->write(sink, "\n", 1);
+            }
+        } else {
+            sink->write(sink, write_buf, write_len);
         }
     }
     clog_mutex_unlock(&logger->dispatcher_mutex);

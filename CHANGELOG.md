@@ -4,6 +4,9 @@ All notable changes to this project will be documented in this file.
 
 ## [Unreleased]
 
+### Changed
+- Sync hot-path throughput: module name via seqlock (lock-free read, mutex only on concurrent set), record assembled field-by-field (no `memset`), pid cached at init (refreshed atfork), redact zero-rule fast path (no mutex), dispatcher newline merged into a single `write` per record. Measured sync +107.7% / throughput +68.3% vs v0.4.0 baseline. ABI unchanged; `test_multi_instance` write-count assertions updated 6→3 / 8→4 (same bytes, one syscall per record).
+
 ## [0.4.0] - 2026-10-07
 
 ### Fixed

@@ -1,8 +1,13 @@
 # ThreadSanitizer suppressions for clogx.
 #
 # Entries are added ONLY for races involving external uninstrumented code
-# (e.g. system libyaml) that cannot be instrumented in CI. Do NOT add entries
-# for races inside clogx itself — those are real bugs to fix.
+# (e.g. system libyaml) that cannot be instrumented in CI, plus benign-by-design
+# lock-free protocols (seqlock) whose correctness TSan cannot verify — those must
+# cite the guard mechanism. Do NOT add entries for other races inside clogx itself.
 
 # macOS Apple Clang TSan interposer quirk in test_multithread_sync
 race:file_write
+# Benign by design: module[] seqlock payload. The writer's snprintf races the
+# reader's optimistic memcpy, but every torn copy is detected by the module_gen
+# double-flip and re-read under module_mutex. Guard: module_gen in core/log.c.
+race:logger_set_module_internal

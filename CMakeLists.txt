@@ -261,6 +261,7 @@ if(CLOG_BUILD_TESTS)
         test_max_size
         test_console_stderr
         test_module_trunc
+        test_sync_hotpath
         test_mutex_guard_raii
         test_add_sink
         test_multithread_sync

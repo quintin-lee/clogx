@@ -64,8 +64,10 @@ typedef struct logger_t {
     clog_mutex_t fmt_mutex;                        /**< Mutex for format string access. */
 
     /* ── Module name ── */
-    char         module[64];   /**< Module/tag name for %module token. */
-    clog_mutex_t module_mutex; /**< Mutex for module name access. */
+    char            module[64];   /**< Module/tag name for %module token. */
+    volatile size_t module_gen;   /**< Seqlock generation: odd = writer inside. */
+    uint32_t        cached_pid;   /**< getpid() cached at init, refreshed atfork. */
+    clog_mutex_t    module_mutex; /**< Mutex for module name access (slow path). */
 
     /* ── Runtime statistics ── */
     uint64_t total_logged;       /**< Total log records dispatched. */
