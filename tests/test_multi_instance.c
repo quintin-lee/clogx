@@ -180,12 +180,12 @@ static void test_instance_logging(void)
     LOGGER_ERROR(logger, "error msg");
     logger_flush(logger);
 
-    /* Custom sink write is called twice per record (message + newline). */
-    assert(g_sink_write_count == 6);
+    /* Custom sink write is called once per record (message + newline merged). */
+    assert(g_sink_write_count == 3);
 
     LOGGER_FATAL(logger, "fatal msg");
     logger_flush(logger);
-    assert(g_sink_write_count == 8);
+    assert(g_sink_write_count == 4);
 
     logger_destroy(logger);
     printf("test_instance_logging PASSED (%d writes)\n", g_sink_write_count);

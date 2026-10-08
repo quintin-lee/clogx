@@ -205,11 +205,16 @@ void (*log_get_async_fallback_cb(void))(void)
 static void logger_set_module_internal(logger_t *logger, const char *module)
 {
     clog_mutex_lock(&logger->module_mutex);
+    /* Atomic RMW, not plain ++: readers sample module_gen with
+     * clog_atomic_load_sz outside this mutex — a non-atomic bump here is a
+     * formal data race on the counter itself (TSan-proven). */
+    clog_atomic_fetch_add_sz(&logger->module_gen, 1); /* odd: writer inside */
     if (!module || !*module) {
         snprintf(logger->module, sizeof(logger->module), "%s", "main");
     } else {
         snprintf(logger->module, sizeof(logger->module), "%s", module);
     }
+    clog_atomic_fetch_add_sz(&logger->module_gen, 1); /* even: done */
     clog_mutex_unlock(&logger->module_mutex);
 }
 
@@ -294,6 +299,8 @@ static int logger_init_internal(logger_t *logger, const char *yaml_path)
     }
 
     logger_set_module_internal(logger, "main");
+    logger->cached_pid  = clog_getpid();
+    logger->module_gen  = 0;
     logger->initialized = true;
 
     fprintf(stderr, "[clogx] version " CLOGX_VERSION_STRING "\n");
@@ -379,23 +386,33 @@ static void logger_writevprintf_internal(logger_t   *logger,
 
     redact_message_if_needed(message, sizeof(message));
 
-    char module_buf[64];
-    clog_mutex_lock(&logger->module_mutex);
-    snprintf(module_buf, sizeof(module_buf), "%s", logger->module);
-    clog_mutex_unlock(&logger->module_mutex);
+    char   module_buf[64];
+    size_t gen1 = clog_atomic_load_sz(&logger->module_gen);
+    if ((gen1 & 1) == 0) {
+        memcpy(module_buf, logger->module, sizeof(module_buf));
+        size_t gen2 = clog_atomic_load_sz(&logger->module_gen);
+        if (gen1 != gen2) {
+            goto module_locked;
+        }
+    } else {
+    module_locked:
+        clog_mutex_lock(&logger->module_mutex);
+        memcpy(module_buf, logger->module, sizeof(module_buf));
+        clog_mutex_unlock(&logger->module_mutex);
+    }
 
     log_record_t record;
-    memset(&record, 0, sizeof(record));
     record.level     = level;
     record.timestamp = clog_get_timestamp_us();
     record.tid       = clog_get_thread_id();
-    record.pid       = clog_getpid();
+    record.pid       = logger->cached_pid;
     record.file      = file;
     record.func      = func;
     record.line      = line;
     record.module    = module_buf;
     record.tag       = NULL;
     record.message   = message;
+    record.kv_count  = 0;
     span_current_ids(record.trace_id, record.span_id);
 
     uint64_t suppressed = 0;
@@ -488,17 +505,26 @@ static void logger_write_kv_internal(logger_t        *logger,
         clog_atomic_inc64(&g_prometheus_level_counts[(int)level]);
     }
 
-    char module_buf[64];
-    clog_mutex_lock(&logger->module_mutex);
-    snprintf(module_buf, sizeof(module_buf), "%s", logger->module);
-    clog_mutex_unlock(&logger->module_mutex);
+    char   module_buf[64];
+    size_t gen1 = clog_atomic_load_sz(&logger->module_gen);
+    if ((gen1 & 1) == 0) {
+        memcpy(module_buf, logger->module, sizeof(module_buf));
+        size_t gen2 = clog_atomic_load_sz(&logger->module_gen);
+        if (gen1 != gen2) {
+            goto module_locked;
+        }
+    } else {
+    module_locked:
+        clog_mutex_lock(&logger->module_mutex);
+        memcpy(module_buf, logger->module, sizeof(module_buf));
+        clog_mutex_unlock(&logger->module_mutex);
+    }
 
     log_record_t record;
-    memset(&record, 0, sizeof(record));
     record.level     = level;
     record.timestamp = clog_get_timestamp_us();
     record.tid       = clog_get_thread_id();
-    record.pid       = clog_getpid();
+    record.pid       = logger->cached_pid;
     record.file      = file;
     record.func      = func;
     record.line      = line;
@@ -783,7 +809,7 @@ typedef struct {
 
 static clog_mutex_t       g_redact_mutex = CLOG_MUTEX_INITIALIZER;
 static clog_redact_rule_t g_redact_rules[CLOG_MAX_REDACT_RULES];
-static size_t             g_redact_count = 0;
+static volatile size_t    g_redact_count = 0;
 
 clogx_errno_t clog_redact_add(const char *pattern, const char *mask)
 {
@@ -793,7 +819,8 @@ clogx_errno_t clog_redact_add(const char *pattern, const char *mask)
     if (pattern == NULL || pattern[0] == '\0' || g_redact_count >= (size_t)CLOG_MAX_REDACT_RULES) {
         rc = CLOG_ERR_INVALID_ARG;
     } else {
-        clog_redact_rule_t *slot = &g_redact_rules[g_redact_count];
+        size_t              n    = clog_atomic_load_sz(&g_redact_count);
+        clog_redact_rule_t *slot = &g_redact_rules[n];
 
         snprintf(slot->pattern, sizeof(slot->pattern), "%s", pattern);
         if (mask == NULL || mask[0] == '\0') {
@@ -801,7 +828,7 @@ clogx_errno_t clog_redact_add(const char *pattern, const char *mask)
         } else {
             snprintf(slot->mask, sizeof(slot->mask), "%s", mask);
         }
-        g_redact_count++;
+        clog_atomic_store_sz(&g_redact_count, n + 1);
     }
     clog_mutex_unlock(&g_redact_mutex);
     return rc;
@@ -810,7 +837,7 @@ clogx_errno_t clog_redact_add(const char *pattern, const char *mask)
 void clog_redact_clear(void)
 {
     clog_mutex_lock(&g_redact_mutex);
-    g_redact_count = 0;
+    clog_atomic_store_sz(&g_redact_count, 0);
     clog_mutex_unlock(&g_redact_mutex);
 }
 
@@ -868,10 +895,14 @@ static void redact_apply_locked(char *buf, size_t buf_size)
     }
 }
 
-/* Hot-path wrapper: a single lock/unlock pair; zero rules costs one
- * counter check, on the order of the level check. */
+/* Hot-path wrapper: zero rules costs one atomic counter check and no lock;
+ * rules present take one lock hold. The in-lock recheck covers an add/clear
+ * racing between the fast check and the lock. */
 static void redact_message_if_needed(char *buf, size_t buf_size)
 {
+    if (clog_atomic_load_sz(&g_redact_count) == 0) {
+        return; /* No rules: zero-cost (no mutex). */
+    }
     clog_mutex_lock(&g_redact_mutex);
     if (g_redact_count > 0) {
         redact_apply_locked(buf, buf_size);
@@ -888,6 +919,10 @@ static void redact_kv_record_if_needed(log_record_t *record, char **p_owned_msg,
     char  *owned_msg = NULL;
     size_t vi;
 
+    if (clog_atomic_load_sz(&g_redact_count) == 0) {
+        *p_owned_msg = NULL;
+        return; /* No rules: zero-cost (no mutex). */
+    }
     clog_mutex_lock(&g_redact_mutex);
     if (g_redact_count > 0) {
         owned_msg = redact_apply_all_locked(record->message);
@@ -1181,6 +1216,7 @@ static void log_atfork_child(void)
     log_dispatcher_atfork_child_for(&g_default_logger);
     clog_mutex_unlock(&g_default_logger.module_mutex);
     clog_mutex_unlock(&g_init_mutex);
+    g_default_logger.cached_pid = clog_getpid();
     log_async_atfork_child_for(&g_default_logger);
 }
 
@@ -1446,6 +1482,8 @@ logger_t *logger_create_from_config(const log_config_t *cfg)
     }
 
     logger_set_module_internal(logger, "main");
+    logger->cached_pid  = clog_getpid();
+    logger->module_gen  = 0;
     logger->initialized = true;
     return logger;
 }

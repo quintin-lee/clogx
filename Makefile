@@ -126,7 +126,7 @@ TESTS = test_async_lifecycle test_async_reload test_dispatcher_lifecycle \
         test_pipeline verify_config \
         test_invalid_config test_double_init test_empty_sink \
         test_async_fallback test_queue_try_put test_max_size test_console_stderr \
-        test_module_trunc test_add_sink \
+        test_module_trunc test_add_sink test_sync_hotpath \
         test_multithread_sync test_config_set test_boundary_config \
         test_socket_sink test_sink_level test_log_level test_json_formatter \
         test_rate_limit test_fork_safety test_signal_handler test_sigpipe test_custom_sink \
