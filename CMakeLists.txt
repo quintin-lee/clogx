@@ -117,6 +117,7 @@ set(CLOG_SOURCES
     sinks/custom_sink.c
     sinks/syslog_sink.c
     sinks/otlp_sink.c
+    sinks/journald_sink.c
     core/plugin_loader.c
     core/prometheus_exporter.c
     core/socket_async.c
@@ -278,6 +279,7 @@ if(CLOG_BUILD_TESTS)
         test_custom_sink
         test_observability_stats
         test_syslog_sink
+        test_journald_sink
         test_thread_context
         test_coverage_boost
         test_coverage_deep

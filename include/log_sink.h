@@ -425,6 +425,26 @@ CLOGX_API void *custom_sink_get_private_data(log_sink_t *sink);
 CLOGX_API log_sink_t *syslog_sink_create(const char *ident, int facility);
 
 /**
+ * @brief Create a native systemd-journal sink (Linux only).
+ *
+ * Sends each log record as one datagram to `/run/systemd/journal/socket`
+ * using the journal native protocol, with `PRIORITY` (mapped from the
+ * record level the same way as the syslog sink), `SYSLOG_IDENTIFIER`,
+ * and `MESSAGE` fields. No libsystemd dependency.
+ *
+ * @param[in] ident Journal SYSLOG_IDENTIFIER value (e.g. "my_app").
+ *                  NULL defaults to "clogx". Must not contain '\n'.
+ *
+ * @return New sink, or NULL on allocation failure, when @p ident contains
+ *         '\n', when the journal socket is unavailable, or on non-Linux
+ *         platforms (Windows/macOS stub).
+ *
+ * Note Oversized MESSAGE payloads are truncated to `240 * 1024` bytes.
+ *       Runtime send failures return -1 from write (no in-sink retry).
+ */
+CLOGX_API log_sink_t *journald_sink_create(const char *ident);
+
+/**
  * @brief Create an OpenTelemetry OTLP JSON log sink.
  *
  * Formats log records as OpenTelemetry OTLP JSON logs (`resourceLogs` payload)
