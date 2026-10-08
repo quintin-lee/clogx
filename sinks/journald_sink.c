@@ -39,7 +39,7 @@
 
 #define JOURNALD_SOCKET_PATH "/run/systemd/journal/socket"
 /** @brief MESSAGE truncation cap for oversized records. */
-#define JOURNALD_MAX_MESSAGE (240u * 1024u)
+#define JOURNALD_MAX_MESSAGE ((size_t)240 * 1024)
 
 typedef struct {
     int   fd;
@@ -72,6 +72,20 @@ static void journald_store_le64(unsigned char *dst, uint64_t v)
     }
 }
 
+/**
+ * @brief Append @p n bytes from @p src at packet offset @p *off.
+ *
+ * Centralizes framing copies so literal lengths are compile-time
+ * `sizeof`-constants at call sites (keeps clang-tidy's
+ * bugprone-not-null-terminated-result quiet: packet framing is
+ * newline-delimited, never NUL-terminated by design).
+ */
+static void journald_put(char *packet, size_t *off, const char *src, size_t n)
+{
+    memcpy(packet + *off, src, n);
+    *off += n;
+}
+
 static int journald_write(log_sink_t *sink, const char *buf, size_t len)
 {
     journald_sink_data_t *data = (journald_sink_data_t *)sink->private_data;
@@ -100,35 +114,28 @@ static int journald_write(log_sink_t *sink, const char *buf, size_t len)
         return -1;
     }
     use_binary = (memchr(buf, '\n', msg_len) != NULL);
-    total      = (size_t)prio_len + strlen("SYSLOG_IDENTIFIER=") + strlen(data->ident) + 1u;
+    total      = (size_t)prio_len + sizeof("SYSLOG_IDENTIFIER=") - 1u + strlen(data->ident) + 1u;
     if (use_binary) {
-        total += strlen("MESSAGE\n") + 8u + msg_len + 1u;
+        total += sizeof("MESSAGE\n") - 1u + 8u + msg_len + 1u;
     } else {
-        total += strlen("MESSAGE=") + msg_len + 1u;
+        total += sizeof("MESSAGE=") - 1u + msg_len + 1u;
     }
     packet = (char *)malloc(total);
     if (!packet) {
         return -1;
     }
-    memcpy(packet + off, prio_line, (size_t)prio_len);
-    off += (size_t)prio_len;
-    memcpy(packet + off, "SYSLOG_IDENTIFIER=", strlen("SYSLOG_IDENTIFIER="));
-    off += strlen("SYSLOG_IDENTIFIER=");
-    memcpy(packet + off, data->ident, strlen(data->ident));
-    off += strlen(data->ident);
+    journald_put(packet, &off, prio_line, (size_t)prio_len);
+    journald_put(packet, &off, "SYSLOG_IDENTIFIER=", sizeof("SYSLOG_IDENTIFIER=") - 1u);
+    journald_put(packet, &off, data->ident, strlen(data->ident));
     packet[off++] = '\n';
     if (use_binary) {
-        memcpy(packet + off, "MESSAGE\n", strlen("MESSAGE\n"));
-        off += strlen("MESSAGE\n");
+        journald_put(packet, &off, "MESSAGE\n", sizeof("MESSAGE\n") - 1u);
         journald_store_le64((unsigned char *)(packet + off), (uint64_t)msg_len);
         off += 8u;
-        memcpy(packet + off, buf, msg_len);
-        off += msg_len;
+        journald_put(packet, &off, buf, msg_len);
     } else {
-        memcpy(packet + off, "MESSAGE=", strlen("MESSAGE="));
-        off += strlen("MESSAGE=");
-        memcpy(packet + off, buf, msg_len);
-        off += msg_len;
+        journald_put(packet, &off, "MESSAGE=", sizeof("MESSAGE=") - 1u);
+        journald_put(packet, &off, buf, msg_len);
     }
     packet[off++] = '\n';
     if (off != total) {

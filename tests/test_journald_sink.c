@@ -19,12 +19,12 @@
 
 static int g_failures = 0;
 
-#define CHECK(cond, msg)                                                      \
-    do {                                                                      \
-        if (!(cond)) {                                                        \
-            fprintf(stderr, "FAIL: %s (line %d)\n", msg, __LINE__);            \
-            g_failures++;                                                     \
-        }                                                                     \
+#define CHECK(cond, msg)                                                                           \
+    do {                                                                                           \
+        if (!(cond)) {                                                                             \
+            fprintf(stderr, "FAIL: %s (line %d)\n", msg, __LINE__);                                \
+            g_failures++;                                                                          \
+        }                                                                                          \
     } while (0)
 
 static int has_journal_socket(void)
@@ -59,9 +59,9 @@ static void test_factory_bad_ident(void)
 static void test_round_trip(void)
 {
 #if defined(__linux__)
-    char token[128];
-    char cmd[512];
-    char line[1024];
+    char  token[128];
+    char  cmd[512];
+    char  line[1024];
     FILE *fp;
     int   found_token   = 0;
     int   found_prio    = 0;
