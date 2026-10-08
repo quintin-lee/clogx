@@ -413,6 +413,7 @@ static void logger_writevprintf_internal(logger_t   *logger,
     record.tag       = NULL;
     record.message   = message;
     record.kv_count  = 0;
+    record.is_tombstone = false;
     span_current_ids(record.trace_id, record.span_id);
 
     uint64_t suppressed = 0;
@@ -534,6 +535,7 @@ static void logger_write_kv_internal(logger_t        *logger,
 
     size_t count    = kv_count > CLOG_MAX_KV ? CLOG_MAX_KV : kv_count;
     record.kv_count = count;
+    record.is_tombstone = false;
     for (size_t i = 0; i < count; i++) {
         record.kv[i] = kvs[i];
     }
