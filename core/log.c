@@ -337,26 +337,17 @@ static int logger_init_internal(logger_t *logger, const char *yaml_path)
  * @note Thread-safe: no locks held across the entire path. Module name is
  *       briefly locked; Prometheus counters use atomic increments.
  */
-static void  redact_message_if_needed(char *buf, size_t buf_size);
+static void redact_message_if_needed(char *buf, size_t buf_size);
 /** Stack scratch size for the KV message redact fast path (see below). */
 #define REDACT_KV_TMP_LEN 512
 
-static char *redact_apply_one_buf(const char *src,
-                                    const char *pat,
-                                    const char *msk,
-                                    char       *tmp,
-                                    size_t      tmp_size,
-                                    int        *p_on_stack);
-static const char *redact_apply_all_locked(const char *src,
-                                           char       *tmp_a,
-                                           char       *tmp_b,
-                                           char      **p_owned);
-static char       *redact_apply_all_heap_locked(const char *src);
-static void        redact_kv_record_if_needed(log_record_t *record,
-                                              char        **p_owned_msg,
-                                              char         *owned_str[],
-                                              char         *tmp_a,
-                                              char         *tmp_b);
+static char *redact_apply_one_buf(
+    const char *src, const char *pat, const char *msk, char *tmp, size_t tmp_size, int *p_on_stack);
+static const char *
+redact_apply_all_locked(const char *src, char *tmp_a, char *tmp_b, char **p_owned);
+static char *redact_apply_all_heap_locked(const char *src);
+static void  redact_kv_record_if_needed(
+    log_record_t *record, char **p_owned_msg, char *owned_str[], char *tmp_a, char *tmp_b);
 
 static void logger_writevprintf_internal(logger_t   *logger,
                                          log_level_t level,
@@ -419,17 +410,17 @@ static void logger_writevprintf_internal(logger_t   *logger,
     }
 
     log_record_t record;
-    record.level     = level;
-    record.timestamp = clog_get_timestamp_us();
-    record.tid       = clog_get_thread_id();
-    record.pid       = logger->cached_pid;
-    record.file      = file;
-    record.func      = func;
-    record.line      = line;
-    record.module    = module_buf;
-    record.tag       = NULL;
-    record.message   = message;
-    record.kv_count  = 0;
+    record.level        = level;
+    record.timestamp    = clog_get_timestamp_us();
+    record.tid          = clog_get_thread_id();
+    record.pid          = logger->cached_pid;
+    record.file         = file;
+    record.func         = func;
+    record.line         = line;
+    record.module       = module_buf;
+    record.tag          = NULL;
+    record.message      = message;
+    record.kv_count     = 0;
     record.is_tombstone = false;
     span_current_ids(record.trace_id, record.span_id);
 
@@ -550,8 +541,8 @@ static void logger_write_kv_internal(logger_t        *logger,
     record.tag       = NULL;
     record.message   = msg ? msg : "";
 
-    size_t count    = kv_count > CLOG_MAX_KV ? CLOG_MAX_KV : kv_count;
-    record.kv_count = count;
+    size_t count        = kv_count > CLOG_MAX_KV ? CLOG_MAX_KV : kv_count;
+    record.kv_count     = count;
     record.is_tombstone = false;
     for (size_t i = 0; i < count; i++) {
         record.kv[i] = kvs[i];
@@ -937,11 +928,8 @@ static void redact_message_if_needed(char *buf, size_t buf_size)
  * alloc); STR values keep the heap path. Owned heap pointers are returned
  * through @p p_owned_msg / @p owned_str (indexed by kv slot) for the
  * caller to free after dispatch; untouched slots stay NULL. */
-static void redact_kv_record_if_needed(log_record_t *record,
-                                       char        **p_owned_msg,
-                                       char         *owned_str[],
-                                       char         *tmp_a,
-                                       char         *tmp_b)
+static void redact_kv_record_if_needed(
+    log_record_t *record, char **p_owned_msg, char *owned_str[], char *tmp_a, char *tmp_b)
 {
     char  *owned_msg = NULL;
     size_t vi;
@@ -953,8 +941,7 @@ static void redact_kv_record_if_needed(log_record_t *record,
     clog_mutex_lock(&g_redact_mutex);
     if (g_redact_count > 0) {
         char       *msg_owned = NULL;
-        const char *msg_final =
-            redact_apply_all_locked(record->message, tmp_a, tmp_b, &msg_owned);
+        const char *msg_final = redact_apply_all_locked(record->message, tmp_a, tmp_b, &msg_owned);
 
         owned_msg = msg_owned;
         if (msg_final != record->message) {
@@ -978,11 +965,8 @@ static void redact_kv_record_if_needed(log_record_t *record,
 /* Count occurrences of @p pat in @p src and compute the expanded length.
  * Returns the length of the replaced string (excluding NUL); *p_count is
  * the hit count (0 when the pattern does not occur). */
-static size_t redact_expand_len(const char *src,
-                                const char *pat,
-                                size_t      pat_len,
-                                size_t      msk_len,
-                                size_t     *p_count)
+static size_t
+redact_expand_len(const char *src, const char *pat, size_t pat_len, size_t msk_len, size_t *p_count)
 {
     size_t      count = 0;
     size_t      src_len;
@@ -1003,12 +987,8 @@ static size_t redact_expand_len(const char *src,
 
 /* Copy @p src to @p dst replacing every @p pat with @p msk.
  * @p dst must hold redact_expand_len(...)+1 bytes. */
-static void redact_expand_copy(const char *src,
-                               const char *pat,
-                               size_t      pat_len,
-                               const char *msk,
-                               size_t      msk_len,
-                               char       *dst)
+static void redact_expand_copy(
+    const char *src, const char *pat, size_t pat_len, const char *msk, size_t msk_len, char *dst)
 {
     const char *cur = src;
     const char *hit;
@@ -1037,12 +1017,8 @@ static void redact_expand_copy(const char *src,
  * when the pattern does not occur or on allocation failure (caller then
  * keeps the original pointer: fail-open, never fail-closed).
  * *p_on_stack is 1 when the result lives in @p tmp. */
-static char *redact_apply_one_buf(const char *src,
-                                  const char *pat,
-                                  const char *msk,
-                                  char       *tmp,
-                                  size_t      tmp_size,
-                                  int        *p_on_stack)
+static char *redact_apply_one_buf(
+    const char *src, const char *pat, const char *msk, char *tmp, size_t tmp_size, int *p_on_stack)
 {
     size_t pat_len = strlen(pat);
     size_t msk_len = strlen(msk);
@@ -1073,10 +1049,8 @@ static char *redact_apply_one_buf(const char *src,
  * matched); *p_owned is the live heap block or NULL when the result is
  * @p src or stack-owned (caller frees *p_owned with free() — free(NULL)
  * is a no-op, so the stack path needs no special handling). */
-static const char *redact_apply_all_locked(const char *src,
-                                           char       *tmp_a,
-                                           char       *tmp_b,
-                                           char      **p_owned)
+static const char *
+redact_apply_all_locked(const char *src, char *tmp_a, char *tmp_b, char **p_owned)
 {
     const char *cur     = src;
     char       *owned   = NULL;
@@ -1112,31 +1086,38 @@ static const char *redact_apply_all_locked(const char *src,
 }
 
 /* Heap-only variant for STR KV values (unchanged behavior, one malloc per
- * matching rule as before). */
+ * matching rule as before). NULL on no match or allocation failure (caller
+ * keeps the original pointer: fail-open, never fail-closed). */
 static char *redact_apply_all_heap_locked(const char *src)
 {
     const char *cur   = src;
     char       *owned = NULL;
-    char        tiny[1];
     size_t      r;
 
     for (r = 0; r < g_redact_count; r++) {
-        const char *pat = g_redact_rules[r].pattern;
-        const char *msk = g_redact_rules[r].mask;
-        int         on_stack;
+        const char *pat     = g_redact_rules[r].pattern;
+        const char *msk     = g_redact_rules[r].mask;
+        size_t      pat_len = strlen(pat);
+        size_t      msk_len = strlen(msk);
+        size_t      count   = 0;
+        size_t      new_len;
         char       *rep;
 
         if (pat[0] == '\0' || msk[0] == '\0') {
             continue;
         }
-        /* 1-byte tmp never fits a real replacement: count > 0 implies a
-         * nonempty result, so new_len + 1 >= 2 > 1 and malloc always wins. */
-        rep = redact_apply_one_buf(cur, pat, msk, tiny, sizeof(tiny), &on_stack);
-        if (rep != NULL) {
-            free(owned);
-            owned = rep;
-            cur   = owned;
+        new_len = redact_expand_len(cur, pat, pat_len, msk_len, &count);
+        if (count == 0) {
+            continue;
         }
+        rep = (char *)malloc(new_len + 1);
+        if (rep == NULL) {
+            continue;
+        }
+        redact_expand_copy(cur, pat, pat_len, msk, msk_len, rep);
+        free(owned);
+        owned = rep;
+        cur   = owned;
     }
     return owned;
 }

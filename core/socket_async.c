@@ -184,11 +184,8 @@ int socket_ring_put(socket_ring_buffer_t *ring, const char *line, size_t len)
     }
 }
 
-int socket_ring_get_batch(socket_ring_buffer_t *ring,
-                           const char          **lines,
-                           size_t               *lengths,
-                           int                  *heaps,
-                           size_t                max_lines)
+int socket_ring_get_batch(
+    socket_ring_buffer_t *ring, const char **lines, size_t *lengths, int *heaps, size_t max_lines)
 {
     if (!ring || !lines || !lengths || !heaps || max_lines == 0) {
         return -1;
@@ -731,8 +728,8 @@ static void *socket_writer_thread(void *arg)
                     socket_writer_send(writer, lines[i], lengths[i]);
                 } else {
                     size_t framed_len = lengths[i] + 1;
-                    char  *framed     = (framed_len <= sizeof(framed_stack)) ? framed_stack
-                                                                            : malloc(framed_len);
+                    char  *framed =
+                        (framed_len <= sizeof(framed_stack)) ? framed_stack : malloc(framed_len);
                     if (framed) {
                         memcpy(framed, lines[i], lengths[i]);
                         framed[lengths[i]] = '\n';

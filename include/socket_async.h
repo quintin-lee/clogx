@@ -77,7 +77,7 @@
 #define SOCKET_RING_INLINE_LEN 256
 
 typedef struct {
-    char             inline_buf[SOCKET_RING_INLINE_LEN]; /**< Slot-embedded line storage. */
+    char              inline_buf[SOCKET_RING_INLINE_LEN]; /**< Slot-embedded line storage. */
     char             *line; /**< Points to inline_buf (heap == 0) or malloc'd memory (heap == 1). */
     size_t            len;  /**< Length of @ref line (excluding NUL). */
     int               heap; /**< 1 if @ref line is heap-owned and the consumer must free it. */
@@ -187,11 +187,8 @@ int socket_ring_put(socket_ring_buffer_t *ring, const char *line, size_t len);
  * @retval 0   Ring is empty (should not happen under normal usage).
  * @retval -1  Ring is closed and drained.
  */
-int socket_ring_get_batch(socket_ring_buffer_t *ring,
-                           const char          **lines,
-                           size_t               *lengths,
-                           int                  *heaps,
-                           size_t                max_lines);
+int socket_ring_get_batch(
+    socket_ring_buffer_t *ring, const char **lines, size_t *lengths, int *heaps, size_t max_lines);
 
 /**
  * @brief Signal the ring buffer to close (no more puts accepted).
