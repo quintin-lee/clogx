@@ -14,11 +14,16 @@
 
 改动面（只动内部，不碰公有头）：
 
-1. `core/socket_async.c` — `socket_ring_slot_t` 加小行 inline 缓冲
-   （默认 512B，可配），短行零分配。
-2. `core/log.c` — `redact_apply_one` 短消息走调用方栈缓冲，
-   超长命中才 `malloc`。
-3. formatter 输出缓冲线程局部复用（内部 `static __thread`，公有 API 不变）。
+1. `core/socket_async.c` — `socket_ring_slot_t` 加 256B inline 缓冲
+   （固定值，对齐 async 已有 256B inline 前例；短行零分配，超长走堆）。
+   归属标记经内部 `socket_ring_get_batch` 批 API 传递（内部头，可改）。
+2. `core/log.c` — KV 路径 `redact_apply_one` 拆为 count+copy 两阶段，
+   短消息写调用方 512B ping-pong 栈缓冲，超长命中才 `malloc`。
+   （文本路径已是原地改写，不动；STR KV 值保持堆路径不变。）
+3. writer 线程换行 framing `malloc`（`core/socket_async.c:655,701`）→
+   512B 栈缓冲 + 超长回退堆。
+   （修正：`core/formatter.c` 经 grep 确认零堆分配，原 formatter/TLS
+   两项取消；TLS 发送路径亦无逐条分配。）
 
 不碰：`log_record_t` / queue 公有布局、async 既有 256B inline 机制、公有 API 签名。
 
@@ -29,25 +34,23 @@
 
 socket ring（核心变化）：
 
-- `slot` 新增 `char inline_line[INLINE]` + `bool heap` 标记（内部结构体，可改）。
-- `put`：`len <= INLINE` → `memcpy` 进 `inline_line`，`slot->line` 指向它，
-  `heap = false`；超长 → `malloc`，`heap = true`
- （保留现有失败发布空 slot 逻辑）。
-- `consumer`：`heap ? free(slot->line) : noop`，`slot->line = NULL` 后再推进
-  `tail`。ordering 沿用现有 `seq` release-store，不新增屏障。
-- `INLINE` 默认 512（覆盖绝大多数单行日志），创建时可配；
-  `capacity × 512` 常驻增量在 YAML 文档注明（默认 8K 档约 +4MB）。
+- `slot` 新增 `char inline_buf[256]` + `int heap` 标记（内部结构体，可改）。
+- `put`：`len < 256` → `memcpy` 进 `inline_buf`，`slot->line` 指向它，
+  `heap = 0`；超长 → `malloc`，`heap = 1`
+  （保留现有失败发布空 slot 逻辑）。
+- `consumer`：`heap ? free : noop`（标记经批 API 传递，`destroy` 余量同理），
+  ordering 沿用现有 `seq` release-store，不新增屏障。
+- 固定 256（对齐 async inline 前例；默认 8K 档常驻增量约 +2MB，
+  在"减体积/资源占用"维度下优于 512；不做配置项，YAGNI）。
 
 redact（次要变化）：
 
-- 调用方栈上备 `char tmp[1024]`；`redact_apply_one` 改为"写调用方缓冲"语义：
+- `logger_write_kv_internal` 帧备 `char tmp_a/tmp_b[512]` 传给 KV message
+  脱敏链（多规则 ping-pong，任一超长规则回退堆）；`redact_apply_one`
+  改为"两阶段写调用方缓冲"语义：
   能装下 → 写 buf 返回指针；装不下 → 内部 `malloc`
- （保留 fail-open：失败返回 NULL，调用方用原文）。
+  （保留 fail-open：失败返回 NULL，调用方用原文）。
 - 零规则 fast path 不变（无 `strstr` 开销）。
-
-formatter：输出缓冲 `static __thread char tls_buf[CLOG_MAX_FORMATTED_SIZE]` 复用（8192B，
-见 `include/log_limits.h`），只影响内部
-`format_*`；`log_reload` 改 format 字符串时只重编 opcode，不碰缓冲。
 
 ## §3 错误处理、测试与回滚
 
@@ -55,8 +58,7 @@ formatter：输出缓冲 `static __thread char tls_buf[CLOG_MAX_FORMATTED_SIZE]`
 
 - inline 路径无失败点；堆路径 `malloc` 失败沿用现有语义：
   socket 发布空 slot + `dropped++` 返回 -1；redact 失败 fail-open 用原文。
-  无新增失败模式。
-- `INLINE=0` 配置视为"关闭 inline"（全堆），逻辑等价旧代码，即天然回滚开关。
+   无新增失败模式。
 
 测试：
 
@@ -66,8 +68,8 @@ formatter：输出缓冲 `static __thread char tls_buf[CLOG_MAX_FORMATTED_SIZE]`
 2. 压力：8 producers × 短行，断言 `real == ok` 且 consumer 无泄漏（ASan）。
 3. 回归：`make check` 全绿 + `make benchmark` 对 baseline（吞吐不回退才合入）。
 
-回滚：任一门禁红 → 关 inline（`INLINE=0`）或 revert 单文件
-（改动只涉 2–3 个 `.c` 内部，无头文件依赖）。
+回滚：任一门禁红 → revert 本分支提交（改动只涉 `core/socket_async.c`、
+`core/log.c`、内部头 `include/socket_async.h` + 两测试文件，无公有依赖）。
 
 ## 非目标
 
