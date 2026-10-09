@@ -161,6 +161,80 @@ static void test_kv_non_str_untouched(void)
     printf("test_kv_non_str_untouched passed\n");
 }
 
+static void test_kv_redact_short_str(void)
+{
+    logger_t *logger;
+    char      out[4096];
+
+    clog_redact_clear();
+    assert(clog_redact_add("secret123", NULL) == CLOG_OK);
+
+    logger = make_json_file_logger("logs/test_redact_kv_short.log");
+    assert(logger != NULL);
+    LOGGER_INFO_KV(logger, "user login", CLOG_KV_STR("token", "abc secret123 xyz"));
+    logger_flush(logger);
+    logger_destroy(logger);
+
+    read_whole("logs/test_redact_kv_short.log", out, sizeof(out));
+    assert(strstr(out, "secret123") == NULL);
+    assert(strstr(out, "***") != NULL);
+    clog_redact_clear();
+    printf("test_kv_redact_short_str passed\n");
+}
+
+static void test_kv_redact_multi_rule(void)
+{
+    logger_t *logger;
+    char      out[4096];
+    char      msg[256];
+
+    clog_redact_clear();
+    assert(clog_redact_add("alpha", "[A]") == CLOG_OK);
+    assert(clog_redact_add("beta", "[B]") == CLOG_OK);
+
+    snprintf(msg, sizeof(msg), "alpha and beta");
+    logger = make_json_file_logger("logs/test_redact_kv_multi.log");
+    assert(logger != NULL);
+    LOGGER_INFO_KV(logger, msg, CLOG_KV_STR("k", "v"));
+    logger_flush(logger);
+    logger_destroy(logger);
+
+    read_whole("logs/test_redact_kv_multi.log", out, sizeof(out));
+    assert(strstr(out, "alpha") == NULL);
+    assert(strstr(out, "beta") == NULL);
+    assert(strstr(out, "[A]") != NULL);
+    assert(strstr(out, "[B]") != NULL);
+    clog_redact_clear();
+    printf("test_kv_redact_multi_rule passed\n");
+}
+
+static void test_kv_redact_long_value(void)
+{
+    /* 600B value forces the heap-fallback path — output must stay exact. */
+    static char big[640];
+    logger_t   *logger;
+    char        out[4096];
+
+    memset(big, 'x', 600);
+    memcpy(big + 600, "secret123", 9);
+    big[609] = '\0';
+
+    clog_redact_clear();
+    assert(clog_redact_add("secret123", NULL) == CLOG_OK);
+
+    logger = make_json_file_logger("logs/test_redact_kv_long.log");
+    assert(logger != NULL);
+    LOGGER_INFO_KV(logger, "big value", CLOG_KV_STR("blob", big));
+    logger_flush(logger);
+    logger_destroy(logger);
+
+    read_whole("logs/test_redact_kv_long.log", out, sizeof(out));
+    assert(strstr(out, "secret123") == NULL);
+    assert(strstr(out, "***") != NULL);
+    clog_redact_clear();
+    printf("test_kv_redact_long_value passed\n");
+}
+
 static void test_invalid_add_rejected(void)
 {
     clog_redact_clear();
@@ -196,6 +270,9 @@ int main(void)
     test_no_rule_passthrough();
     test_kv_str_redacted();
     test_kv_non_str_untouched();
+    test_kv_redact_short_str();
+    test_kv_redact_multi_rule();
+    test_kv_redact_long_value();
     test_invalid_add_rejected();
     test_table_full_rejected();
     printf("all redact tests passed!\n");
