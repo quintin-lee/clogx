@@ -143,27 +143,37 @@ int socket_ring_put(socket_ring_buffer_t *ring, const char *line, size_t len)
              * the write visible to the consumer) before signalling.
              */
             socket_ring_slot_t *slot = &ring->slots[head & ring->mask];
-            char               *copy = malloc(len + 1);
-            if (!copy) {
-                /*
-                 * Allocation failed. The slot is already claimed — rolling
-                 * head back would corrupt other producers' claims, so publish
-                 * an empty slot instead and count it as dropped. The consumer
-                 * frees NULL safely and skips zero-length lines.
-                 */
-                slot->line = NULL;
-                slot->len  = 0;
-                clog_atomic_store_u64(&slot->seq, (uint64_t)head + 1);
-                clog_atomic_fetch_add_sz(&ring->count, 1);
-                clog_sem_post(&ring->items_sem);
-                clog_atomic_inc64(&ring->dropped);
-                return -1;
-            }
-            memcpy(copy, line, len);
-            copy[len] = '\0';
+            if (len < SOCKET_RING_INLINE_LEN) {
+                memcpy(slot->inline_buf, line, len);
+                slot->inline_buf[len] = '\0';
+                slot->line            = slot->inline_buf;
+                slot->len             = len;
+                slot->heap            = 0;
+            } else {
+                char *copy = malloc(len + 1);
+                if (!copy) {
+                    /*
+                     * Allocation failed. The slot is already claimed — rolling
+                     * head back would corrupt other producers' claims, so publish
+                     * an empty slot instead and count it as dropped. The consumer
+                     * frees NULL safely and skips zero-length lines.
+                     */
+                    slot->line = NULL;
+                    slot->len  = 0;
+                    slot->heap = 0;
+                    clog_atomic_store_u64(&slot->seq, (uint64_t)head + 1);
+                    clog_atomic_fetch_add_sz(&ring->count, 1);
+                    clog_sem_post(&ring->items_sem);
+                    clog_atomic_inc64(&ring->dropped);
+                    return -1;
+                }
+                memcpy(copy, line, len);
+                copy[len] = '\0';
 
-            slot->line = copy;
-            slot->len  = len;
+                slot->line = copy;
+                slot->len  = len;
+                slot->heap = 1;
+            }
 
             clog_atomic_store_u64(&slot->seq, (uint64_t)head + 1);
             clog_atomic_fetch_add_sz(&ring->count, 1);
@@ -175,11 +185,12 @@ int socket_ring_put(socket_ring_buffer_t *ring, const char *line, size_t len)
 }
 
 int socket_ring_get_batch(socket_ring_buffer_t *ring,
-                          const char          **lines,
-                          size_t               *lengths,
-                          size_t                max_lines)
+                           const char          **lines,
+                           size_t               *lengths,
+                           int                  *heaps,
+                           size_t                max_lines)
 {
-    if (!ring || !lines || !lengths || max_lines == 0) {
+    if (!ring || !lines || !lengths || !heaps || max_lines == 0) {
         return -1;
     }
 
@@ -241,8 +252,10 @@ int socket_ring_get_batch(socket_ring_buffer_t *ring,
             }
             lines[n]   = slot->line;
             lengths[n] = slot->len;
+            heaps[n]   = slot->heap;
             slot->line = NULL;
             slot->len  = 0;
+            slot->heap = 0;
             n++;
         }
 
@@ -305,9 +318,12 @@ void socket_ring_destroy(socket_ring_buffer_t *ring)
     size_t remaining = head - tail;
     for (size_t i = 0; i < remaining && i < ring->capacity; i++) {
         size_t idx = (tail + i) & ring->mask;
-        free(ring->slots[idx].line);
+        if (ring->slots[idx].heap) {
+            free(ring->slots[idx].line);
+        }
         ring->slots[idx].line = NULL;
         ring->slots[idx].len  = 0;
+        ring->slots[idx].heap = 0;
     }
 
     clog_sem_destroy(&ring->items_sem);
@@ -613,10 +629,12 @@ static void *socket_writer_thread(void *arg)
     const size_t BATCH_SIZE = 64;
     const char  *lines[64];
     size_t       lengths[64];
+    int          heap_flags[64];
+    char         framed_stack[512];
 
     for (;;) {
         /* Dequeue a batch (blocks on semaphore if empty). */
-        int n = socket_ring_get_batch(ring, lines, lengths, BATCH_SIZE);
+        int n = socket_ring_get_batch(ring, lines, lengths, heap_flags, BATCH_SIZE);
         if (n < 0) {
             /* Ring closed and drained — exit. */
             break;
@@ -634,7 +652,9 @@ static void *socket_writer_thread(void *arg)
                     backoff_next(writer->backoff_ms, writer->config.backoff_max_ms);
                 /* Free the batch lines we didn't send. */
                 for (int i = 0; i < n; i++) {
-                    free((void *)lines[i]);
+                    if (heap_flags[i]) {
+                        free((void *)lines[i]);
+                    }
                 }
                 continue;
             }
@@ -645,28 +665,38 @@ static void *socket_writer_thread(void *arg)
         for (int i = 0; i < n; i++) {
             /* Skip empty slots (published on producer-side alloc failure). */
             if (!lines[i] || lengths[i] == 0) {
-                free((void *)lines[i]);
+                if (heap_flags[i]) {
+                    free((void *)lines[i]);
+                }
                 continue;
             }
             int rc = 0;
             if (lines[i][lengths[i] - 1] == '\n') {
                 rc = socket_writer_send(writer, lines[i], lengths[i]);
             } else {
-                char *framed = malloc(lengths[i] + 1);
+                size_t framed_len = lengths[i] + 1;
+                char  *framed =
+                    (framed_len <= sizeof(framed_stack)) ? framed_stack : malloc(framed_len);
                 if (framed) {
                     memcpy(framed, lines[i], lengths[i]);
                     framed[lengths[i]] = '\n';
-                    rc                 = socket_writer_send(writer, framed, lengths[i] + 1);
-                    free(framed);
+                    rc                 = socket_writer_send(writer, framed, framed_len);
+                    if (framed != framed_stack) {
+                        free(framed);
+                    }
                 }
             }
-            free((void *)lines[i]);
+            if (heap_flags[i]) {
+                free((void *)lines[i]);
+            }
 
             if (rc < 0) {
                 send_failed = 1;
                 /* Drop remaining lines in this batch. */
                 for (int j = i + 1; j < n; j++) {
-                    free((void *)lines[j]);
+                    if (heap_flags[j]) {
+                        free((void *)lines[j]);
+                    }
                 }
                 break;
             }
@@ -686,27 +716,35 @@ static void *socket_writer_thread(void *arg)
     /* Final drain: send any remaining lines before exit. */
     if (writer->connected || socket_writer_connect(writer) == 0) {
         for (;;) {
-            int n = socket_ring_get_batch(ring, lines, lengths, BATCH_SIZE);
+            int n = socket_ring_get_batch(ring, lines, lengths, heap_flags, BATCH_SIZE);
             if (n <= 0) {
                 break;
             }
             for (int i = 0; i < n; i++) {
                 if (!lines[i] || lengths[i] == 0) {
-                    free((void *)lines[i]);
+                    if (heap_flags[i]) {
+                        free((void *)lines[i]);
+                    }
                     continue;
                 }
                 if (lines[i][lengths[i] - 1] == '\n') {
                     socket_writer_send(writer, lines[i], lengths[i]);
                 } else {
-                    char *framed = malloc(lengths[i] + 1);
+                    size_t framed_len = lengths[i] + 1;
+                    char  *framed     = (framed_len <= sizeof(framed_stack)) ? framed_stack
+                                                                            : malloc(framed_len);
                     if (framed) {
                         memcpy(framed, lines[i], lengths[i]);
                         framed[lengths[i]] = '\n';
-                        socket_writer_send(writer, framed, lengths[i] + 1);
-                        free(framed);
+                        socket_writer_send(writer, framed, framed_len);
+                        if (framed != framed_stack) {
+                            free(framed);
+                        }
                     }
                 }
-                free((void *)lines[i]);
+                if (heap_flags[i]) {
+                    free((void *)lines[i]);
+                }
             }
         }
         socket_writer_cleanup(writer);

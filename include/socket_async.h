@@ -73,11 +73,16 @@
  * reads the slot when it equals `position + 1` — closing the window between
  * the head CAS and the actual write.
  */
+/** Maximum line length served from slot-embedded storage (incl. NUL). */
+#define SOCKET_RING_INLINE_LEN 256
+
 typedef struct {
-    char             *line; /**< Heap-allocated log line (ownership transferred to ring). */
+    char             inline_buf[SOCKET_RING_INLINE_LEN]; /**< Slot-embedded line storage. */
+    char             *line; /**< Points to inline_buf (heap == 0) or malloc'd memory (heap == 1). */
     size_t            len;  /**< Length of @ref line (excluding NUL). */
+    int               heap; /**< 1 if @ref line is heap-owned and the consumer must free it. */
     volatile uint64_t seq;  /**< Publish counter — release-stored by producer,
-                                 acquire-loaded by consumer. */
+                                  acquire-loaded by consumer. */
 } socket_ring_slot_t;
 
 /**
@@ -174,15 +179,19 @@ int socket_ring_put(socket_ring_buffer_t *ring, const char *line, size_t len);
  * @param ring       Ring buffer instance.
  * @param lines      Output array of const char* (pointers into ring-owned storage).
  * @param lengths    Output array of line lengths.
+ * @param heaps      Output array of ownership flags, parallel to @p lines:
+ *                   1 if the line is heap-allocated (caller must free),
+ *                   0 if it points at slot-embedded storage (must NOT free).
  * @param max_lines  Capacity of output arrays.
  * @retval >0  Number of lines dequeued.
  * @retval 0   Ring is empty (should not happen under normal usage).
  * @retval -1  Ring is closed and drained.
  */
 int socket_ring_get_batch(socket_ring_buffer_t *ring,
-                          const char          **lines,
-                          size_t               *lengths,
-                          size_t                max_lines);
+                           const char          **lines,
+                           size_t               *lengths,
+                           int                  *heaps,
+                           size_t                max_lines);
 
 /**
  * @brief Signal the ring buffer to close (no more puts accepted).

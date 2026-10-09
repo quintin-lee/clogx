@@ -41,7 +41,8 @@ static void test_ring_put_get(void)
 
     const char *lines[4];
     size_t      lengths[4];
-    int         n = socket_ring_get_batch(ring, lines, lengths, 4);
+    int         heaps[4];
+    int         n = socket_ring_get_batch(ring, lines, lengths, heaps, 4);
     assert(n == 2);
     assert(lengths[0] == 5);
     assert(memcmp(lines[0], "line1", 5) == 0);
@@ -50,7 +51,9 @@ static void test_ring_put_get(void)
     assert(clog_atomic_load_sz(&ring->count) == 0);
 
     for (int i = 0; i < n; i++) {
-        free((void *)lines[i]);
+        if (heaps[i]) {
+            free((void *)lines[i]);
+        }
     }
 
     socket_ring_destroy(ring);
@@ -71,14 +74,17 @@ static void test_ring_overflow_drops(void)
 
     const char *lines[2];
     size_t      lengths[2];
-    int         n = socket_ring_get_batch(ring, lines, lengths, 2);
+    int         heaps[2];
+    int         n = socket_ring_get_batch(ring, lines, lengths, heaps, 2);
     assert(n == 2);
     /* ccc was dropped, so we get aaa then bbb */
     assert(memcmp(lines[0], "aaa", 3) == 0);
     assert(memcmp(lines[1], "bbb", 3) == 0);
 
     for (int i = 0; i < n; i++) {
-        free((void *)lines[i]);
+        if (heaps[i]) {
+            free((void *)lines[i]);
+        }
     }
 
     socket_ring_destroy(ring);
@@ -106,11 +112,14 @@ static void test_ring_close_rejects_puts(void)
     /* existing entry still retrievable */
     const char *lines[1];
     size_t      lengths[1];
-    int         n = socket_ring_get_batch(ring, lines, lengths, 1);
+    int         heaps[1];
+    int         n = socket_ring_get_batch(ring, lines, lengths, heaps, 1);
     assert(n == 1);
-    free((void *)lines[0]);
+    if (heaps[0]) {
+        free((void *)lines[0]);
+    }
     /* drained + closed → -1 */
-    n = socket_ring_get_batch(ring, lines, lengths, 1);
+    n = socket_ring_get_batch(ring, lines, lengths, heaps, 1);
     assert(n == -1);
     socket_ring_destroy(ring);
     printf("  test_ring_close_rejects_puts PASSED\n");
@@ -122,13 +131,14 @@ static void test_ring_empty_batch(void)
     assert(ring != NULL);
     const char *lines[4];
     size_t      lengths[4];
+    int         heaps[4];
     /* get_batch blocks on empty ring — close first so it returns -1 */
     socket_ring_close(ring);
-    int n = socket_ring_get_batch(ring, lines, lengths, 4);
+    int n = socket_ring_get_batch(ring, lines, lengths, heaps, 4);
     assert(n == -1);
     /* closed empty ring: repeated get_batch must return immediately, not
      * block on the consumed wake-up post (regression: lost-wakeup deadlock) */
-    n = socket_ring_get_batch(ring, lines, lengths, 4);
+    n = socket_ring_get_batch(ring, lines, lengths, heaps, 4);
     assert(n == -1);
     socket_ring_destroy(ring);
     printf("  test_ring_empty_batch PASSED\n");
@@ -145,22 +155,86 @@ static void test_ring_get_batch_limit(void)
     }
     const char *lines[8];
     size_t      lengths[8];
+    int         heaps[8];
     /* request max 3 */
-    int n = socket_ring_get_batch(ring, lines, lengths, 3);
+    int n = socket_ring_get_batch(ring, lines, lengths, heaps, 3);
     assert(n == 3);
     assert(clog_atomic_load_sz(&ring->count) == 3);
     for (int i = 0; i < n; i++) {
-        free((void *)lines[i]);
+        if (heaps[i]) {
+            free((void *)lines[i]);
+        }
     }
     /* get the rest */
-    n = socket_ring_get_batch(ring, lines, lengths, 8);
+    n = socket_ring_get_batch(ring, lines, lengths, heaps, 8);
     assert(n == 3);
     assert(clog_atomic_load_sz(&ring->count) == 0);
     for (int i = 0; i < n; i++) {
-        free((void *)lines[i]);
+        if (heaps[i]) {
+            free((void *)lines[i]);
+        }
     }
     socket_ring_destroy(ring);
     printf("  test_ring_get_batch_limit PASSED\n");
+}
+
+static void test_ring_inline_short(void)
+{
+    socket_ring_buffer_t *ring = socket_ring_create(4);
+    assert(ring != NULL);
+
+    assert(socket_ring_put(ring, "hi", 2) == 0);
+
+    const char *lines[4];
+    size_t      lengths[4];
+    int         heaps[4];
+    int         n = socket_ring_get_batch(ring, lines, lengths, heaps, 4);
+    assert(n == 1);
+    assert(lengths[0] == 2);
+    assert(memcmp(lines[0], "hi", 2) == 0);
+    assert(heaps[0] == 0);
+    assert(lines[0] == ring->slots[0].inline_buf); /* zero-alloc: points at slot storage */
+    /* No free — inline storage dies with the ring. */
+
+    socket_ring_destroy(ring);
+    printf("  test_ring_inline_short PASSED\n");
+}
+
+static void test_ring_inline_boundary(void)
+{
+    char                  buf255[255];
+    char                  buf256[256];
+    const char           *lines[4];
+    size_t                lengths[4];
+    int                   heaps[4];
+    socket_ring_buffer_t *ring = socket_ring_create(4);
+
+    memset(buf255, 'a', sizeof(buf255));
+    memset(buf256, 'b', sizeof(buf256));
+    assert(ring != NULL);
+    assert(socket_ring_put(ring, buf255, sizeof(buf255)) == 0); /* 255 + NUL = 256: inline */
+    assert(socket_ring_put(ring, buf256, sizeof(buf256)) == 0); /* 256 + NUL = 257: heap  */
+    assert(socket_ring_get_batch(ring, lines, lengths, heaps, 4) == 2);
+    assert(heaps[0] == 0);
+    assert(lengths[0] == sizeof(buf255));
+    assert(memcmp(lines[0], buf255, sizeof(buf255)) == 0);
+    assert(heaps[1] == 1);
+    assert(lengths[1] == sizeof(buf256));
+    assert(memcmp(lines[1], buf256, sizeof(buf256)) == 0);
+    free((void *)lines[1]);
+
+    socket_ring_destroy(ring);
+    printf("  test_ring_inline_boundary PASSED\n");
+}
+
+static void test_ring_inline_destroy_pending(void)
+{
+    /* Inline lines pending in the ring at destroy time must not be freed. */
+    socket_ring_buffer_t *ring = socket_ring_create(4);
+    assert(ring != NULL);
+    assert(socket_ring_put(ring, "pending", 7) == 0);
+    socket_ring_destroy(ring); /* ASan gate catches any free-of-inline-storage */
+    printf("  test_ring_inline_destroy_pending PASSED\n");
 }
 
 static void test_ring_signal_wakes(void)
@@ -362,11 +436,13 @@ static void test_socket_async_boundary_cases(void)
     /* socket_ring_get_batch NULL/invalid args */
     const char *lines[4];
     size_t      lengths[4];
-    assert(socket_ring_get_batch(NULL, lines, lengths, 4) == -1);
+    int         heaps[4];
+    assert(socket_ring_get_batch(NULL, lines, lengths, heaps, 4) == -1);
     socket_ring_buffer_t *ring = socket_ring_create(4);
-    assert(socket_ring_get_batch(ring, NULL, lengths, 4) == -1);
-    assert(socket_ring_get_batch(ring, lines, NULL, 4) == -1);
-    assert(socket_ring_get_batch(ring, lines, lengths, 0) == -1);
+    assert(socket_ring_get_batch(ring, NULL, lengths, heaps, 4) == -1);
+    assert(socket_ring_get_batch(ring, lines, NULL, heaps, 4) == -1);
+    assert(socket_ring_get_batch(ring, lines, lengths, NULL, 4) == -1);
+    assert(socket_ring_get_batch(ring, lines, lengths, heaps, 0) == -1);
 
     /* NULL checks for close, signal, destroy */
     socket_ring_close(NULL);
@@ -428,6 +504,9 @@ int main(void)
     test_ring_close_rejects_puts();
     test_ring_empty_batch();
     test_ring_get_batch_limit();
+    test_ring_inline_short();
+    test_ring_inline_boundary();
+    test_ring_inline_destroy_pending();
     test_ring_signal_wakes();
 
 #if !defined(_WIN32)
