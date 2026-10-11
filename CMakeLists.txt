@@ -123,7 +123,9 @@ set(CLOG_SOURCES
     sinks/journald_sink.c
     core/plugin_loader.c
     core/prometheus_exporter.c
-    core/socket_async.c
+    core/socket_ring.c
+    core/socket_transport.c
+    core/socket_writer.c
 )
 
 # Object library — all sources compiled once, shared across library and internal-symbol tests
