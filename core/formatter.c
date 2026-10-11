@@ -42,6 +42,7 @@
  */
 #include "clog_port.h"
 #include "fast_ascii.h"
+#include "formatter_internal.h"
 #include "log_formatter.h"
 #include "log_internal.h"
 #include "log_limits.h"
@@ -58,7 +59,7 @@
 /* ------------------------------------------------------------------ */
 
 static char g_default_format[CLOG_MAX_FORMAT_SIZE] = "[%time] [%level] %msg";
-static char g_time_format_buf[64]                  = "%Y-%m-%d %H:%M:%S";
+char        g_time_format_buf[64]                  = "%Y-%m-%d %H:%M:%S";
 
 typedef struct {
     time_t sec;
@@ -68,7 +69,7 @@ typedef struct {
 
 static clog_thread_local clog_time_cache_t g_time_cache = {0, "", ""};
 
-static void format_sec_cached(time_t sec, const char *fmt, char *out_str, size_t out_str_size)
+void format_sec_cached(time_t sec, const char *fmt, char *out_str, size_t out_str_size)
 {
     if (!fmt) {
         fmt = "%Y-%m-%d %H:%M:%S";
@@ -98,35 +99,12 @@ static void format_sec_cached(time_t sec, const char *fmt, char *out_str, size_t
     out_str[len] = '\0';
 }
 
-/* Compiled opcode program (populated at init time). */
-
-#define TIME_BUF_SIZE 64
-
-/*
- * Per-thread compiled-format cache.
- *
- * fmt_compile() output depends only on the format string, so re-parsing it
- * on every log call is pure waste. The cache keeps a private copy of the
- * format string; literal opcodes reference that copy, making the cached
- * program self-contained regardless of the lifetime of the caller's format
- * buffer (e.g. `logger->format_str` across a reload). A string compare on
- * each call invalidates the cache whenever the format actually changes.
- * Thread-local: no locking, no cross-thread sharing.
- */
-typedef struct {
-    char     fmt[CLOG_MAX_FORMAT_SIZE];
-    fmt_op_t ops[FMT_MAX_OPS];
-    int      op_count;
-} clog_fmt_cache_t;
-
-static clog_thread_local clog_fmt_cache_t g_fmt_cache;
-
 /* ------------------------------------------------------------------ */
 /*  Helpers                                                           */
 /* ------------------------------------------------------------------ */
 
 /** @brief Convert a log level enum to its string name. */
-static const char *level_to_string(log_level_t level)
+const char *level_to_string(log_level_t level)
 {
     switch (level) {
     case LOG_LEVEL_TRACE:
@@ -146,26 +124,6 @@ static const char *level_to_string(log_level_t level)
     }
 }
 
-/**
- * @brief Append a token's literal text to the output buffer.
- *
- * Advances @p out and decrements @p remaining by the token length.
- * Returns -1 if the token doesn't fit; 0 on success.
- */
-static int append_token(char **out, size_t *remaining, const char *token, size_t token_len)
-{
-    if (token_len >= *remaining) {
-        token_len = *remaining - 1;
-    }
-    if (token_len > 0) {
-        memcpy(*out, token, token_len);
-        *out += token_len;
-        *remaining -= token_len;
-        **out = '\0';
-    }
-    return (int)token_len;
-}
-
 /* ------------------------------------------------------------------ */
 /*  JSON escaping & rendering                                         */
 /* ------------------------------------------------------------------ */
@@ -183,7 +141,7 @@ static int append_token(char **out, size_t *remaining, const char *token, size_t
  * @return 0 when @p str was written completely, -1 when the output
  *         buffer ran out before @p str was exhausted (truncated).
  */
-static int append_json_escaped_string(char **out, size_t *remaining, const char *str)
+int append_json_escaped_string(char **out, size_t *remaining, const char *str)
 {
     if (!str) {
         str = "";
@@ -266,7 +224,7 @@ static int append_json_escaped_string(char **out, size_t *remaining, const char 
  * the OTel attributes object — and returns the total line length.
  * Returns -1 when the suffix does not fit; the caller must drop the line.
  */
-static int json_close_object(char *buf, char **out, size_t *remaining, const char *suffix)
+int json_close_object(char *buf, char **out, size_t *remaining, const char *suffix)
 {
     size_t n = strlen(suffix);
     if (*remaining < n + 1) {
@@ -282,7 +240,7 @@ static int json_close_object(char *buf, char **out, size_t *remaining, const cha
 static const char g_hex_lut[] = "0123456789abcdef";
 
 /** @brief Encode a 16-byte trace ID as a 32-char hex string. */
-static void trace_id_hex(const uint8_t trace_id[16], char *out)
+void trace_id_hex(const uint8_t trace_id[16], char *out)
 {
     for (int i = 0; i < 16; i++) {
         uint8_t byte           = trace_id[i];
@@ -293,7 +251,7 @@ static void trace_id_hex(const uint8_t trace_id[16], char *out)
 }
 
 /** @brief Encode an 8-byte span ID as a 16-char hex string. */
-static void span_id_hex(const uint8_t span_id[8], char *out)
+void span_id_hex(const uint8_t span_id[8], char *out)
 {
     for (int i = 0; i < 8; i++) {
         uint8_t byte           = span_id[i];
@@ -303,7 +261,7 @@ static void span_id_hex(const uint8_t span_id[8], char *out)
     out[16] = '\0';
 }
 
-static inline int append_buf_str(char **out, size_t *remaining, const char *str, size_t len)
+int append_buf_str(char **out, size_t *remaining, const char *str, size_t len)
 {
     if (len >= *remaining) {
         return -1;
@@ -315,89 +273,43 @@ static inline int append_buf_str(char **out, size_t *remaining, const char *str,
     return 0;
 }
 
-static inline int append_buf_u32(char **out, size_t *remaining, uint32_t val)
+int append_buf_u32(char **out, size_t *remaining, uint32_t val)
 {
     char   tmp[16];
     size_t len = clog_u32toa(val, tmp);
     return append_buf_str(out, remaining, tmp, len);
 }
 
-static inline int append_buf_i32(char **out, size_t *remaining, int32_t val)
+int append_buf_i32(char **out, size_t *remaining, int32_t val)
 {
     char   tmp[16];
     size_t len = clog_i32toa(val, tmp);
     return append_buf_str(out, remaining, tmp, len);
 }
 
-static inline int append_buf_i64(char **out, size_t *remaining, int64_t val)
+int append_buf_i64(char **out, size_t *remaining, int64_t val)
 {
     char   tmp[32];
     size_t len = clog_i64toa(val, tmp);
     return append_buf_str(out, remaining, tmp, len);
 }
 
-static inline int append_buf_u64(char **out, size_t *remaining, uint64_t val)
+int append_buf_u64(char **out, size_t *remaining, uint64_t val)
 {
     char   tmp[32];
     size_t len = clog_u64toa(val, tmp);
     return append_buf_str(out, remaining, tmp, len);
 }
 
-static inline int append_buf_u32_pad6(char **out, size_t *remaining, uint32_t val)
+int append_buf_u32_pad6(char **out, size_t *remaining, uint32_t val)
 {
     char tmp[8];
     clog_u32toa_pad6(val, tmp);
     return append_buf_str(out, remaining, tmp, 6);
 }
 
-/**
- * @brief Append one typed KV attribute: `,"key":value`.
- *
- * @return 0 on success; 1 when a `"`-delimited string was truncated
- *         (the caller must close the object via json_close_object);
- *         -1 on failure (the caller must drop the line).
- */
-static int append_json_kv(char **out, size_t *remaining, const clog_kv_t *kv)
-{
-    if (!kv || !kv->key) {
-        return 0;
-    }
-    if (append_buf_str(out, remaining, ",\"", 2) != 0) {
-        return -1;
-    }
-    if (append_json_escaped_string(out, remaining, kv->key) != 0) {
-        return 1; /* key string truncated — caller closes with '"' + closer */
-    }
-    if (append_buf_str(out, remaining, "\":", 2) != 0) {
-        return -1;
-    }
-    switch (kv->type) {
-    case CLOG_KV_TYPE_INT:
-        return append_buf_i64(out, remaining, kv->val.i64);
-    case CLOG_KV_TYPE_UINT:
-        return append_buf_u64(out, remaining, kv->val.u64);
-    case CLOG_KV_TYPE_FLOAT: {
-        char fbuf[32];
-        snprintf(fbuf, sizeof(fbuf), "%.6g", kv->val.f64);
-        return append_buf_str(out, remaining, fbuf, strlen(fbuf));
-    }
-    case CLOG_KV_TYPE_STR:
-        if (append_buf_str(out, remaining, "\"", 1) != 0) {
-            return -1;
-        }
-        if (append_json_escaped_string(out, remaining, kv->val.str ? kv->val.str : "") != 0) {
-            return 1; /* value string truncated — caller closes with '"' + closer */
-        }
-        return append_buf_str(out, remaining, "\"", 1);
-    case CLOG_KV_TYPE_BOOL:
-        return append_buf_str(out, remaining, kv->val.b ? "true" : "false", kv->val.b ? 4 : 5);
-    default:
-        return 0;
-    }
-}
-
 /** @brief Check if an ID byte array is all zeros (no active trace/span). */
-static int is_zero_id(const uint8_t *id, int len)
+int is_zero_id(const uint8_t *id, int len)
 {
     for (int i = 0; i < len; i++) {
         if (id[i]) {
@@ -405,623 +317,6 @@ static int is_zero_id(const uint8_t *id, int len)
         }
     }
     return 1;
-}
-
-/**
- * @brief Format a log record as a single-line RFC 8259 JSON object.
- *
- * Renders fields: timestamp (ISO 8601 + µs), level, module, file, line,
- * func, thread, pid, tag, message. All string values are JSON-escaped.
- * trace_id and span_id are included only when non-zero.
- *
- * @param[in]  record    Log record to format.
- * @param[out] buf       Output buffer.
- * @param[in]  buf_size  Capacity of @p buf.
- * @param[in]  time_format  strftime template (NULL → default).
- * @return Bytes written, or -1 on truncation.
- */
-static int format_json_ex(log_record_t *restrict record,
-                          char *restrict buf,
-                          size_t      buf_size,
-                          const char *time_format)
-{
-    time_t   sec  = (time_t)(record->timestamp / 1000000);
-    uint32_t usec = (uint32_t)(record->timestamp % 1000000);
-
-    char time_buf[64];
-    format_sec_cached(sec, time_format, time_buf, sizeof(time_buf));
-
-    char       *out       = buf;
-    size_t      remaining = buf_size;
-    const char *lvl_str   = level_to_string(record->level);
-
-    if (append_buf_str(&out, &remaining, "{\"timestamp\":\"", 14) != 0 ||
-        append_buf_str(&out, &remaining, time_buf, strlen(time_buf)) != 0 ||
-        append_buf_str(&out, &remaining, ".", 1) != 0 ||
-        append_buf_u32_pad6(&out, &remaining, usec) != 0 ||
-        append_buf_str(&out, &remaining, "\",\"level\":\"", 11) != 0 ||
-        append_buf_str(&out, &remaining, lvl_str, strlen(lvl_str)) != 0 ||
-        append_buf_str(&out, &remaining, "\",\"module\":\"", 12) != 0) {
-        return -1;
-    }
-
-    if (append_json_escaped_string(&out, &remaining, record->module ? record->module : "") != 0) {
-        return json_close_object(buf, &out, &remaining, "\"}");
-    }
-
-    if (append_buf_str(&out, &remaining, "\",\"file\":\"", 10) != 0) {
-        return -1;
-    }
-    if (append_json_escaped_string(&out, &remaining, record->file ? record->file : "") != 0) {
-        return json_close_object(buf, &out, &remaining, "\"}");
-    }
-
-    if (append_buf_str(&out, &remaining, "\",\"line\":", 9) != 0 ||
-        append_buf_i32(&out, &remaining, record->line) != 0 ||
-        append_buf_str(&out, &remaining, ",\"func\":\"", 9) != 0) {
-        return -1;
-    }
-    if (append_json_escaped_string(&out, &remaining, record->func ? record->func : "") != 0) {
-        return json_close_object(buf, &out, &remaining, "\"}");
-    }
-
-    if (append_buf_str(&out, &remaining, "\",\"thread\":", 11) != 0 ||
-        append_buf_u32(&out, &remaining, record->tid) != 0 ||
-        append_buf_str(&out, &remaining, ",\"pid\":", 7) != 0 ||
-        append_buf_u32(&out, &remaining, record->pid) != 0 ||
-        append_buf_str(&out, &remaining, ",\"tag\":\"", 8) != 0) {
-        return -1;
-    }
-    if (append_json_escaped_string(&out, &remaining, record->tag ? record->tag : "") != 0) {
-        return json_close_object(buf, &out, &remaining, "\"}");
-    }
-
-    char tid_hex[33];
-    char sid_hex[17];
-    if (!is_zero_id(record->trace_id, 16)) {
-        trace_id_hex(record->trace_id, tid_hex);
-        if (append_buf_str(&out, &remaining, "\",\"trace_id\":\"", 14) != 0 ||
-            append_buf_str(&out, &remaining, tid_hex, 32) != 0) {
-            return -1;
-        }
-    }
-    if (!is_zero_id(record->span_id, 8)) {
-        span_id_hex(record->span_id, sid_hex);
-        if (append_buf_str(&out, &remaining, "\",\"span_id\":\"", 13) != 0 ||
-            append_buf_str(&out, &remaining, sid_hex, 16) != 0) {
-            return -1;
-        }
-    }
-
-    if (append_buf_str(&out, &remaining, "\",\"message\":\"", 13) != 0) {
-        return -1;
-    }
-    if (append_json_escaped_string(&out, &remaining, record->message ? record->message : "") != 0) {
-        return json_close_object(buf, &out, &remaining, "\"}");
-    }
-    if (append_buf_str(&out, &remaining, "\"", 1) != 0) {
-        return -1;
-    }
-
-    for (size_t i = 0; i < record->kv_count; i++) {
-        int r = append_json_kv(&out, &remaining, &record->kv[i]);
-        if (r == 1) {
-            return json_close_object(buf, &out, &remaining, "\"}");
-        }
-        if (r != 0) {
-            return -1;
-        }
-    }
-
-    if (append_buf_str(&out, &remaining, "}", 1) != 0) {
-        return -1;
-    }
-
-    return (int)(out - buf);
-}
-
-/* ------------------------------------------------------------------ */
-/*  W3C TraceContext parser                                            */
-/* ------------------------------------------------------------------ */
-
-/** @brief Convert a single hex character to its 4-bit integer value (0–15), or -1 on invalid input.
- */
-static int hex_nibble(char c)
-{
-    if (c >= '0' && c <= '9') {
-        return c - '0';
-    }
-    if (c >= 'a' && c <= 'f') {
-        return c - 'a' + 10;
-    }
-    if (c >= 'A' && c <= 'F') {
-        return c - 'A' + 10;
-    }
-    return -1;
-}
-
-/**
- * @brief Decode a hex string into a byte array.
- *
- * @param hex   Input hex string (2×@p n characters).
- * @param out   Output byte array (must have at least @p n bytes).
- * @param n     Number of bytes to decode.
- * @return 0 on success, -1 on invalid hex input.
- */
-static int hex_decode(const char *hex, uint8_t *out, int n)
-{
-    for (int i = 0; i < n; i++) {
-        int hi = hex_nibble(hex[(size_t)i * 2]);
-        int lo = hex_nibble(hex[(size_t)i * 2 + 1]);
-        if (hi < 0 || lo < 0) {
-            return 0;
-        }
-        out[i] = (uint8_t)((hi << 4) | lo);
-    }
-    return 1;
-}
-
-/**
- * Extract trace context from the W3C Trace-Context env var.
- * Output arrays are zeroed on parse failure (safety: env input is untrusted).
- */
-static void parse_traceparent(uint8_t trace_id[16], uint8_t span_id[8])
-{
-    const char *tp = getenv("TRACEPARENT");
-    if (!tp || tp[0] == '\0') {
-        return;
-    }
-
-    const char *p = tp;
-    while (*p && *p != '-') {
-        p++;
-    }
-    if (*p != '-') {
-        return;
-    }
-    p++;
-
-    size_t remaining = strlen(p);
-    if (remaining < 32) {
-        return;
-    }
-    if (!hex_decode(p, trace_id, 16)) {
-        memset(trace_id, 0, 16);
-        return;
-    }
-    p += 32;
-    if (*p != '-') {
-        memset(trace_id, 0, 16);
-        return;
-    }
-    p++;
-
-    remaining = strlen(p);
-    if (remaining < 16) {
-        memset(trace_id, 0, 16);
-        return;
-    }
-    if (!hex_decode(p, span_id, 8)) {
-        memset(trace_id, 0, 16);
-        memset(span_id, 0, 8);
-        return;
-    }
-}
-
-/* ------------------------------------------------------------------ */
-/*  OTel JSON renderer                                                */
-/* ------------------------------------------------------------------ */
-
-/**
- * @brief Format @p record as OpenTelemetry-compatible JSON.
- *
- * Output follows the OTel Log Data Model:
- * @code
- * {"timestamp":"...","severity":"INFO","severity_number":9,
- *  "trace_id":"...","span_id":"...",
- *  "body":"message text",
- *  "attributes":{"file":"app.c","line":42,"func":"main",
- *                "module":"...","tag":"...","thread":1234,"pid":5678}}
- * @endcode
- *
- * The `trace_id` and `span_id` fields are omitted when unset.
- *
- * @return Bytes written, or -1 on truncation.
- */
-/**
- * @brief Render a log record as OpenTelemetry-compatible JSON.
- *
- * Produces a single JSON object with OTLP resource attributes,
- * severity number/text, optional W3C TraceContext fields, and
- * thread-local MDC context.
- *
- * @return Bytes written, or -1 on buffer overflow.
- */
-static int format_otel_json(log_record_t *restrict record, char *restrict buf, size_t buf_size)
-{
-    time_t   sec  = (time_t)(record->timestamp / 1000000);
-    uint32_t usec = (uint32_t)(record->timestamp % 1000000);
-
-    char time_buf[64];
-    format_sec_cached(sec, g_time_format_buf, time_buf, sizeof(time_buf));
-
-    char       *out       = buf;
-    size_t      remaining = buf_size;
-    const char *lvl_str   = level_to_string(record->level);
-
-    if (append_buf_str(&out, &remaining, "{\"timestamp\":\"", 14) != 0 ||
-        append_buf_str(&out, &remaining, time_buf, strlen(time_buf)) != 0 ||
-        append_buf_str(&out, &remaining, ".", 1) != 0 ||
-        append_buf_u32_pad6(&out, &remaining, usec) != 0 ||
-        append_buf_str(&out, &remaining, "\",\"severity\":\"", 14) != 0 ||
-        append_buf_str(&out, &remaining, lvl_str, strlen(lvl_str)) != 0 ||
-        append_buf_str(&out, &remaining, "\",\"severity_number\":", 20) != 0 ||
-        append_buf_i32(&out, &remaining, otel_severity_number(record->level)) != 0) {
-        return -1;
-    }
-
-    /* Trace context (only when present) */
-    char tid_hex[33];
-    char sid_hex[17];
-    parse_traceparent(record->trace_id, record->span_id);
-    if (!is_zero_id(record->trace_id, 16)) {
-        trace_id_hex(record->trace_id, tid_hex);
-        if (append_buf_str(&out, &remaining, ",\"trace_id\":\"", 13) != 0 ||
-            append_buf_str(&out, &remaining, tid_hex, 32) != 0 ||
-            append_buf_str(&out, &remaining, "\"", 1) != 0) {
-            return -1;
-        }
-    }
-    if (!is_zero_id(record->span_id, 8)) {
-        span_id_hex(record->span_id, sid_hex);
-        if (append_buf_str(&out, &remaining, ",\"span_id\":\"", 12) != 0 ||
-            append_buf_str(&out, &remaining, sid_hex, 16) != 0 ||
-            append_buf_str(&out, &remaining, "\"", 1) != 0) {
-            return -1;
-        }
-    }
-
-    if (append_buf_str(&out, &remaining, ",\"body\":\"", 9) != 0) {
-        return -1;
-    }
-    if (append_json_escaped_string(&out, &remaining, record->message ? record->message : "") != 0) {
-        return json_close_object(buf, &out, &remaining, "\"}");
-    }
-    if (append_buf_str(&out, &remaining, "\"", 1) != 0) {
-        return -1;
-    }
-
-    if (append_buf_str(&out, &remaining, ",\"attributes\":{", 15) != 0 ||
-        append_buf_str(&out, &remaining, "\"module\":\"", 10) != 0) {
-        return -1;
-    }
-    if (append_json_escaped_string(&out, &remaining, record->module ? record->module : "") != 0) {
-        return json_close_object(buf, &out, &remaining, "\"}}");
-    }
-    if (append_buf_str(&out, &remaining, "\",\"file\":\"", 10) != 0) {
-        return -1;
-    }
-    if (append_json_escaped_string(&out, &remaining, record->file ? record->file : "") != 0) {
-        return json_close_object(buf, &out, &remaining, "\"}}");
-    }
-    if (append_buf_str(&out, &remaining, "\",\"line\":", 9) != 0 ||
-        append_buf_i32(&out, &remaining, record->line) != 0 ||
-        append_buf_str(&out, &remaining, ",\"func\":\"", 9) != 0) {
-        return -1;
-    }
-    if (append_json_escaped_string(&out, &remaining, record->func ? record->func : "") != 0) {
-        return json_close_object(buf, &out, &remaining, "\"}}");
-    }
-    if (append_buf_str(&out, &remaining, "\",\"thread\":", 11) != 0 ||
-        append_buf_u32(&out, &remaining, record->tid) != 0 ||
-        append_buf_str(&out, &remaining, ",\"pid\":", 7) != 0 ||
-        append_buf_u32(&out, &remaining, record->pid) != 0 ||
-        append_buf_str(&out, &remaining, ",\"tag\":\"", 8) != 0) {
-        return -1;
-    }
-    if (append_json_escaped_string(&out, &remaining, record->tag ? record->tag : "") != 0) {
-        return json_close_object(buf, &out, &remaining, "\"}}");
-    }
-    if (append_buf_str(&out, &remaining, "\"", 1) != 0) {
-        return -1;
-    }
-
-    for (size_t i = 0; i < record->kv_count; i++) {
-        int r = append_json_kv(&out, &remaining, &record->kv[i]);
-        if (r == 1) {
-            return json_close_object(buf, &out, &remaining, "\"}}");
-        }
-        if (r != 0) {
-            return -1;
-        }
-    }
-
-    if (append_buf_str(&out, &remaining, "}}", 2) != 0) {
-        return -1;
-    }
-
-    return (int)(out - buf);
-}
-
-/* ------------------------------------------------------------------ */
-/*  Pattern compiler                                                   */
-/* ------------------------------------------------------------------ */
-
-/**
- * @brief Match a token name at the current format-string position.
- *
- * Returns 1 and advances @p fmt past the token if the next characters
- * match @p token and are followed by a non-alpha boundary.
- */
-static int token_match(const char **fmt, const char *token)
-{
-    size_t len = strlen(token);
-    if (strncmp(*fmt, token, len) == 0) {
-        unsigned char c = (unsigned char)(*fmt)[len];
-        if (c == '\0' || !isalpha(c)) {
-            *fmt += len;
-            return 1;
-        }
-    }
-    return 0;
-}
-
-/**
- * @brief Compile a format string into an opcode program.
- *
- * Walks @p fmt_str once, emitting one @ref fmt_op_t per literal
- * segment or token.  Literal pointers reference @p fmt_str memory
- * (the caller must ensure it outlives the ops array).
- *
- * @param[in]  fmt_str  Format string to compile.
- * @param[out] ops      Output opcode array (capacity @p max_ops).
- * @param[in]  max_ops  Capacity of @p ops.
- * @return Number of ops written (always < max_ops).
- */
-static int fmt_compile(const char *fmt_str, fmt_op_t *ops, int max_ops)
-{
-    int n = 0;
-    while (*fmt_str && n < max_ops - 1) {
-        if (*fmt_str != '%') {
-            const char *start = fmt_str;
-            while (*fmt_str && *fmt_str != '%') {
-                fmt_str++;
-            }
-            size_t len = (size_t)(fmt_str - start);
-            if (len > 0) {
-                ops[n].op          = FMT_OP_LITERAL;
-                ops[n].literal     = start;
-                ops[n].literal_len = len;
-                n++;
-            }
-            continue;
-        }
-
-        fmt_str++; /* skip '%' */
-
-        if (token_match(&fmt_str, "time")) {
-            ops[n++].op = FMT_OP_TIME;
-        } else if (token_match(&fmt_str, "level")) {
-            ops[n++].op = FMT_OP_LEVEL;
-        } else if (token_match(&fmt_str, "msg")) {
-            ops[n++].op = FMT_OP_MSG;
-        } else if (token_match(&fmt_str, "thread")) {
-            ops[n++].op = FMT_OP_THREAD;
-        } else if (token_match(&fmt_str, "pid")) {
-            ops[n++].op = FMT_OP_PID;
-        } else if (token_match(&fmt_str, "file")) {
-            ops[n++].op = FMT_OP_FILE;
-        } else if (token_match(&fmt_str, "line")) {
-            ops[n++].op = FMT_OP_LINE;
-        } else if (token_match(&fmt_str, "func")) {
-            ops[n++].op = FMT_OP_FUNC;
-        } else if (token_match(&fmt_str, "module")) {
-            ops[n++].op = FMT_OP_MODULE;
-        } else if (token_match(&fmt_str, "tag")) {
-            ops[n++].op = FMT_OP_TAG;
-        } else if (token_match(&fmt_str, "newline")) {
-            ops[n++].op = FMT_OP_NEWLINE;
-        } else if (token_match(&fmt_str, "trace_id")) {
-            ops[n++].op = FMT_OP_TRACE_ID;
-        } else if (token_match(&fmt_str, "span_id")) {
-            ops[n++].op = FMT_OP_SPAN_ID;
-        } else {
-            /* Unknown token — emit '%' as a literal. */
-            ops[n].op          = FMT_OP_LITERAL;
-            ops[n].literal     = fmt_str - 1;
-            ops[n].literal_len = 1;
-            n++;
-        }
-    }
-    return n;
-}
-
-/**
- * @brief Internal format dispatch: routes to JSON, OTel, or token-based renderer.
- *
- * If @p fmt is "json"/"JSON", delegates to format_json_ex().
- * If @p fmt is "otlp"/"OTLP"/"otel"/"OTEL", delegates to format_otel_json().
- * Otherwise, resolves the per-thread compiled-opcode cache and renders by
- * walking the opcode array.
- *
- * @param[in]  record       Log record to format.
- * @param[out] buf          Output buffer.
- * @param[in]  buf_size     Capacity of @p buf.
- * @param[in]  fmt          Format string or mode keyword.
- * @param[in]  time_format  strftime template for %time token.
- * @return Bytes written, or -1 on error.
- */
-static int format_impl(log_record_t *restrict record,
-                       char *restrict buf,
-                       size_t      buf_size,
-                       const char *fmt,
-                       const char *time_format)
-{
-    if (strcmp(fmt, "json") == 0 || strcmp(fmt, "JSON") == 0) {
-        return format_json_ex(record, buf, buf_size, time_format);
-    }
-    if (strcmp(fmt, "otlp") == 0 || strcmp(fmt, "OTLP") == 0 || strcmp(fmt, "otel") == 0 ||
-        strcmp(fmt, "OTEL") == 0) {
-        return format_otel_json(record, buf, buf_size);
-    }
-
-    if (strcmp(fmt, g_fmt_cache.fmt) != 0) {
-        snprintf(g_fmt_cache.fmt, sizeof(g_fmt_cache.fmt), "%s", fmt);
-        g_fmt_cache.op_count = fmt_compile(g_fmt_cache.fmt, g_fmt_cache.ops, FMT_MAX_OPS);
-    }
-    const fmt_op_t *ops      = g_fmt_cache.ops;
-    int             op_count = g_fmt_cache.op_count;
-    const char     *tf       = (time_format && time_format[0]) ? time_format : "%Y-%m-%d %H:%M:%S";
-
-    char  *out       = buf;
-    size_t remaining = buf_size;
-    int    total     = 0;
-
-    for (int i = 0; i < op_count; i++) {
-        switch (ops[i].op) {
-
-        case FMT_OP_LITERAL:
-            total += append_token(&out, &remaining, ops[i].literal, ops[i].literal_len);
-            break;
-
-        case FMT_OP_TIME: {
-            time_t sec = (time_t)(record->timestamp / 1000000);
-            char   time_buf[TIME_BUF_SIZE];
-            format_sec_cached(sec, tf, time_buf, sizeof(time_buf));
-            total += append_token(&out, &remaining, time_buf, strlen(time_buf));
-            break;
-        }
-
-        case FMT_OP_LEVEL: {
-            const char *s = level_to_string(record->level);
-            total += append_token(&out, &remaining, s, strlen(s));
-            break;
-        }
-
-        case FMT_OP_MSG: {
-            const char *msg = record->message ? record->message : "(no message)";
-            total += append_token(&out, &remaining, msg, strlen(msg));
-            break;
-        }
-
-        case FMT_OP_THREAD: {
-            char   tmp[16];
-            size_t n = clog_u32toa(record->tid, tmp);
-            total += append_token(&out, &remaining, tmp, n);
-            break;
-        }
-
-        case FMT_OP_PID: {
-            char   tmp[16];
-            size_t n = clog_u32toa(record->pid, tmp);
-            total += append_token(&out, &remaining, tmp, n);
-            break;
-        }
-
-        case FMT_OP_FILE: {
-            const char *s = record->file ? record->file : "(unknown)";
-            total += append_token(&out, &remaining, s, strlen(s));
-            break;
-        }
-
-        case FMT_OP_LINE: {
-            char   tmp[16];
-            size_t n = clog_i32toa(record->line, tmp);
-            total += append_token(&out, &remaining, tmp, n);
-            break;
-        }
-
-        case FMT_OP_FUNC: {
-            const char *s = record->func ? record->func : "(unknown)";
-            total += append_token(&out, &remaining, s, strlen(s));
-            break;
-        }
-
-        case FMT_OP_MODULE: {
-            const char *s = record->module ? record->module : "(unknown)";
-            total += append_token(&out, &remaining, s, strlen(s));
-            break;
-        }
-
-        case FMT_OP_TAG: {
-            const char *s = record->tag ? record->tag : "";
-            total += append_token(&out, &remaining, s, strlen(s));
-            break;
-        }
-
-        case FMT_OP_NEWLINE: {
-            if (remaining > 1) {
-                *out++ = '\n';
-                remaining--;
-                total++;
-            }
-            break;
-        }
-
-        case FMT_OP_TRACE_ID: {
-            char tid_hex[33] = "";
-            if (!is_zero_id(record->trace_id, 16)) {
-                trace_id_hex(record->trace_id, tid_hex);
-            }
-            total += append_token(&out, &remaining, tid_hex, strlen(tid_hex));
-            break;
-        }
-
-        case FMT_OP_SPAN_ID: {
-            char sid_hex[17] = "";
-            if (!is_zero_id(record->span_id, 8)) {
-                span_id_hex(record->span_id, sid_hex);
-            }
-            total += append_token(&out, &remaining, sid_hex, strlen(sid_hex));
-            break;
-        }
-        }
-    }
-
-    if (record->kv_count > 0) {
-        for (size_t i = 0; i < record->kv_count; i++) {
-            const clog_kv_t *kv = &record->kv[i];
-            if (!kv->key) {
-                continue;
-            }
-            total += append_token(&out, &remaining, " ", 1);
-            total += append_token(&out, &remaining, kv->key, strlen(kv->key));
-            total += append_token(&out, &remaining, "=", 1);
-            switch (kv->type) {
-            case CLOG_KV_TYPE_INT: {
-                char   tmp[32];
-                size_t n = clog_i64toa(kv->val.i64, tmp);
-                total += append_token(&out, &remaining, tmp, n);
-                break;
-            }
-            case CLOG_KV_TYPE_UINT: {
-                char   tmp[32];
-                size_t n = clog_u64toa(kv->val.u64, tmp);
-                total += append_token(&out, &remaining, tmp, n);
-                break;
-            }
-            case CLOG_KV_TYPE_FLOAT: {
-                char tmp[32];
-                snprintf(tmp, sizeof(tmp), "%.6g", kv->val.f64);
-                total += append_token(&out, &remaining, tmp, strlen(tmp));
-                break;
-            }
-            case CLOG_KV_TYPE_STR: {
-                const char *s = kv->val.str ? kv->val.str : "";
-                total += append_token(&out, &remaining, s, strlen(s));
-                break;
-            }
-            case CLOG_KV_TYPE_BOOL: {
-                const char *b = kv->val.b ? "true" : "false";
-                total += append_token(&out, &remaining, b, strlen(b));
-                break;
-            }
-            }
-        }
-    }
-
-    *out = '\0';
-    return total;
 }
 
 /**

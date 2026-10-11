@@ -104,6 +104,9 @@ endif()
 set(CLOG_SOURCES
     core/config.c
     core/formatter.c
+    core/formatter_fmt.c
+    core/formatter_json.c
+    core/formatter_otel.c
     core/dispatcher.c
     core/queue.c
     core/async.c

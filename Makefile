@@ -113,7 +113,7 @@ $(BUILD_DIR)/test_%: $(YAML_STATIC_LIB)
 $(BUILD_DIR)/verify_config: $(YAML_STATIC_LIB)
 endif
 
-CORE_SRCS = config.c formatter.c dispatcher.c queue.c async.c log.c rotate.c rate_limit.c signal_handler.c plugin_loader.c prometheus_exporter.c socket_async.c
+CORE_SRCS = config.c formatter.c formatter_fmt.c formatter_json.c formatter_otel.c dispatcher.c queue.c async.c log.c rotate.c rate_limit.c signal_handler.c plugin_loader.c prometheus_exporter.c socket_async.c
 SINK_SRCS = console_sink.c file_sink.c socket_sink.c custom_sink.c syslog_sink.c otlp_sink.c journald_sink.c
 CLOG_SRCS = $(addprefix core/,$(CORE_SRCS)) $(addprefix sinks/,$(SINK_SRCS))
 EXAMPLE_SRCS = example/main.c
