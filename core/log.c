@@ -80,84 +80,6 @@ typedef struct {
 static clog_thread_local clog_span_slot_t g_span_stack[CLOG_SPAN_MAX_DEPTH];
 static clog_thread_local unsigned         g_span_depth = 0;
 
-static bool span_is_zero(const uint8_t *id, size_t n)
-{
-    size_t i;
-    for (i = 0; i < n; i++) {
-        if (id[i] != 0) {
-            return false;
-        }
-    }
-    return true;
-}
-
-/* Top frame wins; empty stack falls back to the legacy base context. */
-static void span_current_ids(uint8_t trace_id[16], uint8_t span_id[8])
-{
-    if (g_span_depth > 0) {
-        const clog_span_slot_t *top = &g_span_stack[g_span_depth - 1u];
-        memcpy(trace_id, top->trace_id, 16);
-        memcpy(span_id, top->span_id, 8);
-    } else if (g_has_thread_trace_context) {
-        memcpy(trace_id, g_thread_trace_id, 16);
-        memcpy(span_id, g_thread_span_id, 8);
-    } else {
-        memset(trace_id, 0, 16);
-        memset(span_id, 0, 8);
-    }
-}
-
-/* Uniqueness, not cryptographic strength (documented in the user manual). */
-static void span_random_bytes(uint8_t *out, size_t n)
-{
-#if defined(__linux__)
-    {
-        ssize_t got = getrandom(out, n, 0);
-        if (got == (ssize_t)n) {
-            return;
-        }
-    }
-#endif
-#if defined(__APPLE__)
-    if (getentropy(out, n) == 0) {
-        return;
-    }
-#endif
-    {
-        uint64_t s =
-            clog_get_timestamp_us() ^ ((uint64_t)clog_getpid() << 32) ^ (uint64_t)(uintptr_t)out;
-        size_t i = 0;
-        if (s == 0) {
-            s = 0x9e3779b97f4a7c15ULL;
-        }
-        while (i < n) {
-            size_t chunk;
-            size_t k;
-            s ^= s << 13;
-            s ^= s >> 7;
-            s ^= s << 17;
-            if (s == 0) {
-                s = 0x9e3779b97f4a7c15ULL;
-            }
-            chunk = (n - i) < 8 ? (n - i) : 8;
-            for (k = 0; k < chunk; k++) {
-                out[i + k] = (uint8_t)((s >> (k * 8)) & 0xffU);
-            }
-            i += chunk;
-        }
-    }
-}
-
-static void span_new_span_id(uint8_t span_id[8])
-{
-    span_random_bytes(span_id, 8);
-    if (span_is_zero(span_id, 8)) {
-        span_id[7] = 0x01;
-    }
-}
-
-static int parse_hex_nibble(char c);
-
 const char *log_strerror(int err)
 {
     switch (err) {
@@ -190,121 +112,6 @@ const char *log_strerror(int err)
     default:
         return "unknown error";
     }
-}
-
-void log_set_async_fallback_cb(void (*cb)(void))
-{
-    g_default_logger.async_fallback_cb = cb;
-}
-
-void (*log_get_async_fallback_cb(void))(void)
-{
-    return g_default_logger.async_fallback_cb;
-}
-
-static void logger_set_module_internal(logger_t *logger, const char *module)
-{
-    clog_mutex_lock(&logger->module_mutex);
-    /* Atomic RMW, not plain ++: readers sample module_gen with
-     * clog_atomic_load_sz outside this mutex — a non-atomic bump here is a
-     * formal data race on the counter itself (TSan-proven). */
-    clog_atomic_fetch_add_sz(&logger->module_gen, 1); /* odd: writer inside */
-    if (!module || !*module) {
-        snprintf(logger->module, sizeof(logger->module), "%s", "main");
-    } else {
-        snprintf(logger->module, sizeof(logger->module), "%s", module);
-    }
-    clog_atomic_fetch_add_sz(&logger->module_gen, 1); /* even: done */
-    clog_mutex_unlock(&logger->module_mutex);
-}
-
-void log_set_module(const char *module)
-{
-    logger_set_module_internal(&g_default_logger, module);
-}
-
-void log_get_module(char *buf, size_t n)
-{
-    if (!buf || n == 0) {
-        return;
-    }
-    clog_mutex_lock(&g_default_logger.module_mutex);
-    snprintf(buf, n, "%s", g_default_logger.module);
-    clog_mutex_unlock(&g_default_logger.module_mutex);
-}
-
-int log_add_sink(log_sink_t *sink)
-{
-    if (!sink) {
-        return CLOG_ERR_INVALID_ARG;
-    }
-
-    clog_mutex_lock(&g_init_mutex);
-    if (!g_default_logger.initialized) {
-        clog_mutex_unlock(&g_init_mutex);
-        return CLOG_ERR_RELOAD;
-    }
-    int ret = log_dispatcher_add_sink_for(&g_default_logger, sink);
-    clog_mutex_unlock(&g_init_mutex);
-    return ret == 0 ? CLOG_OK : CLOG_ERR_OOM;
-}
-
-int log_remove_sink(log_sink_t *sink)
-{
-    if (!sink) {
-        return CLOG_ERR_INVALID_ARG;
-    }
-    if (log_dispatcher_remove_sink_for(&g_default_logger, sink) != 0) {
-        return CLOG_ERR_INVALID_ARG;
-    }
-    return CLOG_OK;
-}
-
-/**
- * @brief Internal initialisation shared by global and multi-instance loggers.
- *
- * Loads config from YAML, initialises rate limiter, dispatcher (creates
- * sinks from config), and optionally starts the async worker thread.
- * On failure, partially-initialised resources are cleaned up by the caller.
- *
- * @param logger  Logger instance to initialise (must be zero-initialized).
- * @param yaml_path  Path to YAML config file, or NULL for defaults.
- * @return CLOG_OK on success, or a negative clogx_errno_t code.
- *
- * @pre  Caller holds no locks on @p logger.
- * @post On success, `logger->initialized == true`.
- */
-static int logger_init_internal(logger_t *logger, const char *yaml_path)
-{
-    clog_rwlock_init(&logger->config_rwlock);
-
-    if (log_config_load_into(logger, yaml_path) != 0) {
-        return CLOG_ERR_CONFIG_OPEN;
-    }
-
-    log_rate_limit_init_for(logger,
-                            logger->config.rate_limit_enable,
-                            logger->config.rate_limit_max_per_sec,
-                            logger->config.rate_limit_burst);
-
-    if (log_dispatcher_init_for(logger) != 0) {
-        return CLOG_ERR_NO_SINKS;
-    }
-
-    if (logger->config.async) {
-        if (log_async_init_for(logger, logger->config.queue_size) != 0) {
-            log_dispatcher_destroy_for(logger);
-            return CLOG_ERR_THREAD_CREATE;
-        }
-    }
-
-    logger_set_module_internal(logger, "main");
-    logger->cached_pid  = clog_getpid();
-    logger->module_gen  = 0;
-    logger->initialized = true;
-
-    fprintf(stderr, "[clogx] version " CLOGX_VERSION_STRING "\n");
-    return CLOG_OK;
 }
 
 /* ════════════════════════════════════════════════════════════════════════
@@ -348,6 +155,13 @@ redact_apply_all_locked(const char *src, char *tmp_a, char *tmp_b, char **p_owne
 static char *redact_apply_all_heap_locked(const char *src);
 static void  redact_kv_record_if_needed(
     log_record_t *record, char **p_owned_msg, char *owned_str[], char *tmp_a, char *tmp_b);
+/* Forward declarations for symbols defined in later partitions but used above:
+ * span_current_ids (P5 trace), logger_set_module_internal (P7 module),
+ * g_atfork_once / register_atfork (P8 platform). */
+static void           span_current_ids(uint8_t trace_id[16], uint8_t span_id[8]);
+static void           logger_set_module_internal(logger_t *logger, const char *module);
+static pthread_once_t g_atfork_once;
+static void           register_atfork(void);
 
 static void logger_writevprintf_internal(logger_t   *logger,
                                          log_level_t level,
@@ -626,6 +440,211 @@ void logger_write_kv(logger_t        *logger,
     logger_write_kv_internal(logger, level, file, line, func, msg, kvs, kv_count);
 }
 
+/* ══════════════════════════════════════════════════════════════════════════════
+ *  Singleton lifecycle (init/destroy/flush/reload, stats, fallback)
+ ══════════════════════════════════════════════════════════════════════════════ */
+
+/**
+ * @brief Internal initialisation shared by global and multi-instance loggers.
+ *
+ * Loads config from YAML, initialises rate limiter, dispatcher (creates
+ * sinks from config), and optionally starts the async worker thread.
+ * On failure, partially-initialised resources are cleaned up by the caller.
+ *
+ * @param logger  Logger instance to initialise (must be zero-initialized).
+ * @param yaml_path  Path to YAML config file, or NULL for defaults.
+ * @return CLOG_OK on success, or a negative clogx_errno_t code.
+ *
+ * @pre  Caller holds no locks on @p logger.
+ * @post On success, `logger->initialized == true`.
+ */
+static int logger_init_internal(logger_t *logger, const char *yaml_path)
+{
+    clog_rwlock_init(&logger->config_rwlock);
+
+    if (log_config_load_into(logger, yaml_path) != 0) {
+        return CLOG_ERR_CONFIG_OPEN;
+    }
+
+    log_rate_limit_init_for(logger,
+                            logger->config.rate_limit_enable,
+                            logger->config.rate_limit_max_per_sec,
+                            logger->config.rate_limit_burst);
+
+    if (log_dispatcher_init_for(logger) != 0) {
+        return CLOG_ERR_NO_SINKS;
+    }
+
+    if (logger->config.async) {
+        if (log_async_init_for(logger, logger->config.queue_size) != 0) {
+            log_dispatcher_destroy_for(logger);
+            return CLOG_ERR_THREAD_CREATE;
+        }
+    }
+
+    logger_set_module_internal(logger, "main");
+    logger->cached_pid  = clog_getpid();
+    logger->module_gen  = 0;
+    logger->initialized = true;
+
+    fprintf(stderr, "[clogx] version " CLOGX_VERSION_STRING "\n");
+    return CLOG_OK;
+}
+
+/**
+ * @brief Initialise the global singleton logger from a YAML config file.
+ *
+ * Must be called before any LOG_* macros. Calling a second time without
+ * intervening log_destroy() returns CLOG_ERR_INIT_REENTRANT.
+ *
+ * On POSIX, registers pthread_atfork handlers to maintain lock consistency
+ * across fork() and restart the async worker in the child process.
+ *
+ * @param yaml_path  Path to YAML config file. Pass NULL for built-in defaults
+ *                   (console sink, INFO level, sync mode).
+ * @return CLOG_OK on success, or a negative clogx_errno_t code.
+ *
+ * @pre  No other thread is calling LOG_* yet.
+ * @post Logger is fully initialised; log_destroy() must be called before exit.
+ */
+
+int log_init(const char *yaml_path)
+{
+#ifndef _WIN32
+    pthread_once(&g_atfork_once, register_atfork);
+#endif
+
+    clog_mutex_lock(&g_init_mutex);
+    if (g_default_logger.initialized) {
+        clog_mutex_unlock(&g_init_mutex);
+        return CLOG_ERR_INIT_REENTRANT;
+    }
+
+    int ret = logger_init_internal(&g_default_logger, yaml_path);
+    if (ret != CLOG_OK) {
+        clog_mutex_unlock(&g_init_mutex);
+        return ret;
+    }
+
+    if (g_default_logger.config.catch_signals) {
+        log_install_signal_handlers();
+    }
+
+    if (g_default_logger.config.prometheus_enable) {
+        clog_prometheus_exporter_start(g_default_logger.config.prometheus_port);
+    }
+    clog_mutex_unlock(&g_init_mutex);
+    return CLOG_OK;
+}
+
+/**
+ * @brief Tear down the global singleton logger and release all resources.
+ *
+ * Flushes the async worker (if running), destroys all sinks, resets the
+ * rate limiter, and unloads plugin handles. Safe to call even if the
+ * logger was never initialised (no-op in that case).
+ *
+ * @note After log_destroy(), log_init() may be called again to reinitialise.
+ *       Not thread-safe with concurrent LOG_* calls — stop all logging first.
+ */
+void log_destroy(void)
+{
+    bool was_initialized = false;
+
+    clog_mutex_lock(&g_init_mutex);
+    if (g_default_logger.initialized) {
+        g_default_logger.initialized = false;
+        was_initialized              = true;
+    }
+    clog_mutex_unlock(&g_init_mutex);
+
+    if (was_initialized) {
+        clog_prometheus_exporter_stop();
+        log_restore_signal_handlers();
+        log_async_shutdown_for(&g_default_logger);
+        log_dispatcher_destroy_for(&g_default_logger);
+        log_rate_limit_reset_for(&g_default_logger);
+        log_plugin_shutdown_all();
+    }
+}
+
+/**
+ * @brief Flush all pending log output to sinks.
+ *
+ * In async mode, blocks until the async worker has drained all queued
+ * records. In sync mode, flushes each sink's underlying FILE* handle.
+ *
+ * @note Safe to call from signal handler context (POSIX) as it delegates
+ *       to the signal-safe flush path. Timeout: 2000 ms.
+ */
+void log_flush(void)
+{
+    if (g_default_logger.config.async) {
+        log_async_flush_for(&g_default_logger);
+    } else {
+        log_dispatcher_flush_for(&g_default_logger);
+    }
+}
+
+/**
+ * @brief Hot-reload the logger configuration without full restart.
+ *
+ * Re-reads the YAML config file, rebuilds the rate limiter, takes a
+ * new sink snapshot, shuts down the old async worker, commits the new
+ * snapshot, and restarts the async worker if needed. Existing log calls
+ * in-flight during reload use the old sink set until the commit.
+ *
+ * @return CLOG_OK on success, or CLOG_ERR_RELOAD if the logger is not
+ *         initialised, or CLOG_ERR_NO_SINKS if the new config has no sinks.
+ */
+int log_reload(void)
+{
+    clog_mutex_lock(&g_init_mutex);
+    if (!g_default_logger.initialized) {
+        clog_mutex_unlock(&g_init_mutex);
+        return CLOG_ERR_RELOAD;
+    }
+    clog_mutex_unlock(&g_init_mutex);
+
+    int ret = log_config_load_into(&g_default_logger, g_default_logger.config_path);
+    if (ret != 0) {
+        return CLOG_ERR_CONFIG_OPEN;
+    }
+
+    log_rate_limit_init_for(&g_default_logger,
+                            g_default_logger.config.rate_limit_enable,
+                            g_default_logger.config.rate_limit_max_per_sec,
+                            g_default_logger.config.rate_limit_burst);
+
+    log_dispatcher_snapshot_t snap = {0};
+    ret = log_dispatcher_build_snapshot_for(&g_default_logger, &g_default_logger.config, &snap);
+    if (ret != 0) {
+        return CLOG_ERR_NO_SINKS;
+    }
+
+    log_async_shutdown_for(&g_default_logger);
+    log_dispatcher_commit_snapshot_for(&g_default_logger, &snap);
+    log_dispatcher_destroy_snapshot(&snap);
+
+    if (g_default_logger.config.async) {
+        if (log_async_init_for(&g_default_logger, g_default_logger.config.queue_size) != 0) {
+            return CLOG_ERR_THREAD_CREATE;
+        }
+    }
+
+    return CLOG_OK;
+}
+
+void log_set_async_fallback_cb(void (*cb)(void))
+{
+    g_default_logger.async_fallback_cb = cb;
+}
+
+void (*log_get_async_fallback_cb(void))(void)
+{
+    return g_default_logger.async_fallback_cb;
+}
+
 void log_get_stats(log_stats_t *stats)
 {
     if (!stats) {
@@ -637,86 +656,379 @@ void log_get_stats(log_stats_t *stats)
     stats->current_queue_depth      = log_async_get_queue_depth_for(&g_default_logger);
 }
 
-#define MAX_THREAD_CONTEXT_PAIRS 16
-
-typedef struct {
-    char key[32];
-    char value[128];
-} thread_context_pair_t;
-
-static clog_thread_local thread_context_pair_t g_thread_context[MAX_THREAD_CONTEXT_PAIRS];
-static clog_thread_local size_t                g_thread_context_count = 0;
+/* ════════════════════════════════════════════════════════════════════════
+ *  Multi-instance API (Phase 2)
+ * ════════════════════════════════════════════════════════════════════════ */
 
 /**
- * @brief Set a key-value pair in the calling thread's MDC context.
+ * @brief Create an independent logger instance from a YAML config file.
  *
- * Mapped Diagnostic Context (MDC) allows attaching structured metadata
- * (e.g. request_id, user_id) to all log lines from the current thread
- * without passing them through every function call. The context is
- * thread-local and survives across log calls.
+ * Allocates and initialises a new `logger_t` that operates independently
+ * of the global singleton. Useful for multi-component applications where
+ * different subsystems need separate log levels, sinks, or formats.
  *
- * @param key    Context key (must not be empty; max 31 chars).
- * @param value  Context value (empty string or NULL removes the key).
- * @return CLOG_OK on success, CLOG_ERR_INVALID_ARG on bad input or
- *         if the context is full (max 16 pairs).
+ * @param yaml_path  Path to YAML config file (must not be NULL).
+ * @return Pointer to the new logger, or NULL on allocation/init failure.
  *
- * @note Thread-local: each thread has its own independent context.
+ * @note The returned logger must be freed with logger_destroy().
  */
-clogx_errno_t log_set_thread_context(const char *key, const char *value)
+logger_t *logger_create(const char *yaml_path)
 {
-    if (!key || strlen(key) == 0) {
-        return CLOG_ERR_INVALID_ARG;
+    logger_t *logger = (logger_t *)calloc(1, sizeof(logger_t));
+    if (!logger) {
+        return NULL;
     }
 
-    for (size_t i = 0; i < g_thread_context_count; i++) {
-        if (strcmp(g_thread_context[i].key, key) == 0) {
-            if (!value || strlen(value) == 0) {
-                g_thread_context[i] = g_thread_context[g_thread_context_count - 1];
-                g_thread_context_count--;
-            } else {
-                snprintf(g_thread_context[i].value, sizeof(g_thread_context[i].value), "%s", value);
-            }
-            return CLOG_OK;
+    clog_mutex_init(&logger->dispatcher_mutex);
+    clog_mutex_init(&logger->rl_mutex);
+    clog_mutex_init(&logger->fmt_mutex);
+    clog_mutex_init(&logger->module_mutex);
+
+    if (logger_init_internal(logger, yaml_path) != CLOG_OK) {
+        clog_mutex_destroy(&logger->dispatcher_mutex);
+        clog_mutex_destroy(&logger->rl_mutex);
+        clog_mutex_destroy(&logger->fmt_mutex);
+        clog_mutex_destroy(&logger->module_mutex);
+        free(logger);
+        return NULL;
+    }
+
+    return logger;
+}
+
+/**
+ * @brief Create an independent logger instance from an in-memory config.
+ *
+ * Unlike logger_create(), this does not touch the filesystem — the
+ * config is provided directly as a struct. Format and time_format strings
+ * are copied into the logger's internal buffers to ensure lifetime safety.
+ *
+ * @param cfg  Non-NULL config struct. Internal pointers (format, time_format)
+ *             are copied; the caller retains ownership.
+ * @return Pointer to the new logger, or NULL on failure.
+ */
+logger_t *logger_create_from_config(const log_config_t *cfg)
+{
+    if (!cfg) {
+        return NULL;
+    }
+
+    logger_t *logger = (logger_t *)calloc(1, sizeof(logger_t));
+    if (!logger) {
+        return NULL;
+    }
+
+    clog_mutex_init(&logger->dispatcher_mutex);
+    clog_mutex_init(&logger->rl_mutex);
+    clog_mutex_init(&logger->fmt_mutex);
+    clog_mutex_init(&logger->module_mutex);
+    clog_rwlock_init(&logger->config_rwlock);
+
+    logger->config = *cfg;
+
+    if (cfg->format) {
+        snprintf(logger->format_str, sizeof(logger->format_str), "%s", cfg->format);
+        logger->config.format = logger->format_str;
+    }
+    if (cfg->time_format) {
+        snprintf(logger->time_format_str, sizeof(logger->time_format_str), "%s", cfg->time_format);
+        logger->config.time_format = logger->time_format_str;
+    }
+
+    log_formatter_init_for(logger, cfg->format, cfg->time_format);
+    log_rate_limit_init_for(
+        logger, cfg->rate_limit_enable, cfg->rate_limit_max_per_sec, cfg->rate_limit_burst);
+
+    if (log_dispatcher_init_for(logger) != 0) {
+        clog_mutex_destroy(&logger->dispatcher_mutex);
+        clog_mutex_destroy(&logger->rl_mutex);
+        clog_mutex_destroy(&logger->fmt_mutex);
+        clog_mutex_destroy(&logger->module_mutex);
+        clog_rwlock_destroy(&logger->config_rwlock);
+        free(logger);
+        return NULL;
+    }
+
+    if (cfg->async) {
+        if (log_async_init_for(logger, cfg->queue_size) != 0) {
+            log_dispatcher_destroy_for(logger);
+            clog_mutex_destroy(&logger->dispatcher_mutex);
+            clog_mutex_destroy(&logger->rl_mutex);
+            clog_mutex_destroy(&logger->fmt_mutex);
+            clog_mutex_destroy(&logger->module_mutex);
+            clog_rwlock_destroy(&logger->config_rwlock);
+            free(logger);
+            return NULL;
         }
     }
 
-    if (!value || strlen(value) == 0) {
-        return CLOG_OK;
+    logger_set_module_internal(logger, "main");
+    logger->cached_pid  = clog_getpid();
+    logger->module_gen  = 0;
+    logger->initialized = true;
+    return logger;
+}
+
+void logger_destroy(logger_t *logger)
+{
+    if (!logger) {
+        return;
     }
 
-    if (g_thread_context_count >= MAX_THREAD_CONTEXT_PAIRS) {
-        return CLOG_ERR_INVALID_ARG;
+    log_async_shutdown_for(logger);
+    log_dispatcher_destroy_for(logger);
+    log_rate_limit_reset_for(logger);
+
+    clog_mutex_destroy(&logger->dispatcher_mutex);
+    clog_mutex_destroy(&logger->rl_mutex);
+    clog_mutex_destroy(&logger->fmt_mutex);
+    clog_mutex_destroy(&logger->module_mutex);
+
+    free(logger);
+}
+
+void logger_flush(logger_t *logger)
+{
+    if (!logger) {
+        return;
+    }
+    if (logger->config.async) {
+        log_async_flush_for(logger);
+    } else {
+        log_dispatcher_flush_for(logger);
+    }
+}
+
+int logger_reload(logger_t *logger)
+{
+    if (!logger || !logger->initialized) {
+        return CLOG_ERR_RELOAD;
     }
 
-    snprintf(g_thread_context[g_thread_context_count].key,
-             sizeof(g_thread_context[g_thread_context_count].key),
-             "%s",
-             key);
-    snprintf(g_thread_context[g_thread_context_count].value,
-             sizeof(g_thread_context[g_thread_context_count].value),
-             "%s",
-             value);
-    g_thread_context_count++;
+    int ret = log_config_load_into(logger, logger->config_path);
+    if (ret != 0) {
+        return CLOG_ERR_CONFIG_OPEN;
+    }
+
+    log_rate_limit_init_for(logger,
+                            logger->config.rate_limit_enable,
+                            logger->config.rate_limit_max_per_sec,
+                            logger->config.rate_limit_burst);
+
+    log_dispatcher_snapshot_t snap = {0};
+    ret = log_dispatcher_build_snapshot_for(logger, &logger->config, &snap);
+    if (ret != 0) {
+        return CLOG_ERR_NO_SINKS;
+    }
+
+    log_async_shutdown_for(logger);
+    log_dispatcher_commit_snapshot_for(logger, &snap);
+    log_dispatcher_destroy_snapshot(&snap);
+
+    if (logger->config.async) {
+        if (log_async_init_for(logger, logger->config.queue_size) != 0) {
+            return CLOG_ERR_THREAD_CREATE;
+        }
+    }
+
     return CLOG_OK;
 }
 
-const char *log_get_thread_context(const char *key)
+int logger_set_level(logger_t *logger, log_level_t level)
 {
-    if (!key) {
-        return NULL;
+    if (!logger) {
+        return -1;
     }
-    for (size_t i = 0; i < g_thread_context_count; i++) {
-        if (strcmp(g_thread_context[i].key, key) == 0) {
-            return g_thread_context[i].value;
-        }
-    }
-    return NULL;
+    logger->config.level = level;
+    return 0;
 }
 
-void log_clear_thread_context(void)
+log_level_t logger_get_level(const logger_t *logger)
 {
-    g_thread_context_count = 0;
+    return logger ? logger->config.level : LOG_LEVEL_INFO;
 }
+
+void logger_set_module(logger_t *logger, const char *module)
+{
+    if (logger) {
+        logger_set_module_internal(logger, module);
+    }
+}
+
+void logger_get_module(const logger_t *logger, char *buf, size_t n)
+{
+    if (!logger || !buf || n == 0) {
+        return;
+    }
+    clog_mutex_lock(&((logger_t *)logger)->module_mutex);
+    snprintf(buf, n, "%s", logger->module);
+    clog_mutex_unlock(&((logger_t *)logger)->module_mutex);
+}
+
+void logger_get_stats(const logger_t *logger, log_stats_t *stats)
+{
+    if (!logger || !stats) {
+        return;
+    }
+    stats->total_logged_count       = logger->total_logged;
+    stats->dropped_queue_full_count = logger->dropped_queue_full;
+    stats->suppressed_rate_count    = log_rate_limit_get_total_suppressed_for((logger_t *)logger);
+    stats->current_queue_depth      = log_async_get_queue_depth_for((logger_t *)logger);
+}
+
+int logger_config_set(logger_t *logger, const log_config_t *cfg)
+{
+    if (!logger || !cfg) {
+        return -1;
+    }
+    logger->config = *cfg;
+    if (cfg->format) {
+        snprintf(logger->format_str, sizeof(logger->format_str), "%s", cfg->format);
+        logger->config.format = logger->format_str;
+    }
+    if (cfg->time_format) {
+        snprintf(logger->time_format_str, sizeof(logger->time_format_str), "%s", cfg->time_format);
+        logger->config.time_format = logger->time_format_str;
+    }
+    return 0;
+}
+
+log_config_t *logger_config_get(const logger_t *logger)
+{
+    return logger ? (log_config_t *)&logger->config : NULL;
+}
+
+/* ══════════════════════════════════════════════════════════════════════════════
+ *  Sink management (singleton + multi-instance)
+ ══════════════════════════════════════════════════════════════════════════════ */
+
+int log_add_sink(log_sink_t *sink)
+{
+    if (!sink) {
+        return CLOG_ERR_INVALID_ARG;
+    }
+
+    clog_mutex_lock(&g_init_mutex);
+    if (!g_default_logger.initialized) {
+        clog_mutex_unlock(&g_init_mutex);
+        return CLOG_ERR_RELOAD;
+    }
+    int ret = log_dispatcher_add_sink_for(&g_default_logger, sink);
+    clog_mutex_unlock(&g_init_mutex);
+    return ret == 0 ? CLOG_OK : CLOG_ERR_OOM;
+}
+
+int log_remove_sink(log_sink_t *sink)
+{
+    if (!sink) {
+        return CLOG_ERR_INVALID_ARG;
+    }
+    if (log_dispatcher_remove_sink_for(&g_default_logger, sink) != 0) {
+        return CLOG_ERR_INVALID_ARG;
+    }
+    return CLOG_OK;
+}
+
+int logger_add_sink(logger_t *logger, log_sink_t *sink)
+{
+    if (!logger || !sink) {
+        return CLOG_ERR_INVALID_ARG;
+    }
+    if (!logger->initialized) {
+        return CLOG_ERR_RELOAD;
+    }
+    return log_dispatcher_add_sink_for(logger, sink) == 0 ? CLOG_OK : CLOG_ERR_OOM;
+}
+
+int logger_remove_sink(logger_t *logger, log_sink_t *sink)
+{
+    if (!logger || !sink) {
+        return CLOG_ERR_INVALID_ARG;
+    }
+    return log_dispatcher_remove_sink_for(logger, sink) == 0 ? CLOG_OK : CLOG_ERR_INVALID_ARG;
+}
+
+/* ══════════════════════════════════════════════════════════════════════════════
+ *  Trace / Span (helpers + context + export)
+ ══════════════════════════════════════════════════════════════════════════════ */
+
+static bool span_is_zero(const uint8_t *id, size_t n)
+{
+    size_t i;
+    for (i = 0; i < n; i++) {
+        if (id[i] != 0) {
+            return false;
+        }
+    }
+    return true;
+}
+
+/* Top frame wins; empty stack falls back to the legacy base context. */
+static void span_current_ids(uint8_t trace_id[16], uint8_t span_id[8])
+{
+    if (g_span_depth > 0) {
+        const clog_span_slot_t *top = &g_span_stack[g_span_depth - 1u];
+        memcpy(trace_id, top->trace_id, 16);
+        memcpy(span_id, top->span_id, 8);
+    } else if (g_has_thread_trace_context) {
+        memcpy(trace_id, g_thread_trace_id, 16);
+        memcpy(span_id, g_thread_span_id, 8);
+    } else {
+        memset(trace_id, 0, 16);
+        memset(span_id, 0, 8);
+    }
+}
+
+/* Uniqueness, not cryptographic strength (documented in the user manual). */
+static void span_random_bytes(uint8_t *out, size_t n)
+{
+#if defined(__linux__)
+    {
+        ssize_t got = getrandom(out, n, 0);
+        if (got == (ssize_t)n) {
+            return;
+        }
+    }
+#endif
+#if defined(__APPLE__)
+    if (getentropy(out, n) == 0) {
+        return;
+    }
+#endif
+    {
+        uint64_t s =
+            clog_get_timestamp_us() ^ ((uint64_t)clog_getpid() << 32) ^ (uint64_t)(uintptr_t)out;
+        size_t i = 0;
+        if (s == 0) {
+            s = 0x9e3779b97f4a7c15ULL;
+        }
+        while (i < n) {
+            size_t chunk;
+            size_t k;
+            s ^= s << 13;
+            s ^= s >> 7;
+            s ^= s << 17;
+            if (s == 0) {
+                s = 0x9e3779b97f4a7c15ULL;
+            }
+            chunk = (n - i) < 8 ? (n - i) : 8;
+            for (k = 0; k < chunk; k++) {
+                out[i + k] = (uint8_t)((s >> (k * 8)) & 0xffU);
+            }
+            i += chunk;
+        }
+    }
+}
+
+static void span_new_span_id(uint8_t span_id[8])
+{
+    span_random_bytes(span_id, 8);
+    if (span_is_zero(span_id, 8)) {
+        span_id[7] = 0x01;
+    }
+}
+
+static int parse_hex_nibble(char c);
 
 void clog_set_trace_context(const uint8_t trace_id[16], const uint8_t span_id[8])
 {
@@ -810,7 +1122,161 @@ clogx_errno_t clog_span_end(clog_span_t tok)
     return CLOG_OK;
 }
 
-/* ---- Record-time redaction (rule table + appliers) ---- */
+clogx_errno_t clog_span_export(char *buf, size_t len)
+{
+    static const char hexd[] = "0123456789abcdef";
+    uint8_t           trace_id[16];
+    uint8_t           span_id[8];
+    uint8_t           flags = 0x00;
+    size_t            pos   = 0;
+    size_t            i;
+
+    if (buf == NULL || len < 56) {
+        return CLOG_ERR_INVALID_ARG;
+    }
+    span_current_ids(trace_id, span_id);
+    if (g_span_depth > 0) {
+        flags = g_span_stack[g_span_depth - 1u].flags;
+    }
+    if (span_is_zero(trace_id, 16)) {
+        return CLOG_ERR_INVALID_ARG;
+    }
+    buf[pos++] = '0';
+    buf[pos++] = '0';
+    buf[pos++] = '-';
+    for (i = 0; i < 16; i++) {
+        buf[pos++] = hexd[(size_t)((trace_id[i] >> 4) & 0x0f)];
+        buf[pos++] = hexd[(size_t)(trace_id[i] & 0x0f)];
+    }
+    buf[pos++] = '-';
+    for (i = 0; i < 8; i++) {
+        buf[pos++] = hexd[(size_t)((span_id[i] >> 4) & 0x0f)];
+        buf[pos++] = hexd[(size_t)(span_id[i] & 0x0f)];
+    }
+    buf[pos++] = '-';
+    buf[pos++] = hexd[(size_t)((flags >> 4) & 0x0f)];
+    buf[pos++] = hexd[(size_t)(flags & 0x0f)];
+    buf[pos++] = '\0';
+    return CLOG_OK;
+}
+
+clog_span_t clog_span_join(const char *traceparent)
+{
+    uint8_t tid[16];
+    uint8_t flags;
+    size_t  i;
+
+    if (traceparent == NULL || strlen(traceparent) < 55 || g_span_depth >= CLOG_SPAN_MAX_DEPTH) {
+        return 0;
+    }
+    if (traceparent[2] != '-' || traceparent[35] != '-' || traceparent[52] != '-') {
+        return 0;
+    }
+    for (i = 0; i < 16; i++) {
+        int hi = parse_hex_nibble(traceparent[3 + i * 2]);
+        int lo = parse_hex_nibble(traceparent[3 + i * 2 + 1]);
+        if (hi < 0 || lo < 0) {
+            return 0;
+        }
+        tid[i] = (uint8_t)((hi << 4) | lo);
+    }
+    for (i = 0; i < 8; i++) {
+        if (parse_hex_nibble(traceparent[36 + i * 2]) < 0 ||
+            parse_hex_nibble(traceparent[36 + i * 2 + 1]) < 0) {
+            return 0;
+        }
+    }
+    {
+        int hi = parse_hex_nibble(traceparent[53]);
+        int lo = parse_hex_nibble(traceparent[54]);
+        if (hi < 0 || lo < 0) {
+            return 0;
+        }
+        flags = (uint8_t)((hi << 4) | lo);
+    }
+
+    {
+        clog_span_slot_t *slot = &g_span_stack[g_span_depth];
+        memcpy(slot->trace_id, tid, 16);
+        span_new_span_id(slot->span_id);
+        slot->flags = flags;
+        g_span_depth++;
+    }
+    return (clog_span_t)g_span_depth;
+}
+
+/**
+ * @brief Convert a hex character to its 4-bit numeric value.
+ *
+ * @param c  Hex character ('0'-'9', 'a'-'f', or 'A'-'F').
+ * @return 0-15 on valid input, -1 otherwise.
+ */
+static int parse_hex_nibble(char c)
+{
+    if (c >= '0' && c <= '9') {
+        return c - '0';
+    }
+    if (c >= 'a' && c <= 'f') {
+        return c - 'a' + 10;
+    }
+    if (c >= 'A' && c <= 'F') {
+        return c - 'A' + 10;
+    }
+    return -1;
+}
+
+/**
+ * @brief Set W3C Trace Context identifiers from hex-encoded strings.
+ *
+ * Parses a 32-char lowercase hex trace_id and 16-char lowercase hex span_id
+ * (as used in the `traceparent` header: `00-{trace_id}-{span_id}-{flags}`).
+ * Invalid hex characters or short strings return CLOG_ERR_INVALID_ARG.
+ *
+ * @param trace_id_hex  32-character hex string (W3C trace-id).
+ * @param span_id_hex   16-character hex string (W3C parent-id).
+ * @return CLOG_OK on success or if both strings are empty (clears context),
+ *         CLOG_ERR_INVALID_ARG on invalid input.
+ */
+clogx_errno_t clog_set_trace_context_hex(const char *trace_id_hex, const char *span_id_hex)
+{
+    if (!trace_id_hex || !span_id_hex) {
+        clog_clear_trace_context();
+        return CLOG_OK;
+    }
+    if (strlen(trace_id_hex) == 0 && strlen(span_id_hex) == 0) {
+        clog_clear_trace_context();
+        return CLOG_OK;
+    }
+    if (strlen(trace_id_hex) < 32 || strlen(span_id_hex) < 16) {
+        return CLOG_ERR_INVALID_ARG;
+    }
+
+    uint8_t tid[16];
+    uint8_t sid[8];
+    for (int i = 0; i < 16; i++) {
+        int hi = parse_hex_nibble(trace_id_hex[(size_t)i * 2]);
+        int lo = parse_hex_nibble(trace_id_hex[(size_t)i * 2 + 1]);
+        if (hi < 0 || lo < 0) {
+            return CLOG_ERR_INVALID_ARG;
+        }
+        tid[i] = (uint8_t)((hi << 4) | lo);
+    }
+    for (int i = 0; i < 8; i++) {
+        int hi = parse_hex_nibble(span_id_hex[(size_t)i * 2]);
+        int lo = parse_hex_nibble(span_id_hex[(size_t)i * 2 + 1]);
+        if (hi < 0 || lo < 0) {
+            return CLOG_ERR_INVALID_ARG;
+        }
+        sid[i] = (uint8_t)((hi << 4) | lo);
+    }
+
+    clog_set_trace_context(tid, sid);
+    return CLOG_OK;
+}
+
+/* ══════════════════════════════════════════════════════════════════════════════
+ *  Record-time redaction (rule table + appliers)
+ ══════════════════════════════════════════════════════════════════════════════ */
 
 #define CLOG_REDACT_DEFAULT_MASK "***"
 
@@ -1122,157 +1588,125 @@ static char *redact_apply_all_heap_locked(const char *src)
     return owned;
 }
 
-clogx_errno_t clog_span_export(char *buf, size_t len)
-{
-    static const char hexd[] = "0123456789abcdef";
-    uint8_t           trace_id[16];
-    uint8_t           span_id[8];
-    uint8_t           flags = 0x00;
-    size_t            pos   = 0;
-    size_t            i;
+/* ══════════════════════════════════════════════════════════════════════════════
+ *  MDC thread context + module name
+ ══════════════════════════════════════════════════════════════════════════════ */
 
-    if (buf == NULL || len < 56) {
+static void logger_set_module_internal(logger_t *logger, const char *module)
+{
+    clog_mutex_lock(&logger->module_mutex);
+    /* Atomic RMW, not plain ++: readers sample module_gen with
+     * clog_atomic_load_sz outside this mutex — a non-atomic bump here is a
+     * formal data race on the counter itself (TSan-proven). */
+    clog_atomic_fetch_add_sz(&logger->module_gen, 1); /* odd: writer inside */
+    if (!module || !*module) {
+        snprintf(logger->module, sizeof(logger->module), "%s", "main");
+    } else {
+        snprintf(logger->module, sizeof(logger->module), "%s", module);
+    }
+    clog_atomic_fetch_add_sz(&logger->module_gen, 1); /* even: done */
+    clog_mutex_unlock(&logger->module_mutex);
+}
+
+void log_set_module(const char *module)
+{
+    logger_set_module_internal(&g_default_logger, module);
+}
+
+void log_get_module(char *buf, size_t n)
+{
+    if (!buf || n == 0) {
+        return;
+    }
+    clog_mutex_lock(&g_default_logger.module_mutex);
+    snprintf(buf, n, "%s", g_default_logger.module);
+    clog_mutex_unlock(&g_default_logger.module_mutex);
+}
+
+#define MAX_THREAD_CONTEXT_PAIRS 16
+
+typedef struct {
+    char key[32];
+    char value[128];
+} thread_context_pair_t;
+
+static clog_thread_local thread_context_pair_t g_thread_context[MAX_THREAD_CONTEXT_PAIRS];
+static clog_thread_local size_t                g_thread_context_count = 0;
+
+/**
+ * @brief Set a key-value pair in the calling thread's MDC context.
+ *
+ * Mapped Diagnostic Context (MDC) allows attaching structured metadata
+ * (e.g. request_id, user_id) to all log lines from the current thread
+ * without passing them through every function call. The context is
+ * thread-local and survives across log calls.
+ *
+ * @param key    Context key (must not be empty; max 31 chars).
+ * @param value  Context value (empty string or NULL removes the key).
+ * @return CLOG_OK on success, CLOG_ERR_INVALID_ARG on bad input or
+ *         if the context is full (max 16 pairs).
+ *
+ * @note Thread-local: each thread has its own independent context.
+ */
+clogx_errno_t log_set_thread_context(const char *key, const char *value)
+{
+    if (!key || strlen(key) == 0) {
         return CLOG_ERR_INVALID_ARG;
     }
-    span_current_ids(trace_id, span_id);
-    if (g_span_depth > 0) {
-        flags = g_span_stack[g_span_depth - 1u].flags;
+
+    for (size_t i = 0; i < g_thread_context_count; i++) {
+        if (strcmp(g_thread_context[i].key, key) == 0) {
+            if (!value || strlen(value) == 0) {
+                g_thread_context[i] = g_thread_context[g_thread_context_count - 1];
+                g_thread_context_count--;
+            } else {
+                snprintf(g_thread_context[i].value, sizeof(g_thread_context[i].value), "%s", value);
+            }
+            return CLOG_OK;
+        }
     }
-    if (span_is_zero(trace_id, 16)) {
+
+    if (!value || strlen(value) == 0) {
+        return CLOG_OK;
+    }
+
+    if (g_thread_context_count >= MAX_THREAD_CONTEXT_PAIRS) {
         return CLOG_ERR_INVALID_ARG;
     }
-    buf[pos++] = '0';
-    buf[pos++] = '0';
-    buf[pos++] = '-';
-    for (i = 0; i < 16; i++) {
-        buf[pos++] = hexd[(size_t)((trace_id[i] >> 4) & 0x0f)];
-        buf[pos++] = hexd[(size_t)(trace_id[i] & 0x0f)];
-    }
-    buf[pos++] = '-';
-    for (i = 0; i < 8; i++) {
-        buf[pos++] = hexd[(size_t)((span_id[i] >> 4) & 0x0f)];
-        buf[pos++] = hexd[(size_t)(span_id[i] & 0x0f)];
-    }
-    buf[pos++] = '-';
-    buf[pos++] = hexd[(size_t)((flags >> 4) & 0x0f)];
-    buf[pos++] = hexd[(size_t)(flags & 0x0f)];
-    buf[pos++] = '\0';
+
+    snprintf(g_thread_context[g_thread_context_count].key,
+             sizeof(g_thread_context[g_thread_context_count].key),
+             "%s",
+             key);
+    snprintf(g_thread_context[g_thread_context_count].value,
+             sizeof(g_thread_context[g_thread_context_count].value),
+             "%s",
+             value);
+    g_thread_context_count++;
     return CLOG_OK;
 }
 
-clog_span_t clog_span_join(const char *traceparent)
+const char *log_get_thread_context(const char *key)
 {
-    uint8_t tid[16];
-    uint8_t flags;
-    size_t  i;
-
-    if (traceparent == NULL || strlen(traceparent) < 55 || g_span_depth >= CLOG_SPAN_MAX_DEPTH) {
-        return 0;
+    if (!key) {
+        return NULL;
     }
-    if (traceparent[2] != '-' || traceparent[35] != '-' || traceparent[52] != '-') {
-        return 0;
-    }
-    for (i = 0; i < 16; i++) {
-        int hi = parse_hex_nibble(traceparent[3 + i * 2]);
-        int lo = parse_hex_nibble(traceparent[3 + i * 2 + 1]);
-        if (hi < 0 || lo < 0) {
-            return 0;
-        }
-        tid[i] = (uint8_t)((hi << 4) | lo);
-    }
-    for (i = 0; i < 8; i++) {
-        if (parse_hex_nibble(traceparent[36 + i * 2]) < 0 ||
-            parse_hex_nibble(traceparent[36 + i * 2 + 1]) < 0) {
-            return 0;
+    for (size_t i = 0; i < g_thread_context_count; i++) {
+        if (strcmp(g_thread_context[i].key, key) == 0) {
+            return g_thread_context[i].value;
         }
     }
-    {
-        int hi = parse_hex_nibble(traceparent[53]);
-        int lo = parse_hex_nibble(traceparent[54]);
-        if (hi < 0 || lo < 0) {
-            return 0;
-        }
-        flags = (uint8_t)((hi << 4) | lo);
-    }
-
-    {
-        clog_span_slot_t *slot = &g_span_stack[g_span_depth];
-        memcpy(slot->trace_id, tid, 16);
-        span_new_span_id(slot->span_id);
-        slot->flags = flags;
-        g_span_depth++;
-    }
-    return (clog_span_t)g_span_depth;
+    return NULL;
 }
 
-/**
- * @brief Convert a hex character to its 4-bit numeric value.
- *
- * @param c  Hex character ('0'-'9', 'a'-'f', or 'A'-'F').
- * @return 0-15 on valid input, -1 otherwise.
- */
-static int parse_hex_nibble(char c)
+void log_clear_thread_context(void)
 {
-    if (c >= '0' && c <= '9') {
-        return c - '0';
-    }
-    if (c >= 'a' && c <= 'f') {
-        return c - 'a' + 10;
-    }
-    if (c >= 'A' && c <= 'F') {
-        return c - 'A' + 10;
-    }
-    return -1;
+    g_thread_context_count = 0;
 }
 
-/**
- * @brief Set W3C Trace Context identifiers from hex-encoded strings.
- *
- * Parses a 32-char lowercase hex trace_id and 16-char lowercase hex span_id
- * (as used in the `traceparent` header: `00-{trace_id}-{span_id}-{flags}`).
- * Invalid hex characters or short strings return CLOG_ERR_INVALID_ARG.
- *
- * @param trace_id_hex  32-character hex string (W3C trace-id).
- * @param span_id_hex   16-character hex string (W3C parent-id).
- * @return CLOG_OK on success or if both strings are empty (clears context),
- *         CLOG_ERR_INVALID_ARG on invalid input.
- */
-clogx_errno_t clog_set_trace_context_hex(const char *trace_id_hex, const char *span_id_hex)
-{
-    if (!trace_id_hex || !span_id_hex) {
-        clog_clear_trace_context();
-        return CLOG_OK;
-    }
-    if (strlen(trace_id_hex) == 0 && strlen(span_id_hex) == 0) {
-        clog_clear_trace_context();
-        return CLOG_OK;
-    }
-    if (strlen(trace_id_hex) < 32 || strlen(span_id_hex) < 16) {
-        return CLOG_ERR_INVALID_ARG;
-    }
-
-    uint8_t tid[16];
-    uint8_t sid[8];
-    for (int i = 0; i < 16; i++) {
-        int hi = parse_hex_nibble(trace_id_hex[(size_t)i * 2]);
-        int lo = parse_hex_nibble(trace_id_hex[(size_t)i * 2 + 1]);
-        if (hi < 0 || lo < 0) {
-            return CLOG_ERR_INVALID_ARG;
-        }
-        tid[i] = (uint8_t)((hi << 4) | lo);
-    }
-    for (int i = 0; i < 8; i++) {
-        int hi = parse_hex_nibble(span_id_hex[(size_t)i * 2]);
-        int lo = parse_hex_nibble(span_id_hex[(size_t)i * 2 + 1]);
-        if (hi < 0 || lo < 0) {
-            return CLOG_ERR_INVALID_ARG;
-        }
-        sid[i] = (uint8_t)((hi << 4) | lo);
-    }
-
-    clog_set_trace_context(tid, sid);
-    return CLOG_OK;
-}
+/* ══════════════════════════════════════════════════════════════════════════════
+ *  Platform adaptation (fork + mutex wrappers)
+ ══════════════════════════════════════════════════════════════════════════════ */
 
 #ifndef _WIN32
 static pthread_once_t g_atfork_once = PTHREAD_ONCE_INIT;
@@ -1331,410 +1765,6 @@ static void register_atfork(void)
     pthread_atfork(log_atfork_prepare, log_atfork_parent, log_atfork_child);
 }
 #endif
-
-/**
- * @brief Initialise the global singleton logger from a YAML config file.
- *
- * Must be called before any LOG_* macros. Calling a second time without
- * intervening log_destroy() returns CLOG_ERR_INIT_REENTRANT.
- *
- * On POSIX, registers pthread_atfork handlers to maintain lock consistency
- * across fork() and restart the async worker in the child process.
- *
- * @param yaml_path  Path to YAML config file. Pass NULL for built-in defaults
- *                   (console sink, INFO level, sync mode).
- * @return CLOG_OK on success, or a negative clogx_errno_t code.
- *
- * @pre  No other thread is calling LOG_* yet.
- * @post Logger is fully initialised; log_destroy() must be called before exit.
- */
-int log_init(const char *yaml_path)
-{
-#ifndef _WIN32
-    pthread_once(&g_atfork_once, register_atfork);
-#endif
-
-    clog_mutex_lock(&g_init_mutex);
-    if (g_default_logger.initialized) {
-        clog_mutex_unlock(&g_init_mutex);
-        return CLOG_ERR_INIT_REENTRANT;
-    }
-
-    int ret = logger_init_internal(&g_default_logger, yaml_path);
-    if (ret != CLOG_OK) {
-        clog_mutex_unlock(&g_init_mutex);
-        return ret;
-    }
-
-    if (g_default_logger.config.catch_signals) {
-        log_install_signal_handlers();
-    }
-
-    if (g_default_logger.config.prometheus_enable) {
-        clog_prometheus_exporter_start(g_default_logger.config.prometheus_port);
-    }
-    clog_mutex_unlock(&g_init_mutex);
-    return CLOG_OK;
-}
-
-/**
- * @brief Tear down the global singleton logger and release all resources.
- *
- * Flushes the async worker (if running), destroys all sinks, resets the
- * rate limiter, and unloads plugin handles. Safe to call even if the
- * logger was never initialised (no-op in that case).
- *
- * @note After log_destroy(), log_init() may be called again to reinitialise.
- *       Not thread-safe with concurrent LOG_* calls — stop all logging first.
- */
-void log_destroy(void)
-{
-    bool was_initialized = false;
-
-    clog_mutex_lock(&g_init_mutex);
-    if (g_default_logger.initialized) {
-        g_default_logger.initialized = false;
-        was_initialized              = true;
-    }
-    clog_mutex_unlock(&g_init_mutex);
-
-    if (was_initialized) {
-        clog_prometheus_exporter_stop();
-        log_restore_signal_handlers();
-        log_async_shutdown_for(&g_default_logger);
-        log_dispatcher_destroy_for(&g_default_logger);
-        log_rate_limit_reset_for(&g_default_logger);
-        log_plugin_shutdown_all();
-    }
-}
-
-/**
- * @brief Flush all pending log output to sinks.
- *
- * In async mode, blocks until the async worker has drained all queued
- * records. In sync mode, flushes each sink's underlying FILE* handle.
- *
- * @note Safe to call from signal handler context (POSIX) as it delegates
- *       to the signal-safe flush path. Timeout: 2000 ms.
- */
-void log_flush(void)
-{
-    if (g_default_logger.config.async) {
-        log_async_flush_for(&g_default_logger);
-    } else {
-        log_dispatcher_flush_for(&g_default_logger);
-    }
-}
-
-/**
- * @brief Hot-reload the logger configuration without full restart.
- *
- * Re-reads the YAML config file, rebuilds the rate limiter, takes a
- * new sink snapshot, shuts down the old async worker, commits the new
- * snapshot, and restarts the async worker if needed. Existing log calls
- * in-flight during reload use the old sink set until the commit.
- *
- * @return CLOG_OK on success, or CLOG_ERR_RELOAD if the logger is not
- *         initialised, or CLOG_ERR_NO_SINKS if the new config has no sinks.
- */
-int log_reload(void)
-{
-    clog_mutex_lock(&g_init_mutex);
-    if (!g_default_logger.initialized) {
-        clog_mutex_unlock(&g_init_mutex);
-        return CLOG_ERR_RELOAD;
-    }
-    clog_mutex_unlock(&g_init_mutex);
-
-    int ret = log_config_load_into(&g_default_logger, g_default_logger.config_path);
-    if (ret != 0) {
-        return CLOG_ERR_CONFIG_OPEN;
-    }
-
-    log_rate_limit_init_for(&g_default_logger,
-                            g_default_logger.config.rate_limit_enable,
-                            g_default_logger.config.rate_limit_max_per_sec,
-                            g_default_logger.config.rate_limit_burst);
-
-    log_dispatcher_snapshot_t snap = {0};
-    ret = log_dispatcher_build_snapshot_for(&g_default_logger, &g_default_logger.config, &snap);
-    if (ret != 0) {
-        return CLOG_ERR_NO_SINKS;
-    }
-
-    log_async_shutdown_for(&g_default_logger);
-    log_dispatcher_commit_snapshot_for(&g_default_logger, &snap);
-    log_dispatcher_destroy_snapshot(&snap);
-
-    if (g_default_logger.config.async) {
-        if (log_async_init_for(&g_default_logger, g_default_logger.config.queue_size) != 0) {
-            return CLOG_ERR_THREAD_CREATE;
-        }
-    }
-
-    return CLOG_OK;
-}
-
-/* ════════════════════════════════════════════════════════════════════════
- *  Multi-instance API (Phase 2)
- * ════════════════════════════════════════════════════════════════════════ */
-
-/**
- * @brief Create an independent logger instance from a YAML config file.
- *
- * Allocates and initialises a new `logger_t` that operates independently
- * of the global singleton. Useful for multi-component applications where
- * different subsystems need separate log levels, sinks, or formats.
- *
- * @param yaml_path  Path to YAML config file (must not be NULL).
- * @return Pointer to the new logger, or NULL on allocation/init failure.
- *
- * @note The returned logger must be freed with logger_destroy().
- */
-logger_t *logger_create(const char *yaml_path)
-{
-    logger_t *logger = (logger_t *)calloc(1, sizeof(logger_t));
-    if (!logger) {
-        return NULL;
-    }
-
-    clog_mutex_init(&logger->dispatcher_mutex);
-    clog_mutex_init(&logger->rl_mutex);
-    clog_mutex_init(&logger->fmt_mutex);
-    clog_mutex_init(&logger->module_mutex);
-
-    if (logger_init_internal(logger, yaml_path) != CLOG_OK) {
-        clog_mutex_destroy(&logger->dispatcher_mutex);
-        clog_mutex_destroy(&logger->rl_mutex);
-        clog_mutex_destroy(&logger->fmt_mutex);
-        clog_mutex_destroy(&logger->module_mutex);
-        free(logger);
-        return NULL;
-    }
-
-    return logger;
-}
-
-/**
- * @brief Create an independent logger instance from an in-memory config.
- *
- * Unlike logger_create(), this does not touch the filesystem — the
- * config is provided directly as a struct. Format and time_format strings
- * are copied into the logger's internal buffers to ensure lifetime safety.
- *
- * @param cfg  Non-NULL config struct. Internal pointers (format, time_format)
- *             are copied; the caller retains ownership.
- * @return Pointer to the new logger, or NULL on failure.
- */
-logger_t *logger_create_from_config(const log_config_t *cfg)
-{
-    if (!cfg) {
-        return NULL;
-    }
-
-    logger_t *logger = (logger_t *)calloc(1, sizeof(logger_t));
-    if (!logger) {
-        return NULL;
-    }
-
-    clog_mutex_init(&logger->dispatcher_mutex);
-    clog_mutex_init(&logger->rl_mutex);
-    clog_mutex_init(&logger->fmt_mutex);
-    clog_mutex_init(&logger->module_mutex);
-    clog_rwlock_init(&logger->config_rwlock);
-
-    logger->config = *cfg;
-
-    if (cfg->format) {
-        snprintf(logger->format_str, sizeof(logger->format_str), "%s", cfg->format);
-        logger->config.format = logger->format_str;
-    }
-    if (cfg->time_format) {
-        snprintf(logger->time_format_str, sizeof(logger->time_format_str), "%s", cfg->time_format);
-        logger->config.time_format = logger->time_format_str;
-    }
-
-    log_formatter_init_for(logger, cfg->format, cfg->time_format);
-    log_rate_limit_init_for(
-        logger, cfg->rate_limit_enable, cfg->rate_limit_max_per_sec, cfg->rate_limit_burst);
-
-    if (log_dispatcher_init_for(logger) != 0) {
-        clog_mutex_destroy(&logger->dispatcher_mutex);
-        clog_mutex_destroy(&logger->rl_mutex);
-        clog_mutex_destroy(&logger->fmt_mutex);
-        clog_mutex_destroy(&logger->module_mutex);
-        clog_rwlock_destroy(&logger->config_rwlock);
-        free(logger);
-        return NULL;
-    }
-
-    if (cfg->async) {
-        if (log_async_init_for(logger, cfg->queue_size) != 0) {
-            log_dispatcher_destroy_for(logger);
-            clog_mutex_destroy(&logger->dispatcher_mutex);
-            clog_mutex_destroy(&logger->rl_mutex);
-            clog_mutex_destroy(&logger->fmt_mutex);
-            clog_mutex_destroy(&logger->module_mutex);
-            clog_rwlock_destroy(&logger->config_rwlock);
-            free(logger);
-            return NULL;
-        }
-    }
-
-    logger_set_module_internal(logger, "main");
-    logger->cached_pid  = clog_getpid();
-    logger->module_gen  = 0;
-    logger->initialized = true;
-    return logger;
-}
-
-void logger_destroy(logger_t *logger)
-{
-    if (!logger) {
-        return;
-    }
-
-    log_async_shutdown_for(logger);
-    log_dispatcher_destroy_for(logger);
-    log_rate_limit_reset_for(logger);
-
-    clog_mutex_destroy(&logger->dispatcher_mutex);
-    clog_mutex_destroy(&logger->rl_mutex);
-    clog_mutex_destroy(&logger->fmt_mutex);
-    clog_mutex_destroy(&logger->module_mutex);
-
-    free(logger);
-}
-
-void logger_flush(logger_t *logger)
-{
-    if (!logger) {
-        return;
-    }
-    if (logger->config.async) {
-        log_async_flush_for(logger);
-    } else {
-        log_dispatcher_flush_for(logger);
-    }
-}
-
-int logger_reload(logger_t *logger)
-{
-    if (!logger || !logger->initialized) {
-        return CLOG_ERR_RELOAD;
-    }
-
-    int ret = log_config_load_into(logger, logger->config_path);
-    if (ret != 0) {
-        return CLOG_ERR_CONFIG_OPEN;
-    }
-
-    log_rate_limit_init_for(logger,
-                            logger->config.rate_limit_enable,
-                            logger->config.rate_limit_max_per_sec,
-                            logger->config.rate_limit_burst);
-
-    log_dispatcher_snapshot_t snap = {0};
-    ret = log_dispatcher_build_snapshot_for(logger, &logger->config, &snap);
-    if (ret != 0) {
-        return CLOG_ERR_NO_SINKS;
-    }
-
-    log_async_shutdown_for(logger);
-    log_dispatcher_commit_snapshot_for(logger, &snap);
-    log_dispatcher_destroy_snapshot(&snap);
-
-    if (logger->config.async) {
-        if (log_async_init_for(logger, logger->config.queue_size) != 0) {
-            return CLOG_ERR_THREAD_CREATE;
-        }
-    }
-
-    return CLOG_OK;
-}
-
-int logger_add_sink(logger_t *logger, log_sink_t *sink)
-{
-    if (!logger || !sink) {
-        return CLOG_ERR_INVALID_ARG;
-    }
-    if (!logger->initialized) {
-        return CLOG_ERR_RELOAD;
-    }
-    return log_dispatcher_add_sink_for(logger, sink) == 0 ? CLOG_OK : CLOG_ERR_OOM;
-}
-
-int logger_remove_sink(logger_t *logger, log_sink_t *sink)
-{
-    if (!logger || !sink) {
-        return CLOG_ERR_INVALID_ARG;
-    }
-    return log_dispatcher_remove_sink_for(logger, sink) == 0 ? CLOG_OK : CLOG_ERR_INVALID_ARG;
-}
-
-int logger_set_level(logger_t *logger, log_level_t level)
-{
-    if (!logger) {
-        return -1;
-    }
-    logger->config.level = level;
-    return 0;
-}
-
-log_level_t logger_get_level(const logger_t *logger)
-{
-    return logger ? logger->config.level : LOG_LEVEL_INFO;
-}
-
-void logger_set_module(logger_t *logger, const char *module)
-{
-    if (logger) {
-        logger_set_module_internal(logger, module);
-    }
-}
-
-void logger_get_module(const logger_t *logger, char *buf, size_t n)
-{
-    if (!logger || !buf || n == 0) {
-        return;
-    }
-    clog_mutex_lock(&((logger_t *)logger)->module_mutex);
-    snprintf(buf, n, "%s", logger->module);
-    clog_mutex_unlock(&((logger_t *)logger)->module_mutex);
-}
-
-void logger_get_stats(const logger_t *logger, log_stats_t *stats)
-{
-    if (!logger || !stats) {
-        return;
-    }
-    stats->total_logged_count       = logger->total_logged;
-    stats->dropped_queue_full_count = logger->dropped_queue_full;
-    stats->suppressed_rate_count    = log_rate_limit_get_total_suppressed_for((logger_t *)logger);
-    stats->current_queue_depth      = log_async_get_queue_depth_for((logger_t *)logger);
-}
-
-int logger_config_set(logger_t *logger, const log_config_t *cfg)
-{
-    if (!logger || !cfg) {
-        return -1;
-    }
-    logger->config = *cfg;
-    if (cfg->format) {
-        snprintf(logger->format_str, sizeof(logger->format_str), "%s", cfg->format);
-        logger->config.format = logger->format_str;
-    }
-    if (cfg->time_format) {
-        snprintf(logger->time_format_str, sizeof(logger->time_format_str), "%s", cfg->time_format);
-        logger->config.time_format = logger->time_format_str;
-    }
-    return 0;
-}
-
-log_config_t *logger_config_get(const logger_t *logger)
-{
-    return logger ? (log_config_t *)&logger->config : NULL;
-}
 
 #if (defined(__SANITIZE_THREAD__) || (defined(__clang__) && __has_feature(thread_sanitizer))) &&   \
     defined(__APPLE__)
