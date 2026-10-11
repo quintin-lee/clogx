@@ -14,7 +14,7 @@
 | 维度 | 状态 |
 |------|------|
 | 架构层次 | Core(`core/`) / Sinks(`sinks/`) / 公共 API(`include/`)三层清晰解耦 |
-| 代码规模 | 核心 + sink 约 7,868 行 C |
+| 代码规模 | 核心 + sink 约 9,000 行 C |
 | 测试 | 测试全部通过(数量与覆盖范围见 CI / `make test`),覆盖多实例、fork 安全、信号、TLS、KV、OTLP、queue、rotate 等 |
 | 硬化 | 符号锁定 ABI(见 `clogx.map` / `clogx.exports` 的符号数)、分支覆盖以 `make coverage-gcov` 门禁为准、clang-tidy 零警告、ASan/TSan/UBSan 可构建 |
 | 性能 | 无锁 MPSC 环(seq CAS)、格式串预编译缓存、批量出队(64/批)、fast_ascii LUT |
@@ -65,7 +65,7 @@ flowchart TB
 
 ## 3. 后续方向(候选)
 
-### 方向 A: 发布就绪 (0.3.0 打磨)
+### 方向 A: 发布就绪（0.3.0/0.4.0 已交付）
 
 | 项 | 工作 | 优先级 |
 |----|------|--------|
@@ -76,7 +76,7 @@ flowchart TB
 
 ### 方向 B: 能力拓展
 
-- 更多 sink(fluent/forward、journald、gRPC)、结构化日志增强
+- 更多 sink(fluent/forward、gRPC)、结构化日志增强
 - 日志脱敏 / 过滤链 / span 全链路集成
 
 ### 方向 C: 生态 / 治理
@@ -95,7 +95,7 @@ flowchart LR
     A3 --> B["B 能力拓展 / C 治理"]
 ```
 
-- 阶段 1: A2 + A1 + A4 ✅ 已全部完成(交付 0.3.0)
+- 阶段 1: A2 + A1 + A4 ✅ 已全部完成(交付 0.3.0/0.4.0)
 - 阶段 2: A3(Windows 真实落地),视资源取舍
 - 阶段 3: B / C(生态与能力扩展)
 

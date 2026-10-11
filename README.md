@@ -115,7 +115,7 @@ flowchart TB
 ```
 include/     public headers (log.h, log_config.h, log_limits.h, log_record.h, log_sink.h, log_prometheus.h, clogx_plugin.h, clog_port.h, clogx_version.h)
 core/        config, formatting, dispatch, queue, async, rotation, rate limiter, signal handler, plugin loader, Prometheus exporter, async socket writer
-sinks/       console / file / socket (TLS / async) / syslog / OTLP / custom
+sinks/       console / file / socket (TLS / async) / syslog / journald / OTLP / custom
 fuzz/        AFL fuzzing harnesses (fuzz_config.c, fuzz_formatter.c, fuzz_pipeline.c)
 example/     example programs
 tests/       regression tests
