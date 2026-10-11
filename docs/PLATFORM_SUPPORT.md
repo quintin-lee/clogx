@@ -38,7 +38,7 @@ All of these are real, present code paths — nothing here is aspirational.
   **Minor gaps** (guarded by `#if !defined(_WIN32)`):
   - `SO_RCVTIMEO` / `SO_SNDTIMEO` socket timeouts are not applied on Windows.
   - `shutdown(SHUT_WR)` graceful half-close is skipped.
-  - The non-blocking writer (`core/socket_async.c`) is Winsock-native
+  - The non-blocking writer (`core/socket_writer.c`, ring buffer `core/socket_ring.c` + transport `core/socket_transport.c`) is Winsock-native
     (`ioctlsocket(FIONBIO)`, `WSAGetLastError`, `WSAEWOULDBLOCK`) and works.
   - TLS (`CLOG_USE_TLS`) is OpenSSL-based and cross-platform, but **only
     enabled explicitly** (`-DCLOG_ENABLE_TLS=ON`); it is not wired into the

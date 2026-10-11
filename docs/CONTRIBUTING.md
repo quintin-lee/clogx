@@ -81,7 +81,7 @@ The CI suite will run automatically on your PR. All checks must pass before merg
 
 Only the following headers in `include/` define the stable public API: `log.h`, `log_config.h`, `log_limits.h`, `log_record.h`, `log_sink.h`, `log_prometheus.h`, `clog_port.h`, `clogx_plugin.h` (installed to `include/clogx/`).
 
-All other headers (`dispatcher.h`, `log_async.h`, `log_dispatcher.h`, `log_formatter.h`, `log_signal.h`, `log_rate_limit.h`, `queue.h`, `rotate.h`, `socket_async.h`) are internal implementation details and subject to change between releases.
+All other headers (`dispatcher.h`, `log_async.h`, `log_dispatcher.h`, `log_formatter.h`, `log_signal.h`, `log_rate_limit.h`, `queue.h`, `rotate.h`, `socket_async.h`, `formatter_internal.h`, `socket_async_internal.h` in `core/`) are internal implementation details and subject to change between releases.
 
 Semantic versioning is followed: `MAJOR.MINOR.PATCH`.
 - `MAJOR` bump: breaking public API changes
