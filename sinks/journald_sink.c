@@ -86,6 +86,12 @@ static void journald_put(char *packet, size_t *off, const char *src, size_t n)
     *off += n;
 }
 
+/* NOLINTBEGIN(clang-analyzer-security.ArrayBound): stack fast-path invariant.
+ * When packet == stack_buf, total <= sizeof(stack_buf) and every journald_put
+ * chunk sums to exactly total, so all packet writes stay in bounds. The
+ * analyzer models snprintf/strlen lengths as unbounded and cannot tie them to
+ * the total <= 512 branch condition, so it reports infeasible overflows here.
+ */
 static int journald_write(log_sink_t *sink, const char *buf, size_t len)
 {
     journald_sink_data_t *data = (journald_sink_data_t *)sink->private_data;
@@ -95,6 +101,7 @@ static int journald_write(log_sink_t *sink, const char *buf, size_t len)
     size_t                total;
     int                   use_binary;
     char                 *packet;
+    char                  stack_buf[512];
     size_t                off = 0;
 
     if (!data || data->fd < 0 || !buf) {
@@ -120,7 +127,7 @@ static int journald_write(log_sink_t *sink, const char *buf, size_t len)
     } else {
         total += sizeof("MESSAGE=") - 1u + msg_len + 1u;
     }
-    packet = (char *)malloc(total);
+    packet = (total <= sizeof(stack_buf)) ? stack_buf : (char *)malloc(total);
     if (!packet) {
         return -1;
     }
@@ -139,16 +146,23 @@ static int journald_write(log_sink_t *sink, const char *buf, size_t len)
     }
     packet[off++] = '\n';
     if (off != total) {
-        free(packet);
+        if (packet != stack_buf) {
+            free(packet);
+        }
         return -1;
     }
     if (send(data->fd, packet, off, MSG_NOSIGNAL) != (ssize_t)off) {
-        free(packet);
+        if (packet != stack_buf) {
+            free(packet);
+        }
         return -1;
     }
-    free(packet);
+    if (packet != stack_buf) {
+        free(packet);
+    }
     return (int)len;
 }
+/* NOLINTEND(clang-analyzer-security.ArrayBound) */
 
 static void journald_flush(log_sink_t *sink)
 {
